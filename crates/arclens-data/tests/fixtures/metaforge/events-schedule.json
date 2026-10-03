@@ -1,0 +1,9 @@
+{
+  "data": [
+    { "name": "Cold Snap", "map": "Dam", "icon": "https://cdn.metaforge.app/arc-raiders/custom/coldsnap.webp", "startTime": 1767556800000, "endTime": 1767564000000 },
+    { "name": "Harvester", "map": "Blue Gate", "icon": "https://cdn.metaforge.app/arc-raiders/custom/harvester.webp", "startTime": 1767582000000, "endTime": 1767585600000 },
+    { "name": "Night Raid", "map": "Riven Tides", "startTime": 1767560400000, "endTime": 1767564000000 },
+    { "name": "Matriarch", "map": "Spaceport", "icon": null, "startTime": 1767553200000, "endTime": 1767556800000 }
+  ],
+  "cachedAt": 1767556800000
+}

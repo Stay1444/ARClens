@@ -8,6 +8,7 @@ mod catalog;
 pub mod download;
 mod error;
 mod icons;
+pub mod metaforge;
 mod name_match;
 pub mod raidtheory;
 mod search;

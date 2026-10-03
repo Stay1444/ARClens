@@ -94,6 +94,28 @@ _Last researched: 2026-10-03. Re-verify before relying on anything marked
 
 - No public API and no source repo found. Its ToS asks people to contact them
   before extensive reuse. **Do not scrape it.**
+- Rechecked 2026-10-03 after the user asked about using its POIs: its map
+  pages carry POIs, but there is still no documented API, and the domain
+  is blocked from our dev container. Using its marker data would mean
+  scraping, which rule 2 forbids. If we want its data, ask the site
+  owners for permission first.
+
+## Mahcks/arcraiders-data-api (`arcdata.mahcks.com`)
+
+- Checked 2026-10-03 (repo at commit `d135a8c`, Dec 2025). Open source, a
+  Cloudflare Worker.
+- It is a **read-through mirror of RaidTheory/arcraiders-data**
+  (`raw.githubusercontent.com/RaidTheory/arcraiders-data/main`). It has
+  `/v1/items`, `/v1/maps`, `/v1/map-events`, `/v1/quests`, `/v1/hideout`
+  and so on.
+- It adds no data of its own. We already read RaidTheory directly, so it
+  brings nothing new.
+- RaidTheory's `maps.json` holds only `id`, localised `name` and an `image`
+  URL (`cdn.arctracker.io`): **no POIs or coordinates**. `map-events.json`
+  holds the event *types* (name, icon, category, localisations) and a map
+  list: **no schedule times**. Verified on a checkout dated 2026-08-18.
+- So for markers and the condition schedule, MetaForge is still the only
+  documented API we know of.
 
 ## Where do event timers come from?
 
