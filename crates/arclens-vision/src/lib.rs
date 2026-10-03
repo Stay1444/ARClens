@@ -29,6 +29,7 @@ mod map_motion;
 mod panel;
 mod read;
 mod text;
+mod workshop;
 
 pub use analyzer::{Analyzer, Hover, MapLabel};
 pub use footer::{FooterInfo, footer, footer_cells, parse_value, value_cells};
@@ -40,3 +41,4 @@ pub use map_motion::{Estimate, Footprint, Motion, MotionTracker, TRACK_REGION};
 pub use panel::{PanelParams, find_panels};
 pub use read::{NameReader, RECOGNITION_MODEL_URL};
 pub use text::{name_line, name_lines};
+pub use workshop::{StationLevel, parse_station_header, read_station_header, station_header_box};

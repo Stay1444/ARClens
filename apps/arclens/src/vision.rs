@@ -43,6 +43,8 @@ impl MapWatch {
     }
 }
 
+/// How often the workshop station header is looked for.
+const STATION_INTERVAL: Duration = Duration::from_secs(2);
 /// Minimum time between map-label reads while the view keeps changing.
 const LABEL_INTERVAL: Duration = Duration::from_millis(250);
 /// Capture pace while the map is open: the tracker follows pans and zooms
@@ -138,6 +140,31 @@ fn footprint(size: (f32, f32), px_per_logical: f32) -> arclens_vision::Footprint
     footprint
 }
 
+/// Reads a workshop station's level now and then, reporting changes.
+#[derive(Debug, Default)]
+struct StationWatch {
+    read_at: Option<Instant>,
+    last: Option<arclens_vision::StationLevel>,
+}
+
+impl StationWatch {
+    fn check(&mut self, analyzer: &Analyzer, frame: &RgbImage, out: &mut Outbox) {
+        if self
+            .read_at
+            .is_some_and(|at| at.elapsed() < STATION_INTERVAL)
+        {
+            return;
+        }
+        self.read_at = Some(Instant::now());
+        if let Ok(Some(station)) = analyzer.read_station_header(frame)
+            && self.last.as_ref() != Some(&station)
+        {
+            self.last = Some(station.clone());
+            out.send_lossy(Event::StationLevel(station));
+        }
+    }
+}
+
 /// Place names read on one map frame.
 #[derive(Debug, Clone)]
 pub struct MapLabels {
@@ -220,6 +247,8 @@ pub enum Event {
     /// How the map moved (frame pixels) since the frame of the last
     /// `MapLabels`; `None` when tracking lost it. Sent while it moves.
     MapMotion(Option<Motion>),
+    /// A workshop station's page shows its level (sent when it changes).
+    StationLevel(arclens_vision::StationLevel),
     /// Vision isn't running; why.
     Unavailable(String),
 }
@@ -317,6 +346,7 @@ fn run(output: mpsc::Sender<Event>) {
     // When the map header was last read, while the map is open.
     let mut map_watch = MapWatch::default();
     let mut map_view = MapView::default();
+    let mut station = StationWatch::default();
     let labels = model.ok().and_then(|model| LabelWorker::spawn(&model));
     while let Some(frame) = source.next_frame() {
         // Capture turned off (the UI dropped the subscription): stop, which
@@ -347,6 +377,7 @@ fn run(output: mpsc::Sender<Event>) {
             continue;
         }
         map_view.reset();
+        station.check(&analyzer, &frame, &mut out);
         let hover = match analyzer.analyze(&frame) {
             Ok(hover) => hover,
             Err(error) => {

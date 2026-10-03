@@ -258,7 +258,7 @@ fn workshop<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
         "Workshop",
         column![
             body,
-            list_button("Edit levels", Message::SetTab(Tab::Workshop))
+            list_button("Edit levels", Message::SetTab(Tab::Progress))
         ]
         .spacing(12),
     )

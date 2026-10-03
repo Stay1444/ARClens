@@ -118,6 +118,15 @@ impl Analyzer {
         crate::read_map_header(&self.reader, frame)
     }
 
+    /// The workshop station page's title and level, if `frame` shows one
+    /// (OCR when there is header text; call it every few seconds).
+    pub fn read_station_header(
+        &self,
+        frame: &RgbImage,
+    ) -> anyhow::Result<Option<crate::StationLevel>> {
+        crate::read_station_header(&self.reader, frame)
+    }
+
     /// The hovered tooltip in `frame`, if any.
     ///
     /// When several panels are visible (trader screen: persistent purchase

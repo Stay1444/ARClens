@@ -45,6 +45,8 @@ pub struct App {
     progress_path: std::path::PathBuf,
     /// Which page the window shows.
     tab: Tab,
+    /// Progress tab: the section shown.
+    progress_section: crate::views::progress::Section,
     /// Map-condition schedule (MetaForge).
     events: Load<Vec<arclens_core::ScheduledEvent>>,
     /// The region the loaded schedule says it is for.
@@ -97,7 +99,8 @@ pub enum Tab {
     Items,
     Map,
     Events,
-    Workshop,
+    /// Where the player is in the game (workshop levels, …).
+    Progress,
 }
 
 /// Settings saved in the config directory.
@@ -228,6 +231,7 @@ pub enum Message {
     ShowAllMarkers,
     HideAllMarkers,
     SetStationLevel(String, u32),
+    SetProgressSection(crate::views::progress::Section),
     ClearProgress,
     Overlay(overlay_link::Event),
     Hotkey(hotkeys::Event),
@@ -261,6 +265,7 @@ impl App {
             progress: crate::progress::load(&paths.progress()),
             progress_path: paths.progress(),
             tab: Tab::Home,
+            progress_section: crate::views::progress::Section::default(),
             events: Load::Loading,
             events_region: None,
             settings: settings.clone(),
@@ -419,6 +424,7 @@ impl App {
                     .insert(station, level);
                 self.progress_changed();
             }
+            Message::SetProgressSection(section) => self.progress_section = section,
             Message::ClearProgress => {
                 self.progress = None;
                 self.progress_changed();
@@ -586,12 +592,51 @@ impl App {
                 self.game_view.motion = motion;
                 self.push_map_view();
             }
+            vision::Event::StationLevel(read) => self.on_station_level(&read),
             vision::Event::Unavailable(reason) => {
                 tracing::info!(%reason, "item detection off");
                 self.status.push(format!("Item detection off: {reason}"));
             }
         }
         Task::none()
+    }
+
+    /// A workshop station's page was on screen: take its level.
+    fn on_station_level(&mut self, read: &arclens_vision::StationLevel) {
+        let Load::Ready(catalog) = &self.catalog else {
+            return;
+        };
+        let wanted = read.station.to_uppercase();
+        let Some(station) = catalog
+            .stations
+            .iter()
+            .map(|s| {
+                (
+                    s,
+                    strsim::normalized_levenshtein(&wanted, &s.name.to_uppercase()),
+                )
+            })
+            .filter(|&(_, score)| score >= 0.8)
+            .max_by(|a, b| a.1.total_cmp(&b.1))
+            .map(|(s, _)| s)
+        else {
+            tracing::debug!(station = %read.station, "unknown workshop station");
+            return;
+        };
+        let level = read.level.min(station.max_level);
+        let progress = self.progress.get_or_insert_with(Progress::default);
+        if progress.level(&station.id) == level {
+            return;
+        }
+        tracing::info!(station = %station.id, level, "workshop level read from the game");
+        progress.stations.insert(station.id.clone(), level);
+        let note = format!(
+            "{} set to level {level} (read from the game).",
+            station.name
+        );
+        self.status.retain(|s| !s.contains("(read from the game)"));
+        self.status.push(note);
+        self.progress_changed();
     }
 
     fn send(&self, msg: ToOverlay) {
@@ -712,7 +757,7 @@ impl App {
                 iced::widget::operation::focus(crate::views::map::SEARCH_ID),
             ]),
             Tab::Events => self.refresh_events_if_stale(),
-            Tab::Workshop => Task::none(),
+            Tab::Progress => Task::none(),
         }
     }
 
@@ -1175,7 +1220,8 @@ impl App {
             Tab::Home => self.view_home(),
             Tab::Events => self.view_events(),
             Tab::Map => self.view_map(),
-            Tab::Items | Tab::Workshop => self.view_catalog_or_status(),
+            Tab::Progress => self.view_progress(),
+            Tab::Items => self.view_catalog_or_status(),
         };
         column![self.view_top_bar(), body, self.view_footer()].into()
     }
@@ -1373,25 +1419,25 @@ impl App {
             ("Items", Tab::Items),
             ("Map", Tab::Map),
             ("Events", Tab::Events),
-            ("Workshop", Tab::Workshop),
+            ("Progress", Tab::Progress),
         ]
         .into_iter()
         .fold(row![].spacing(4), |r, (label, tab)| {
             r.push(tab_button(label, self.tab == tab, Message::SetTab(tab)))
         });
-        let middle: Element<'_, Message> = if matches!(self.tab, Tab::Home | Tab::Events | Tab::Map)
-        {
-            Space::new().width(Length::Fill).into()
-        } else {
-            text_input("Search items…", &self.query)
-                .id(SEARCH_ID)
-                .on_input(Message::QueryChanged)
-                .on_submit(Message::SelectFirst)
-                .padding([8, 12])
-                .size(15)
-                .width(Length::Fill)
-                .into()
-        };
+        let middle: Element<'_, Message> =
+            if matches!(self.tab, Tab::Home | Tab::Events | Tab::Map | Tab::Progress) {
+                Space::new().width(Length::Fill).into()
+            } else {
+                text_input("Search items…", &self.query)
+                    .id(SEARCH_ID)
+                    .on_input(Message::QueryChanged)
+                    .on_submit(Message::SelectFirst)
+                    .padding([8, 12])
+                    .size(15)
+                    .width(Length::Fill)
+                    .into()
+            };
         let bar = row![
             text("ARClens").size(20).font(BOLD),
             tabs,
@@ -1472,9 +1518,7 @@ impl App {
         .padding([12, 8])
         .width(LIST_WIDTH);
 
-        let detail: Element<'_, Message> = if self.tab == Tab::Workshop {
-            self.view_workshop(catalog)
-        } else {
+        let detail: Element<'_, Message> = {
             match self.selected.as_ref().and_then(|id| catalog.item(id)) {
                 Some(item) => {
                     let card = item_card(&ItemCard {
@@ -1514,61 +1558,15 @@ impl App {
         .into()
     }
 
-    fn view_workshop<'a>(&'a self, catalog: &'a Catalog) -> Element<'a, Message> {
-        let explainer = text(
-            "Set your workshop levels so advice knows what you still need. \
-             Upgrades you've built stop counting as reasons to keep. Items whose \
-             parts feed an upgrade you still need say RECYCLE when breaking them \
-             down costs little, and show a hint otherwise.",
-        )
-        .size(13)
-        .color(palette::TEXT_MUTED);
-
-        let rows = catalog
-            .stations
-            .iter()
-            .fold(column![].spacing(6), |col, station| {
-                let level = self.progress.as_ref().map_or(0, |p| p.level(&station.id));
-                let step = |to: u32| Message::SetStationLevel(station.id.clone(), to);
-                col.push(
-                    row![
-                        text(&station.name).size(15).width(Length::Fill),
-                        button(text("−").size(15))
-                            .on_press_maybe((level > 0).then(|| step(level - 1)))
-                            .padding([2, 12]),
-                        text(format!("{level} / {}", station.max_level))
-                            .size(15)
-                            .width(70)
-                            .align_x(Alignment::Center),
-                        button(text("+").size(15))
-                            .on_press_maybe((level < station.max_level).then(|| step(level + 1)))
-                            .padding([2, 12]),
-                    ]
-                    .spacing(8)
-                    .align_y(Alignment::Center),
-                )
-            });
-
-        let status = if self.progress.is_some() {
-            "Using your progress for advice."
-        } else {
-            "Not set: advice is based on value only."
+    fn view_progress(&self) -> Element<'_, Message> {
+        let Load::Ready(catalog) = &self.catalog else {
+            return self.view_catalog_or_status();
         };
-        let mut col = column![
-            text("Workshop").size(24).font(BOLD),
-            explainer,
-            rows,
-            text(status).size(12).color(palette::TEXT_MUTED),
-        ]
-        .spacing(14)
-        .max_width(560);
-        if self.progress.is_some() {
-            col = col
-                .push(button(text("Forget my progress").size(13)).on_press(Message::ClearProgress));
-        }
-        scrollable(container(col).padding(24))
-            .height(Length::Fill)
-            .into()
+        crate::views::progress::view(&crate::views::progress::ProgressView {
+            section: self.progress_section,
+            stations: &catalog.stations,
+            progress: self.progress.as_ref(),
+        })
     }
 
     fn view_row<'a>(&'a self, item: &'a Item, catalog: &'a Catalog) -> Element<'a, Message> {
@@ -1808,7 +1806,7 @@ fn tab_shortcut(event: iced::keyboard::Event) -> Option<Message> {
         "2" => Tab::Items,
         "3" => Tab::Map,
         "4" => Tab::Events,
-        "5" => Tab::Workshop,
+        "5" => Tab::Progress,
         _ => return None,
     };
     Some(Message::SetTab(tab))

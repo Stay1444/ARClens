@@ -121,7 +121,7 @@ pub fn read_map_header(reader: &NameReader, frame: &RgbImage) -> anyhow::Result<
 }
 
 /// Tight box around bright (white-ish) text inside the fractional `region`.
-fn bright_text(frame: &RgbImage, fraction: [f32; 4]) -> Option<Rect> {
+pub(crate) fn bright_text(frame: &RgbImage, fraction: [f32; 4]) -> Option<Rect> {
     let region = region(frame, fraction);
     let bright = |col: u32, row: u32| is_bright(frame, col, row);
     let (mut left, mut top, mut right, mut bottom) = (u32::MAX, u32::MAX, 0, 0);

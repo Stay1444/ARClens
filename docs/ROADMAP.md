@@ -63,7 +63,16 @@ green CI.
       ≥ 60 % of the sell price; otherwise SELL with a "parts would help" hint.
       Stash contents are unknown, so we can't count missing parts.
 - [x] "Used to craft" for materials (recipes and weapon tier upgrades).
-- [ ] Track quests and projects too (they still always count as needed).
+- [x] **Progress tab** (2026-10-03, was "Workshop"): sections of game
+      progress, the workshop first (`docs/assets/progress.png`). Workshop
+      levels fill in from the game: opening a station shows
+      `GUNSMITH — LEVEL 02` in the top bar, which is read and matched to the
+      catalogue station (`arclens_vision::read_station_header`; region
+      measured on one screenshot, **unverified** elsewhere).
+- [ ] Workshop overview tiles (roman numerals under each station) for
+      autofill without opening each station; needs fixture frames.
+- [ ] More progress sections: projects, expeditions, quests (they still
+      always count as needed).
 
 ## M2: Maps and timers
 

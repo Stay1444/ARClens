@@ -141,7 +141,7 @@ grim shot.png
 (`wtype -k Shift_L -k Return`).
 Send modifier chords in the same invocation:
 `wtype -k Shift_L -k Shift_L -M ctrl -k 3 -m ctrl` opens the Map tab
-(Ctrl+1…5 switch between Home, Items, Map, Events and Workshop). Enter in the search box opens the top result,
+(Ctrl+1…5 switch between Home, Items, Map, Events and Progress). Enter in the search box opens the top result,
 which is enough to reach the detail view without a mouse.
 
 Known limitation: the headless seat has no pointer, so simulated clicks
