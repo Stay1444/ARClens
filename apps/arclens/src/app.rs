@@ -29,6 +29,7 @@ pub struct App {
     catalog: Load<Arc<Catalog>>,
     search: ItemSearch,
     icons: Icons,
+    event_icons: crate::event_icons::EventIcons,
     query: String,
     results: Vec<ItemId>,
     selected: Option<ItemId>,
@@ -57,6 +58,10 @@ pub struct App {
     marker_filter: arclens_core::MarkerFilter,
     marker_query: String,
     expanded_categories: std::collections::BTreeSet<String>,
+    /// Map tab: what the view derives from markers, query and filter, and
+    /// the plot's cached marker layer. Rebuilt on change, not per frame.
+    map_summary: crate::views::map::MapSummary,
+    map_plot: iced::widget::canvas::Cache,
     /// Set while the in-game map is open.
     map_screen: Option<MapScreen>,
     /// Item currently detected under the cursor in game, and where.
@@ -99,6 +104,7 @@ pub enum Message {
     ToggleVision,
     SetTab(Tab),
     EventsLoaded(Result<Vec<arclens_core::ScheduledEvent>, String>),
+    EventIconLoaded(String, Option<iced::widget::image::Handle>),
     /// Once a second while the Events tab is open (countdowns).
     Tick,
     FilterEventsMap(Option<String>),
@@ -124,6 +130,7 @@ impl App {
             catalog: Load::Loading,
             search: ItemSearch::default(),
             icons: Icons::new(&paths),
+            event_icons: crate::event_icons::EventIcons::new(&paths),
             query: String::new(),
             results: Vec::new(),
             selected: None,
@@ -146,6 +153,8 @@ impl App {
             marker_query: String::new(),
             expanded_categories: std::collections::BTreeSet::new(),
             map_screen: None,
+            map_summary: crate::views::map::MapSummary::default(),
+            map_plot: iced::widget::canvas::Cache::new(),
             paths: paths.clone(),
             status: Vec::new(),
         };
@@ -199,7 +208,8 @@ impl App {
         match message {
             Message::CatalogLoaded(Ok(catalog)) => {
                 self.catalog = Load::Ready(catalog);
-                return self.refresh_results();
+                // The catalogue carries fallback event icons.
+                return Task::batch([self.refresh_results(), self.request_event_icons()]);
             }
             Message::CatalogLoaded(Err(error)) => self.catalog = Load::Failed(error),
             Message::QueryChanged(query) => {
@@ -258,7 +268,8 @@ impl App {
                 }
             }
             Message::SetTab(tab) => return self.set_tab(tab),
-            Message::EventsLoaded(result) => self.on_events_loaded(result),
+            Message::EventsLoaded(result) => return self.on_events_loaded(result),
+            Message::EventIconLoaded(url, icon) => self.event_icons.insert(url, icon),
             Message::Tick => {
                 self.now_ms = now_ms();
                 return self.refresh_events_if_stale();
@@ -388,8 +399,13 @@ impl App {
                 }
                 self.map_screen = Some(MapScreen { map });
                 let mut task = Task::none();
-                if let Some(map) = map {
+                if let Some(map) = map
+                    && map != self.map
+                {
                     map.clone_into(&mut self.map);
+                    self.refresh_map_summary();
+                }
+                if map.is_some() {
                     task = self.load_map_markers();
                 }
                 self.push_map_panel();
@@ -507,6 +523,7 @@ impl App {
         match message {
             Message::SelectMap(map) => {
                 self.map = map;
+                self.refresh_map_summary();
                 return self.load_map_markers();
             }
             Message::MarkersLoaded(map, result) => {
@@ -524,6 +541,7 @@ impl App {
                         Err(error) => Load::Failed(error),
                     },
                 );
+                self.refresh_map_summary();
                 if on_screen {
                     self.push_map_panel();
                 }
@@ -532,7 +550,10 @@ impl App {
                     return iced::widget::operation::focus(crate::views::map::SEARCH_ID);
                 }
             }
-            Message::MarkerQuery(query) => self.marker_query = query,
+            Message::MarkerQuery(query) => {
+                self.marker_query = query;
+                self.refresh_map_summary();
+            }
             Message::ExpandMarkerCategory(category) => {
                 if !self.expanded_categories.remove(&category) {
                     self.expanded_categories.insert(category);
@@ -575,7 +596,20 @@ impl App {
             _ => return,
         }
         crate::store::save(&self.paths.marker_filter(), &self.marker_filter);
+        self.refresh_map_summary();
         self.push_map_panel();
+    }
+
+    /// Rebuilds the Map tab's derived data after markers, map, query or
+    /// filter changed.
+    fn refresh_map_summary(&mut self) {
+        self.map_summary = match self.markers.get(&self.map) {
+            Some(Load::Ready(markers)) => {
+                crate::views::map::MapSummary::new(markers, &self.marker_query, &self.marker_filter)
+            }
+            _ => crate::views::map::MapSummary::default(),
+        };
+        self.map_plot.clear();
     }
 
     /// Sends the map panel to the overlay while the in-game map is open.
@@ -586,47 +620,27 @@ impl App {
         let map_name = map
             .and_then(|id| arclens_data::metaforge::MAPS.iter().find(|m| m.0 == id))
             .map_or("Unknown map", |m| m.1);
-        let mut panel = arclens_ipc::MapPanel {
-            map_name: map_name.to_owned(),
-            active: Vec::new(),
-            upcoming: Vec::new(),
-            categories: Vec::new(),
-            attribution: format!("Data: {}", arclens_data::metaforge::ATTRIBUTION),
+        let categories = match map.and_then(|m| self.markers.get(m)) {
+            Some(Load::Ready(markers)) => panel_categories(markers, &self.marker_filter),
+            _ => Vec::new(),
         };
-        if let (Some(map), Load::Ready(events)) = (map, &self.events) {
-            let here: Vec<_> = events
-                .iter()
-                .filter(|e| arclens_data::metaforge::event_on_map(&e.map, map))
-                .cloned()
-                .collect();
-            let agenda = arclens_core::agenda(&here, now_ms());
-            let entry = |name: &str, at_ms| arclens_ipc::PanelEvent {
-                name: name.to_owned(),
-                at_ms,
-            };
-            panel.active = agenda
-                .active
-                .iter()
-                .map(|e| entry(&e.name, e.end_ms))
-                .collect();
-            panel.upcoming = agenda
-                .upcoming
-                .iter()
-                .take(3)
-                .map(|e| entry(&e.name, e.start_ms))
-                .collect();
-        }
-        if let Some(Load::Ready(markers)) = map.and_then(|m| self.markers.get(m)) {
-            panel.categories = panel_categories(markers, &self.marker_filter);
-        }
+        let panel = arclens_ipc::MapPanel {
+            map_name: map_name.to_owned(),
+            categories,
+        };
         self.send(ToOverlay::ShowMapPanel { panel });
     }
 
-    fn on_events_loaded(&mut self, result: Result<Vec<arclens_core::ScheduledEvent>, String>) {
+    fn on_events_loaded(
+        &mut self,
+        result: Result<Vec<arclens_core::ScheduledEvent>, String>,
+    ) -> Task<Message> {
         self.events_loaded_at = Some(std::time::Instant::now());
         self.events = match result {
-            Ok(events) => {
+            Ok(mut events) => {
                 tracing::info!(events = events.len(), "event schedule loaded");
+                // Sorted once here; the view relies on it every tick.
+                events.sort_by_key(|e| (e.start_ms, e.end_ms));
                 Load::Ready(events)
             }
             Err(error) => {
@@ -634,7 +648,24 @@ impl App {
                 Load::Failed(error)
             }
         };
-        self.push_map_panel();
+        self.request_event_icons()
+    }
+
+    /// Fetches icons for scheduled events not seen before.
+    fn request_event_icons(&mut self) -> Task<Message> {
+        let Load::Ready(events) = &self.events else {
+            return Task::none();
+        };
+        let catalog = match &self.catalog {
+            Load::Ready(catalog) => Some(catalog.as_ref()),
+            _ => None,
+        };
+        Task::batch(
+            self.event_icons
+                .request(events, catalog)
+                .into_iter()
+                .map(|load| Task::perform(load, |(url, icon)| Message::EventIconLoaded(url, icon))),
+        )
     }
 
     /// Refetches the schedule once it is older than [`data::EVENTS_MAX_AGE`].
@@ -669,10 +700,10 @@ impl App {
             maps: arclens_data::metaforge::MAPS,
             selected: &self.map,
             markers,
-            filter: &self.marker_filter,
+            summary: &self.map_summary,
+            plot: &self.map_plot,
             query: &self.marker_query,
             expanded: &self.expanded_categories,
-            attribution: arclens_data::metaforge::ATTRIBUTION,
         })
     }
 
@@ -691,9 +722,9 @@ impl App {
             ),
             Load::Ready(events) => crate::views::events::view(
                 events,
+                &self.event_icons,
                 self.now_ms,
                 self.event_map_filter.as_deref(),
-                arclens_data::metaforge::ATTRIBUTION,
             ),
         }
     }
@@ -1007,13 +1038,12 @@ impl App {
     }
 
     fn view_footer(&self) -> Element<'_, Message> {
-        let mut parts = Vec::new();
-        if let Load::Ready(catalog) = &self.catalog {
-            parts.push(format!("Data: {}", catalog.source));
+        // Status messages only; data credits live in the README.
+        if self.status.is_empty() {
+            return Space::new().into();
         }
-        parts.extend(self.status.iter().cloned());
         container(
-            text(parts.join("   ·   "))
+            text(self.status.join("   ·   "))
                 .size(11)
                 .color(palette::TEXT_MUTED),
         )

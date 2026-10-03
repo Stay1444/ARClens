@@ -31,11 +31,18 @@ pub struct Agenda<'a> {
 }
 
 /// Splits `events` around `now_ms`; finished events are dropped.
-pub fn agenda(events: &[ScheduledEvent], now_ms: i64) -> Agenda<'_> {
-    let mut active: Vec<_> = events.iter().filter(|e| e.is_active(now_ms)).collect();
-    let mut upcoming: Vec<_> = events.iter().filter(|e| e.start_ms > now_ms).collect();
-    active.sort_by_key(|e| (e.end_ms, e.map.clone()));
-    upcoming.sort_by_key(|e| (e.start_ms, e.map.clone()));
+/// Borrows: no event is copied, so it is cheap to call every tick.
+pub fn agenda<'a>(events: impl IntoIterator<Item = &'a ScheduledEvent>, now_ms: i64) -> Agenda<'a> {
+    let (mut active, mut upcoming) = (Vec::new(), Vec::new());
+    for event in events {
+        if event.is_active(now_ms) {
+            active.push(event);
+        } else if event.start_ms > now_ms {
+            upcoming.push(event);
+        }
+    }
+    active.sort_by(|a, b| (a.end_ms, &a.map).cmp(&(b.end_ms, &b.map)));
+    upcoming.sort_by(|a, b| (a.start_ms, &a.map).cmp(&(b.start_ms, &b.map)));
     Agenda { active, upcoming }
 }
 

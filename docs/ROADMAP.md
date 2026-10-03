@@ -62,9 +62,13 @@ green CI.
 - [ ] Check the provider against a live response; confirm the category
       names and the `y = -lat` orientation.
 - [x] **Map** tab in the companion app: map picker, marker search, category
-      and subcategory toggles with counts, show/hide all, and a dot plot
-      with place names and hover tooltips (`docs/assets/map-tab.png`,
-      synthetic markers). The filter is saved, and the overlay will use the
+      and subcategory toggles with icons and counts, show/hide all, and an
+      icon plot with place names and hover tooltips
+      (`docs/assets/map-tab.png`, synthetic markers). Derived data and the
+      plot layer are cached and rebuilt only when markers, map, search or
+      filter change.
+- [x] Marker icons: our own SVG glyphs (`arclens-ui/assets/markers`),
+      picked by keyword from subcategory, then category. The filter is saved, and the overlay will use the
       same one.
 - [ ] Map image behind the plot, once its alignment with MetaForge
       coordinates is known; pan/zoom.
@@ -77,8 +81,11 @@ green CI.
       (`docs/assets/events.png`).
 - [ ] Verify the per-region rotation claim against the live feed and the
       game; add a region selector if MetaForge exposes one.
-- [ ] Show the active/next condition in the overlay while the map screen is
-      open.
+- [x] Condition icons on the Events tab: MetaForge's per-event icon, else
+      RaidTheory's per-type icon; downloaded once, decoded once; initials
+      while loading or when missing.
+- (Dropped 2026-10-03: conditions in the overlay. The maintainer wants them
+  in the app only; the in-game panel is just the marker filter.)
 - [ ] Optional: tail `PioneerGame.log` for the current map. Never persist
       its contents.
 
@@ -111,12 +118,11 @@ green CI.
         OCR (`is_map_screen`); passes on all 23 fixture frames (Dam at
         1440p only so far). The header is re-read every 5 s while open;
         the title picks the map (`metaforge::map_for_title`);
-  - [x] overlay **map panel** while the map is open: the map's active and
-        next conditions with countdowns, plus the marker filter (search,
-        per-category and per-subcategory toggles, show/hide all) shared
-        with the app's Map tab (`ShowMapPanel`, protocol v4).
-        Verified headlessly by replaying the Dam frames
-        (`docs/assets/overlay-map-panel.png`);
+  - [x] overlay **map panel** while the map is open: the marker filter
+        with icons (search, per-category and per-subcategory toggles,
+        show/hide all) shared with the app's Map tab (`ShowMapPanel`,
+        protocol v5). Verified headlessly by replaying the Dam frames
+        (`docs/assets/overlay-map-panel.png`, `overlay-map-panel-open.png`);
   - [ ] map label finder (white outlined text in the viewport) +
         recognition-only OCR; full ocrs pipeline reads the labels but takes
         ~2 s/frame, see the map findings doc;

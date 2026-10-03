@@ -1,0 +1,9 @@
+{
+  "_readme": { "description": "Map events for ARC Raiders", "format": "List of eventTypes available in the game" },
+  "eventTypes": {
+    "night-raid": { "displayName": "Night Raid", "icon": "https://cdn.arctracker.io/map-events/night_raid.png", "category": "major" },
+    "cold-snap": { "displayName": "Cold Snap", "icon": "https://cdn.arctracker.io/map-events/cold_snap.png", "category": "major" },
+    "no-icon": { "displayName": "No Icon" }
+  },
+  "maps": { "dam-battleground": { "displayName": "Dam Battleground" } }
+}

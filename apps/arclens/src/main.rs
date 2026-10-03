@@ -6,6 +6,7 @@
 
 pub mod app;
 mod data;
+mod event_icons;
 mod hotkeys;
 mod icons;
 mod overlay_link;

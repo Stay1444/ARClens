@@ -4,12 +4,13 @@
 //! Terms (<https://metaforge.app/arc-raiders/api>): attribution with a link
 //! for public projects, contact them before any paid use, cache responses —
 //! endpoints may change without notice. ARClens is non-commercial, credits
-//! MetaForge wherever its data is shown, and caches every response.
+//! MetaForge in its README, and caches every response.
 
 use crate::Error;
 use arclens_core::{MapId, MapPoint, Marker, ScheduledEvent};
 use serde::Deserialize;
 
+/// Credit line, as used in the README.
 pub const ATTRIBUTION: &str = "MetaForge (metaforge.app/arc-raiders)";
 pub const EVENTS_SCHEDULE_URL: &str = "https://metaforge.app/api/arc-raiders/events-schedule";
 

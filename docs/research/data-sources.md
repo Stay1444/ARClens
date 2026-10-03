@@ -122,6 +122,17 @@ _Last researched: 2026-10-03. Re-verify before relying on anything marked
 - So for markers and the condition schedule, MetaForge is still the only
   documented API we know of.
 
+## Image hosts (2026-10-03)
+
+- ARClens downloads map-condition icons once and caches them
+  (`arclens_data::ImageCache`, `~/.cache/arclens/images/`). Only these
+  hosts are fetched:
+  - `cdn.metaforge.app`: the `icon` of each `events-schedule` entry (often
+    `.webp`, sometimes null);
+  - `cdn.arctracker.io`: RaidTheory's `map-events.json` icon per condition
+    type (`.png`), used when MetaForge gives none.
+- Map-marker icons are not downloaded: ARClens draws its own glyphs.
+
 ## Where do event timers come from?
 
 - Map conditions (Night Raid, Electromagnetic Storm, Hurricane, Cold Snap,

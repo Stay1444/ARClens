@@ -50,7 +50,7 @@
 - Every upstream source gets:
   - a provider module;
   - a fixture-based test (`tests/fixtures/<source>/`);
-  - attribution in `Catalog::source`;
+  - attribution in the README ("Data and attribution"), not in the UI;
   - an entry in `docs/research/data-sources.md` with its terms.
 - Cache everything and respect upstream rate limits. Set a `User-Agent` of
   `ARClens/<version>`.

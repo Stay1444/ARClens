@@ -111,8 +111,6 @@ pub struct Overlay {
     outbox: Option<ipc::Outbox>,
     /// Surface size in logical pixels, once known.
     screen: Option<iced::Size>,
-    /// Wall clock (Unix ms) for the panel's countdowns.
-    now_ms: i64,
 }
 
 impl Overlay {
@@ -205,8 +203,6 @@ pub enum Message {
     Panel(map_panel::PanelMessage),
     /// Surface size changed (logical pixels).
     Resized(iced::Size),
-    /// Once a second while the map panel is up (countdowns).
-    Tick,
 }
 
 fn namespace() -> String {
@@ -214,10 +210,10 @@ fn namespace() -> String {
     String::from("arclens-overlay")
 }
 
-fn subscription(state: &Overlay) -> Subscription<Message> {
+fn subscription(_: &Overlay) -> Subscription<Message> {
     // Surfaces closed by the compositor (e.g. output unplugged) are forgotten
     // by `sync_surface` on the next change; nothing to listen for here.
-    let mut subscriptions = vec![
+    Subscription::batch([
         ipc::subscription().map(Message::Ipc),
         iced::event::listen_with(|event, _, _| match event {
             iced::Event::Window(
@@ -225,18 +221,7 @@ fn subscription(state: &Overlay) -> Subscription<Message> {
             ) => Some(Message::Resized(size)),
             _ => None,
         }),
-    ];
-    if state.panel.panel.is_some() {
-        subscriptions
-            .push(iced::time::every(std::time::Duration::from_secs(1)).map(|_| Message::Tick));
-    }
-    Subscription::batch(subscriptions)
-}
-
-fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
+    ])
 }
 
 fn update(state: &mut Overlay, message: Message) -> Task<Message> {
@@ -261,10 +246,6 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
             }
             state.screen = Some(size);
             return state.input_task();
-        }
-        Message::Tick => {
-            state.now_ms = now_ms();
-            return Task::none();
         }
         _ => return Task::none(),
     };
@@ -354,7 +335,6 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
         ToOverlay::ShowMapPanel { panel } => {
             let was_shown = state.panel.panel.is_some();
             state.panel.panel = Some(panel);
-            state.now_ms = now_ms();
             if !was_shown {
                 return state.input_task();
             }

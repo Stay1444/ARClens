@@ -26,9 +26,9 @@ ashpd = { version = "0.13", default-features = false, features = ["tokio", "glob
 directories = "6.0"
 flate2 = "1.1"
 futures = "0.3"
-iced = { version = "0.14", default-features = false, features = ["wgpu", "wayland", "x11", "canvas", "tokio", "image-without-codecs"] }
+iced = { version = "0.14", default-features = false, features = ["wgpu", "wayland", "x11", "canvas", "tokio", "image-without-codecs", "svg"] }
 # Decoders for iced's image widget: item icons are PNG only.
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png", "webp"] }
 iced_layershell = "0.19"
 nucleo-matcher = "0.3"
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2"] }

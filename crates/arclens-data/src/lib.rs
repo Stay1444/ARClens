@@ -8,6 +8,7 @@ mod catalog;
 pub mod download;
 mod error;
 mod icons;
+pub mod images;
 pub mod metaforge;
 mod name_match;
 pub mod raidtheory;
@@ -17,5 +18,15 @@ pub use cache::DiskCache;
 pub use catalog::Catalog;
 pub use error::Error;
 pub use icons::IconCache;
+pub use images::ImageCache;
 pub use name_match::{match_name, normalize_name};
 pub use search::ItemSearch;
+
+/// Key for matching map-condition names across sources: lowercase letters
+/// and digits only ("Night Raid", "night-raid" → "nightraid").
+pub fn event_key(name: &str) -> String {
+    name.chars()
+        .filter(char::is_ascii_alphanumeric)
+        .map(|c| c.to_ascii_lowercase())
+        .collect()
+}

@@ -1,24 +1,22 @@
-//! The panel shown while the in-game map is open: the map's conditions and
-//! the marker filter. It is the only clickable part of the overlay; its
-//! rectangle becomes the surface's input region.
+//! The panel shown while the in-game map is open: which markers to show,
+//! by kind, with their icons. It is the only clickable part of the
+//! overlay; its rectangle becomes the surface's input region.
 
 use crate::Message;
 use arclens_ipc::{MapPanel, PanelCategory, ToApp};
 use arclens_ui::palette::{self, with_alpha};
 use iced::widget::{Space, button, checkbox, column, container, row, scrollable, text, text_input};
-use iced::{Alignment, Border, Color, Element, Font, Length, Rectangle, Size, font};
+use iced::{Alignment, Border, Element, Font, Length, Rectangle, Size, font};
 
 const BOLD: Font = Font {
     weight: font::Weight::Bold,
     ..Font::DEFAULT
 };
-const ACTIVE: Color = Color::from_rgb(0.30, 0.82, 0.50);
-const UPCOMING: Color = Color::from_rgb(0.36, 0.62, 0.98);
 
 /// Where the panel sits, as `[x, y, width, height]` fractions of the screen.
 /// Collapsed it fits under the game's map legend (right column, below
 /// ~72 % of the height); expanded it covers the legend.
-const COLLAPSED: [f32; 4] = [0.78, 0.73, 0.19, 0.21];
+const COLLAPSED: [f32; 4] = [0.78, 0.73, 0.19, 0.11];
 const EXPANDED: [f32; 4] = [0.78, 0.20, 0.19, 0.72];
 
 /// Local UI state of the panel (the data itself comes from the app).
@@ -69,13 +67,10 @@ impl PanelState {
     }
 }
 
-/// The panel, positioned on a `screen`-sized surface. `now_ms` drives the
-/// countdowns.
-pub fn view(state: &PanelState, screen: Size, now_ms: i64) -> Option<Element<'_, Message>> {
+/// The panel, positioned on a `screen`-sized surface.
+pub fn view(state: &PanelState, screen: Size) -> Option<Element<'_, Message>> {
     let panel = state.panel.as_ref()?;
     let bounds = state.bounds(screen)?;
-
-    let conditions = conditions(panel, now_ms);
 
     let total: usize = panel.categories.iter().map(|c| c.count).sum();
     let shown: usize = panel.categories.iter().map(shown_count).sum();
@@ -91,21 +86,15 @@ pub fn view(state: &PanelState, screen: Size, now_ms: i64) -> Option<Element<'_,
                 .font(BOLD)
                 .wrapping(iced::widget::text::Wrapping::None)
                 .width(Length::Fill),
-            // Short credit, always visible; the full one is at the bottom.
-            text("via MetaForge").size(10).color(palette::TEXT_MUTED),
+            text("ARClens").size(10).color(palette::TEXT_MUTED),
         ]
         .align_y(Alignment::Center),
-        conditions,
         toggle,
     ]
     .spacing(8);
 
     if state.expanded {
-        content = content.push(filter(state, panel)).push(
-            text(panel.attribution.clone())
-                .size(10)
-                .color(palette::TEXT_MUTED),
-        );
+        content = content.push(filter(state, panel));
     }
 
     let card = container(content)
@@ -113,8 +102,8 @@ pub fn view(state: &PanelState, screen: Size, now_ms: i64) -> Option<Element<'_,
         .width(bounds.width)
         .height(bounds.height)
         .style(|_| container::Style {
-            // Nearly opaque: the game's legend sits behind when expanded.
-            background: Some(with_alpha(palette::SURFACE, 0.97).into()),
+            // Opaque: the game's legend sits behind when expanded.
+            background: Some(with_alpha(palette::SURFACE, 1.0).into()),
             border: Border {
                 color: palette::BORDER,
                 width: 1.0,
@@ -132,35 +121,6 @@ pub fn view(state: &PanelState, screen: Size, now_ms: i64) -> Option<Element<'_,
             })
             .into(),
     )
-}
-
-/// Active and upcoming conditions, at most three lines.
-fn conditions(panel: &MapPanel, now_ms: i64) -> Element<'_, Message> {
-    let mut conditions = column![].spacing(3);
-    for event in panel.active.iter().take(2) {
-        conditions = conditions.push(condition(
-            "NOW",
-            &event.name,
-            format!("ends in {}", arclens_core::countdown(event.at_ms - now_ms)),
-            ACTIVE,
-        ));
-    }
-    for event in panel.upcoming.iter().take(3 - panel.active.len().min(2)) {
-        conditions = conditions.push(condition(
-            "NEXT",
-            &event.name,
-            format!("in {}", arclens_core::countdown(event.at_ms - now_ms)),
-            UPCOMING,
-        ));
-    }
-    if panel.active.is_empty() && panel.upcoming.is_empty() {
-        conditions = conditions.push(
-            text("No conditions scheduled")
-                .size(12)
-                .color(palette::TEXT_MUTED),
-        );
-    }
-    conditions.into()
 }
 
 fn expand_button<'a>(label: String, expanded: bool) -> Element<'a, Message> {
@@ -210,17 +170,6 @@ fn shown_count(category: &PanelCategory) -> usize {
     }
 }
 
-fn condition<'a>(tag: &'a str, name: &str, when: String, color: Color) -> Element<'a, Message> {
-    row![
-        text(tag).size(10).font(BOLD).color(color).width(34),
-        text(name.to_owned()).size(13).width(Length::Fill),
-        text(when).size(12).color(color),
-    ]
-    .spacing(6)
-    .align_y(Alignment::Center)
-    .into()
-}
-
 /// Search, show/hide all, and the category list.
 fn filter<'a>(state: &'a PanelState, panel: &'a MapPanel) -> Element<'a, Message> {
     let query = state.query.trim().to_lowercase();
@@ -240,7 +189,7 @@ fn filter<'a>(state: &'a PanelState, panel: &'a MapPanel) -> Element<'a, Message
         let id = category.id.clone();
         list = list.push(
             row![
-                dot(palette::marker(&category.id)),
+                arclens_ui::markers::badge(&category.id, None, 20.0),
                 checkbox(category.shown)
                     .label(category.label.clone())
                     .size(14)
@@ -262,7 +211,8 @@ fn filter<'a>(state: &'a PanelState, panel: &'a MapPanel) -> Element<'a, Message
                 let (c, s) = (category.id.clone(), sub.id.clone());
                 list = list.push(
                     row![
-                        Space::new().width(22),
+                        Space::new().width(10),
+                        arclens_ui::markers::badge(&category.id, Some(&sub.id), 16.0),
                         checkbox(sub.shown)
                             .label(sub.label.clone())
                             .size(12)
@@ -322,19 +272,6 @@ fn expander<'a>(category: &PanelCategory, open: bool) -> Element<'a, Message> {
         .into()
 }
 
-fn dot<'a>(color: Color) -> Element<'a, Message> {
-    container(Space::new().width(8).height(8))
-        .style(move |_| container::Style {
-            background: Some(color.into()),
-            border: Border {
-                radius: 4.0.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        })
-        .into()
-}
-
 fn small_button(label: &str, on_press: Message) -> Element<'_, Message> {
     button(text(label).size(11))
         .padding([3, 8])
@@ -370,10 +307,7 @@ mod tests {
         PanelState {
             panel: Some(MapPanel {
                 map_name: "Dam Battlegrounds".into(),
-                active: Vec::new(),
-                upcoming: Vec::new(),
                 categories: Vec::new(),
-                attribution: String::new(),
             }),
             expanded,
             ..PanelState::default()

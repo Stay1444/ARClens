@@ -2,13 +2,13 @@
 
 use arclens_core::{Item, ItemId, MapId, Marker};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, SystemTime};
 
 /// Everything fetched from a [`crate::Provider`], plus where and when it came from.
 /// Bump when the catalogue's content or meaning changes (new fields filled by
 /// the loader), so caches written by older versions are rebuilt.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Catalog {
@@ -24,6 +24,9 @@ pub struct Catalog {
     /// Workshop stations, for the progress editor.
     #[serde(default)]
     pub stations: Vec<arclens_core::Station>,
+    /// Map-condition icon URLs by [`crate::event_key`].
+    #[serde(default)]
+    pub event_icons: BTreeMap<String, String>,
     #[serde(skip)]
     index: HashMap<ItemId, usize>,
 }
@@ -37,6 +40,7 @@ impl Catalog {
             items,
             markers,
             stations: Vec::new(),
+            event_icons: BTreeMap::new(),
             index: HashMap::new(),
         };
         catalog.reindex();
@@ -47,6 +51,19 @@ impl Catalog {
     pub fn with_stations(mut self, stations: Vec<arclens_core::Station>) -> Self {
         self.stations = stations;
         self
+    }
+
+    #[must_use]
+    pub fn with_event_icons(mut self, icons: BTreeMap<String, String>) -> Self {
+        self.event_icons = icons;
+        self
+    }
+
+    /// Icon URL for a map condition, by name ("Night Raid").
+    pub fn event_icon(&self, name: &str) -> Option<&str> {
+        self.event_icons
+            .get(&crate::event_key(name))
+            .map(String::as_str)
     }
 
     /// Rebuilds the id index. Must be called after deserialising.

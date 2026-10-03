@@ -51,8 +51,12 @@ More in [docs/development.md](docs/development.md).
 
 ## Data and attribution
 
-- Game data:
+- Game data and map-condition icons:
   [RaidTheory/arcraiders-data](https://github.com/RaidTheory/arcraiders-data)
   (MIT) / [arctracker.io](https://arctracker.io).
+- Map markers and the map-condition schedule (with its icons):
+  [MetaForge](https://metaforge.app/arc-raiders), through its public API.
+  Thanks to the MetaForge team; responses are cached to keep load low.
+- Map-marker icons are ARClens' own (`crates/arclens-ui/assets/markers`).
 - ARClens is a community project, **not affiliated with or endorsed by Embark
   Studios**. ARC Raiders and all related content are © Embark Studios AB.

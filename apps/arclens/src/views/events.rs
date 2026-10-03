@@ -2,6 +2,7 @@
 //! schedule per condition, in local time.
 
 use crate::app::Message;
+use crate::event_icons::EventIcons;
 use arclens_core::{ScheduledEvent, agenda, countdown};
 use arclens_ui::palette::{self, with_alpha};
 use iced::widget::{Space, button, column, container, row, scrollable, text};
@@ -15,25 +16,35 @@ const BOLD: Font = Font {
 const ACTIVE: Color = Color::from_rgb(0.30, 0.82, 0.50);
 const UPCOMING: Color = Color::from_rgb(0.36, 0.62, 0.98);
 const CARD_WIDTH: f32 = 230.0;
+/// Backgrounds for conditions without an icon.
+const COLORS: [Color; 5] = [
+    Color::from_rgb(0.55, 0.36, 0.85),
+    Color::from_rgb(0.20, 0.55, 0.75),
+    Color::from_rgb(0.80, 0.45, 0.25),
+    Color::from_rgb(0.25, 0.60, 0.45),
+    Color::from_rgb(0.75, 0.30, 0.45),
+];
+
 /// Instances listed per condition in the schedule.
 const PER_CONDITION: usize = 4;
 
 pub fn view<'a>(
     events: &'a [ScheduledEvent],
+    icons: &'a EventIcons,
     now_ms: i64,
     map_filter: Option<&'a str>,
-    attribution: &'a str,
 ) -> Element<'a, Message> {
-    let shown: Vec<ScheduledEvent> = events
-        .iter()
-        .filter(|e| map_filter.is_none_or(|m| e.map == m))
-        .cloned()
-        .collect();
-    let agenda = agenda(&shown, now_ms);
+    let agenda = agenda(
+        events
+            .iter()
+            .filter(|e| map_filter.is_none_or(|m| e.map == m)),
+        now_ms,
+    );
 
     let active = agenda.active.iter().fold(row![].spacing(10), |r, e| {
         r.push(card(
             e,
+            icons,
             format!("Ends in {}", countdown(e.end_ms - now_ms)),
             ACTIVE,
         ))
@@ -49,6 +60,7 @@ pub fn view<'a>(
     let upcoming = next.iter().fold(row![].spacing(10), |r, e| {
         r.push(card(
             e,
+            icons,
             format!("Starts in {}", countdown(e.start_ms - now_ms)),
             UPCOMING,
         ))
@@ -62,7 +74,7 @@ pub fn view<'a>(
     let schedule = by_condition
         .into_iter()
         .fold(row![].spacing(12), |r, (name, list)| {
-            r.push(schedule_card(name, &list, now_ms))
+            r.push(schedule_card(name, &list, icons, now_ms))
         });
 
     let content = column![
@@ -83,10 +95,10 @@ pub fn view<'a>(
             schedule.wrap().vertical_spacing(12).into(),
             agenda.upcoming.is_empty() && agenda.active.is_empty()
         ),
-        text(format!(
-            "Schedule: {attribution}. Times in your local time zone. Some sites shift \
-             the rotation per server region; if times look off for you, tell us."
-        ))
+        text(
+            "Times in your local time zone. Some sites shift the rotation per server \
+             region; if times look off for you, tell us."
+        )
         .size(11)
         .color(palette::TEXT_MUTED),
     ]
@@ -159,14 +171,24 @@ fn pill(label: &str, active: bool, on_press: Message) -> Element<'_, Message> {
         .into()
 }
 
-fn card<'a>(event: &ScheduledEvent, when: String, accent: Color) -> Element<'a, Message> {
+fn card<'a>(
+    event: &ScheduledEvent,
+    icons: &'a EventIcons,
+    when: String,
+    accent: Color,
+) -> Element<'a, Message> {
     container(
-        column![
-            text(event.name.clone()).size(15).font(BOLD),
-            text(event.map.clone()).size(12).color(palette::TEXT_MUTED),
-            text(when).size(12).color(accent),
+        row![
+            event_icon(&event.name, icons, 40.0),
+            column![
+                text(event.name.clone()).size(15).font(BOLD),
+                text(event.map.clone()).size(12).color(palette::TEXT_MUTED),
+                text(when).size(12).color(accent),
+            ]
+            .spacing(2),
         ]
-        .spacing(2),
+        .spacing(10)
+        .align_y(Alignment::Center),
     )
     .padding([10, 12])
     .width(CARD_WIDTH)
@@ -174,7 +196,46 @@ fn card<'a>(event: &ScheduledEvent, when: String, accent: Color) -> Element<'a, 
     .into()
 }
 
-fn schedule_card<'a>(name: &str, list: &[&ScheduledEvent], now_ms: i64) -> Element<'a, Message> {
+/// The condition's icon, or its initials on a colour derived from the name
+/// while the icon loads or when there is none.
+fn event_icon<'a>(name: &str, icons: &'a EventIcons, size: f32) -> Element<'a, Message> {
+    if let Some(handle) = icons.get(name) {
+        return iced::widget::image(handle.clone())
+            .width(size)
+            .height(size)
+            .into();
+    }
+    let initials: String = name
+        .split_whitespace()
+        .filter_map(|w| w.chars().next())
+        .take(2)
+        .collect::<String>()
+        .to_uppercase();
+    let hue = name
+        .bytes()
+        .fold(0u32, |h, b| h.wrapping_mul(31).wrapping_add(u32::from(b)));
+    let color = COLORS[hue as usize % COLORS.len()];
+    container(text(initials).size(size * 0.38).font(BOLD))
+        .center_x(size)
+        .center_y(size)
+        .style(move |_| container::Style {
+            background: Some(with_alpha(color, 0.85).into()),
+            text_color: Some(Color::WHITE),
+            border: Border {
+                radius: (size / 4.0).into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .into()
+}
+
+fn schedule_card<'a>(
+    name: &str,
+    list: &[&ScheduledEvent],
+    icons: &'a EventIcons,
+    now_ms: i64,
+) -> Element<'a, Message> {
     let mut maps: Vec<&str> = list.iter().map(|e| e.map.as_str()).collect();
     maps.sort_unstable();
     maps.dedup();
@@ -212,8 +273,15 @@ fn schedule_card<'a>(name: &str, list: &[&ScheduledEvent], now_ms: i64) -> Eleme
 
     container(
         column![
-            text(name.to_owned()).size(16).font(BOLD),
-            text(maps.join(", ")).size(11).color(palette::TEXT_MUTED),
+            row![
+                event_icon(name, icons, 32.0),
+                column![
+                    text(name.to_owned()).size(16).font(BOLD),
+                    text(maps.join(", ")).size(11).color(palette::TEXT_MUTED),
+                ],
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
             Space::new().height(4),
             rows,
         ]

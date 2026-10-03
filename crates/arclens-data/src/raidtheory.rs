@@ -7,6 +7,7 @@
 //! hideout/<id>.json    workshop stations and their upgrade requirements
 //! quests/<id>.json     quests and the items they require
 //! projects.json        long-running projects and their phase requirements
+//! map-events/map-events.json   map condition types (name, icon URL)
 //! ```
 //!
 //! Localised strings are objects keyed by language (`{"en": "...", "de": ...}`),
@@ -62,7 +63,46 @@ impl RaidTheoryDir {
         }
 
         stations.sort_by(|a, b| a.name.cmp(&b.name));
-        Ok(Catalog::new(SOURCE, items, Vec::new()).with_stations(stations))
+        Ok(Catalog::new(SOURCE, items, Vec::new())
+            .with_stations(stations)
+            .with_event_icons(self.event_icons()?))
+    }
+
+    /// Icon URL per map-condition name ([`crate::event_key`]). Optional
+    /// file: missing means no icons.
+    fn event_icons(&self) -> Result<BTreeMap<String, String>, Error> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct File {
+            #[serde(default)]
+            event_types: BTreeMap<String, EventType>,
+        }
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct EventType {
+            #[serde(default)]
+            display_name: Option<String>,
+            #[serde(default)]
+            icon: Option<String>,
+        }
+        let path = self.root.join("map-events").join("map-events.json");
+        let bytes = match std::fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeMap::new()),
+            Err(e) => return Err(e.into()),
+        };
+        let file: File = serde_json::from_slice(&bytes)?;
+        Ok(file
+            .event_types
+            .into_iter()
+            .filter_map(|(id, t)| {
+                let icon = t.icon.filter(|u| !u.is_empty())?;
+                Some((
+                    crate::event_key(t.display_name.as_deref().unwrap_or(&id)),
+                    icon,
+                ))
+            })
+            .collect())
     }
 
     /// Workshop stations, and the upgrade requirements per item.
@@ -368,6 +408,17 @@ mod tests {
     fn fixture() -> Catalog {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/raidtheory");
         RaidTheoryDir::new(root).load().expect("fixture loads")
+    }
+
+    #[test]
+    fn reads_event_icons() {
+        let catalog = fixture();
+        assert_eq!(
+            catalog.event_icon("Night Raid"),
+            Some("https://cdn.arctracker.io/map-events/night_raid.png")
+        );
+        assert!(catalog.event_icon("cold snap").is_some());
+        assert_eq!(catalog.event_icon("No Icon"), None);
     }
 
     #[test]

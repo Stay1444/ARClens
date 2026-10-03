@@ -1,0 +1,222 @@
+//! Map-marker icons: our own glyphs (in `assets/markers/`), picked by
+//! keywords in the marker's subcategory or category, drawn white on the
+//! category colour.
+
+use crate::palette;
+use iced::widget::{container, svg};
+use iced::{Border, Element, Length};
+use std::sync::OnceLock;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Glyph {
+    Boss,
+    Arc,
+    Container,
+    Weapon,
+    Medical,
+    Nature,
+    Quest,
+    Extraction,
+    Hatch,
+    Event,
+    Place,
+    Key,
+    Spawn,
+    Other,
+}
+
+/// Keywords per glyph, most specific first: the first glyph with a keyword
+/// contained in the name wins.
+const KEYWORDS: &[(Glyph, &[&str])] = &[
+    (
+        Glyph::Boss,
+        &["queen", "matriarch", "boss", "bastion", "bombardier"],
+    ),
+    (Glyph::Hatch, &["hatch"]),
+    (
+        Glyph::Extraction,
+        &["extract", "exit", "elevator", "train", "metro"],
+    ),
+    (Glyph::Key, &["key", "door", "lock"]),
+    (
+        Glyph::Medical,
+        &["medic", "health", "first_aid", "first aid"],
+    ),
+    (
+        Glyph::Weapon,
+        &["weapon", "gun", "ammo", "armory", "armoury"],
+    ),
+    (
+        Glyph::Nature,
+        &[
+            "nature", "plant", "mushroom", "fruit", "apricot", "herb", "mullein", "pear", "berry",
+            "flower", "tree",
+        ],
+    ),
+    (Glyph::Quest, &["quest", "objective", "mission", "task"]),
+    (
+        Glyph::Event,
+        &["event", "harvester", "graveyard", "probe", "supply", "drop"],
+    ),
+    (
+        Glyph::Container,
+        &[
+            "container",
+            "crate",
+            "box",
+            "cache",
+            "loot",
+            "locker",
+            "chest",
+            "case",
+            "bag",
+            "safe",
+            "stash",
+        ],
+    ),
+    (
+        Glyph::Arc,
+        &[
+            "arc",
+            "tick",
+            "wasp",
+            "hornet",
+            "leaper",
+            "rocketeer",
+            "sentinel",
+            "turret",
+            "snitch",
+            "surveyor",
+            "pop",
+            "fireball",
+            "enemy",
+            "robot",
+        ],
+    ),
+    (Glyph::Spawn, &["spawn", "player"]),
+    (
+        Glyph::Place,
+        &["label", "location", "zone", "poi", "area", "landmark"],
+    ),
+];
+
+/// The glyph for a marker kind. The subcategory decides when it is
+/// recognised (`weapon_case` under `containers`), else the category.
+pub fn glyph(category: &str, subcategory: Option<&str>) -> Glyph {
+    let find = |name: &str| {
+        let name = name.to_lowercase();
+        KEYWORDS
+            .iter()
+            .find(|(_, words)| words.iter().any(|w| name.contains(w)))
+            .map(|(glyph, _)| *glyph)
+    };
+    subcategory
+        .and_then(find)
+        .or_else(|| find(category))
+        .unwrap_or(Glyph::Other)
+}
+
+/// The glyph's SVG handle. Built once: iced caches rasterisations per
+/// handle, so reusing it keeps drawing cheap.
+pub fn handle(glyph: Glyph) -> svg::Handle {
+    static HANDLES: OnceLock<Vec<svg::Handle>> = OnceLock::new();
+    let handles = HANDLES.get_or_init(|| {
+        ALL.iter()
+            .map(|g| svg::Handle::from_memory(source(*g)))
+            .collect()
+    });
+    handles[ALL
+        .iter()
+        .position(|g| *g == glyph)
+        .unwrap_or(ALL.len() - 1)]
+    .clone()
+}
+
+const ALL: [Glyph; 14] = [
+    Glyph::Boss,
+    Glyph::Arc,
+    Glyph::Container,
+    Glyph::Weapon,
+    Glyph::Medical,
+    Glyph::Nature,
+    Glyph::Quest,
+    Glyph::Extraction,
+    Glyph::Hatch,
+    Glyph::Event,
+    Glyph::Place,
+    Glyph::Key,
+    Glyph::Spawn,
+    Glyph::Other,
+];
+
+fn source(glyph: Glyph) -> &'static [u8] {
+    match glyph {
+        Glyph::Boss => include_bytes!("../assets/markers/boss.svg"),
+        Glyph::Arc => include_bytes!("../assets/markers/arc.svg"),
+        Glyph::Container => include_bytes!("../assets/markers/container.svg"),
+        Glyph::Weapon => include_bytes!("../assets/markers/weapon.svg"),
+        Glyph::Medical => include_bytes!("../assets/markers/medical.svg"),
+        Glyph::Nature => include_bytes!("../assets/markers/nature.svg"),
+        Glyph::Quest => include_bytes!("../assets/markers/quest.svg"),
+        Glyph::Extraction => include_bytes!("../assets/markers/extraction.svg"),
+        Glyph::Hatch => include_bytes!("../assets/markers/hatch.svg"),
+        Glyph::Event => include_bytes!("../assets/markers/event.svg"),
+        Glyph::Place => include_bytes!("../assets/markers/place.svg"),
+        Glyph::Key => include_bytes!("../assets/markers/key.svg"),
+        Glyph::Spawn => include_bytes!("../assets/markers/spawn.svg"),
+        Glyph::Other => include_bytes!("../assets/markers/other.svg"),
+    }
+}
+
+/// A round badge: the marker's glyph on its category colour, `size` px.
+pub fn badge<'a, M: 'a>(category: &str, subcategory: Option<&str>, size: f32) -> Element<'a, M> {
+    let color = palette::marker(category);
+    let inner = size * 0.62;
+    container(
+        svg(handle(glyph(category, subcategory)))
+            .width(inner)
+            .height(inner),
+    )
+    .center_x(size)
+    .center_y(size)
+    .width(Length::Fixed(size))
+    .height(Length::Fixed(size))
+    .style(move |_| container::Style {
+        background: Some(color.into()),
+        border: Border {
+            radius: (size / 2.0).into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    })
+    .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn picks_glyphs_by_keyword() {
+        assert_eq!(glyph("arc", Some("queen")), Glyph::Boss);
+        assert_eq!(glyph("arc", Some("tick")), Glyph::Arc);
+        assert_eq!(glyph("containers", Some("weapon_case")), Glyph::Weapon);
+        assert_eq!(glyph("containers", Some("medical_bag")), Glyph::Medical);
+        assert_eq!(glyph("containers", Some("utility_box")), Glyph::Container);
+        assert_eq!(glyph("locations", Some("raider_hatch")), Glyph::Hatch);
+        assert_eq!(glyph("locations", Some("extraction")), Glyph::Extraction);
+        assert_eq!(glyph("nature", Some("prickly_pear")), Glyph::Nature);
+        assert_eq!(glyph("labels", Some("poi")), Glyph::Place);
+        // Unknown subcategory: the category decides.
+        assert_eq!(glyph("quests", Some("xyz")), Glyph::Quest);
+        assert_eq!(glyph("mystery", None), Glyph::Other);
+    }
+
+    #[test]
+    fn every_glyph_is_valid_svg() {
+        for g in ALL {
+            let text = std::str::from_utf8(source(g)).unwrap();
+            assert!(text.starts_with("<svg") && text.trim_end().ends_with("</svg>"));
+        }
+    }
+}

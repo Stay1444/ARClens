@@ -1,8 +1,9 @@
-//! The Map tab: every marker of a map, searchable, with per-kind toggles.
-//! The same filter decides what the overlay draws on the in-game map.
+//! The Map tab: every marker of a map, searchable, with per-kind toggles
+//! and icons. The same filter decides what the overlay shows in game.
 
 use crate::app::Message;
 use arclens_core::{Marker, MarkerFilter, humanize, marker_counts};
+use arclens_ui::markers::{badge, glyph, handle};
 use arclens_ui::palette::{self, with_alpha};
 use iced::widget::canvas::{self, Frame, Geometry, Path, Stroke};
 use iced::widget::{
@@ -19,6 +20,8 @@ const BOLD: Font = Font {
     ..Font::DEFAULT
 };
 const PANEL_WIDTH: f32 = 340.0;
+/// Marker icon diameter on the plot.
+const ICON: f32 = 16.0;
 pub const SEARCH_ID: &str = "marker-search";
 
 /// Markers of the selected map, as far as they are loaded.
@@ -28,16 +31,86 @@ pub enum Markers<'a> {
     Failed(&'a str),
 }
 
+/// Everything the tab derives from (markers, query, filter). Built by the
+/// app when one of those changes, never per frame.
+#[derive(Debug, Default)]
+pub struct MapSummary {
+    /// Indices of markers matching the query.
+    pub matching: Vec<usize>,
+    /// Indices of matching markers the filter shows.
+    pub visible: Vec<usize>,
+    /// Matching markers with a proper name.
+    pub named: Vec<usize>,
+    pub categories: Vec<CategorySummary>,
+}
+
+#[derive(Debug)]
+pub struct CategorySummary {
+    pub id: String,
+    pub label: String,
+    pub count: usize,
+    pub shown: bool,
+    /// `(id, label, count, shown)`.
+    pub subcategories: Vec<(String, String, usize, bool)>,
+}
+
+impl MapSummary {
+    pub fn new(markers: &[Marker], query: &str, filter: &MarkerFilter) -> Self {
+        let matching: Vec<usize> = (0..markers.len())
+            .filter(|&i| markers[i].matches(query))
+            .collect();
+        let visible = matching
+            .iter()
+            .copied()
+            .filter(|&i| filter.shows(&markers[i]))
+            .collect();
+        let named = matching
+            .iter()
+            .copied()
+            .filter(|&i| markers[i].label.is_some())
+            .collect();
+        let subset: Vec<Marker> = matching.iter().map(|&i| markers[i].clone()).collect();
+        let categories = marker_counts(&subset)
+            .into_iter()
+            .map(|(category, subs)| CategorySummary {
+                id: category.to_owned(),
+                label: humanize(category),
+                count: subs.values().sum(),
+                shown: filter.shows_category(category),
+                subcategories: subs
+                    .into_iter()
+                    .filter(|(sub, _)| !sub.is_empty())
+                    .map(|(sub, count)| {
+                        (
+                            sub.to_owned(),
+                            humanize(sub),
+                            count,
+                            filter.shows_subcategory(category, sub),
+                        )
+                    })
+                    .collect(),
+            })
+            .collect();
+        Self {
+            matching,
+            visible,
+            named,
+            categories,
+        }
+    }
+}
+
 pub struct MapView<'a> {
     /// `(id, name)` of every map.
     pub maps: &'a [(&'static str, &'static str)],
     pub selected: &'a str,
     pub markers: Markers<'a>,
-    pub filter: &'a MarkerFilter,
+    pub summary: &'a MapSummary,
+    /// Cached marker layer of the plot; the app clears it on changes.
+    pub plot: &'a canvas::Cache,
     pub query: &'a str,
     /// Categories opened to show their subcategories.
     pub expanded: &'a BTreeSet<String>,
-    pub attribution: &'a str,
 }
 
 pub fn view<'a>(map: &MapView<'a>) -> Element<'a, Message> {
@@ -68,8 +141,9 @@ pub fn view<'a>(map: &MapView<'a>) -> Element<'a, Message> {
             container(
                 Canvas::new(Plot {
                     markers,
-                    filter: map.filter,
-                    query: map.query,
+                    summary: map.summary,
+                    cache: map.plot,
+                    searching: !map.query.trim().is_empty(),
                 })
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -82,48 +156,30 @@ pub fn view<'a>(map: &MapView<'a>) -> Element<'a, Message> {
         .into(),
     };
 
-    column![
-        container(pills).padding([12, 16]),
-        body,
-        container(
-            text(format!("Markers: {}", map.attribution))
-                .size(11)
-                .color(palette::TEXT_MUTED)
-        )
-        .padding([4, 16]),
-    ]
-    .height(Length::Fill)
-    .into()
+    column![container(pills).padding([12, 16]), body]
+        .height(Length::Fill)
+        .into()
 }
 
-/// Left panel: search, show/hide all, categories with counts.
+/// Left panel: search, show/hide all, categories with icons and counts.
 fn panel<'a>(map: &MapView<'a>, markers: &'a [Marker]) -> Element<'a, Message> {
-    let matching: Vec<Marker> = markers
-        .iter()
-        .filter(|m| m.matches(map.query))
-        .cloned()
-        .collect();
-    let shown = matching.iter().filter(|m| map.filter.shows(m)).count();
+    let summary = map.summary;
+    let searching = !map.query.trim().is_empty();
 
     let mut categories = column![].spacing(2);
-    for (category, subs) in marker_counts(&matching) {
-        let total: usize = subs.values().sum();
-        let open = map.expanded.contains(category) || !map.query.trim().is_empty();
-        let has_subs = subs.keys().any(|s| !s.is_empty());
-        categories = categories.push(category_row(
-            category,
-            total,
-            map.filter.shows_category(category),
-            has_subs.then_some(open),
-        ));
-        if open && has_subs {
-            for (sub, count) in subs.into_iter().filter(|(s, _)| !s.is_empty()) {
-                let (c, s) = (category.to_owned(), sub.to_owned());
+    for category in &summary.categories {
+        let open = searching || map.expanded.contains(&category.id);
+        let has_subs = !category.subcategories.is_empty();
+        categories = categories.push(category_row(category, has_subs.then_some(open)));
+        if open {
+            for (sub, label, count, shown) in &category.subcategories {
+                let (c, s) = (category.id.clone(), sub.clone());
                 categories = categories.push(
                     row![
-                        Space::new().width(28),
-                        checkbox(map.filter.shows_subcategory(category, sub))
-                            .label(humanize(sub))
+                        Space::new().width(20),
+                        badge(&category.id, Some(sub), 18.0),
+                        checkbox(*shown)
+                            .label(label.clone())
                             .text_size(13)
                             .size(14)
                             .on_toggle(move |_| Message::ToggleMarkerSubcategory(
@@ -133,6 +189,7 @@ fn panel<'a>(map: &MapView<'a>, markers: &'a [Marker]) -> Element<'a, Message> {
                             .width(Length::Fill),
                         text(count.to_string()).size(12).color(palette::TEXT_MUTED),
                     ]
+                    .spacing(8)
                     .align_y(Alignment::Center)
                     .padding([2, 8]),
                 );
@@ -141,10 +198,14 @@ fn panel<'a>(map: &MapView<'a>, markers: &'a [Marker]) -> Element<'a, Message> {
     }
 
     let header = row![
-        text(format!("{shown} OF {} MARKERS SHOWN", matching.len()))
-            .size(11)
-            .color(palette::TEXT_MUTED)
-            .width(Length::Fill),
+        text(format!(
+            "{} OF {} MARKERS SHOWN",
+            summary.visible.len(),
+            summary.matching.len()
+        ))
+        .size(11)
+        .color(palette::TEXT_MUTED)
+        .width(Length::Fill),
         small_button("Show all", Message::ShowAllMarkers),
         small_button("Hide all", Message::HideAllMarkers),
     ]
@@ -152,21 +213,25 @@ fn panel<'a>(map: &MapView<'a>, markers: &'a [Marker]) -> Element<'a, Message> {
     .align_y(Alignment::Center);
 
     // Named places only: unnamed markers are covered by the counts above.
-    let named: Vec<&Marker> = matching.iter().filter(|m| m.label.is_some()).collect();
-    let matches = (!map.query.trim().is_empty() && !named.is_empty()).then(|| {
-        named.iter().take(50).fold(column![].spacing(4), |col, m| {
-            col.push(
-                row![
-                    dot(palette::marker(&m.category)),
-                    text(m.title()).size(13).width(Length::Fill),
-                    text(humanize(&m.category))
-                        .size(11)
-                        .color(palette::TEXT_MUTED),
-                ]
-                .spacing(8)
-                .align_y(Alignment::Center),
-            )
-        })
+    let matches = (searching && !summary.named.is_empty()).then(|| {
+        summary
+            .named
+            .iter()
+            .take(50)
+            .fold(column![].spacing(4), |col, &i| {
+                let m = &markers[i];
+                col.push(
+                    row![
+                        badge(&m.category, m.subcategory.as_deref(), 18.0),
+                        text(m.title()).size(13).width(Length::Fill),
+                        text(humanize(&m.category))
+                            .size(11)
+                            .color(palette::TEXT_MUTED),
+                    ]
+                    .spacing(8)
+                    .align_y(Alignment::Center),
+                )
+            })
     });
 
     container(
@@ -196,17 +261,12 @@ fn panel<'a>(map: &MapView<'a>, markers: &'a [Marker]) -> Element<'a, Message> {
     .into()
 }
 
-/// A category: toggle, colour, name, count and (if it has subcategories)
-/// an expander.
-fn category_row<'a>(
-    category: &str,
-    count: usize,
-    shown: bool,
-    open: Option<bool>,
-) -> Element<'a, Message> {
-    let name = category.to_owned();
-    let toggle = checkbox(shown)
-        .label(humanize(category))
+/// A category: icon, toggle, name, count and (if it has subcategories) an
+/// expander.
+fn category_row<'a>(category: &CategorySummary, open: Option<bool>) -> Element<'a, Message> {
+    let name = category.id.clone();
+    let toggle = checkbox(category.shown)
+        .label(category.label.clone())
         .text_size(14)
         .size(16)
         .on_toggle(move |_| Message::ToggleMarkerCategory(name.clone()))
@@ -214,7 +274,7 @@ fn category_row<'a>(
     let expander: Element<'a, Message> = match open {
         Some(open) => button(text(if open { "▾" } else { "▸" }).size(13))
             .padding([0, 6])
-            .on_press(Message::ExpandMarkerCategory(category.to_owned()))
+            .on_press(Message::ExpandMarkerCategory(category.id.clone()))
             .style(|_, _| button::Style {
                 text_color: palette::TEXT_MUTED,
                 ..button::Style::default()
@@ -223,9 +283,11 @@ fn category_row<'a>(
         None => Space::new().width(22).into(),
     };
     row![
-        dot(palette::marker(category)),
+        badge(&category.id, None, 22.0),
         toggle,
-        text(count.to_string()).size(12).color(palette::TEXT_MUTED),
+        text(category.count.to_string())
+            .size(12)
+            .color(palette::TEXT_MUTED),
         expander,
     ]
     .spacing(8)
@@ -234,12 +296,67 @@ fn category_row<'a>(
     .into()
 }
 
-/// The map's markers as dots, fitted to the canvas. A background map image
-/// comes once its alignment with the marker coordinates is known.
+/// The map's markers as icons, fitted to the canvas. The marker layer is
+/// cached; only the hover tooltip is drawn per frame. A background map
+/// image comes once its alignment with the marker coordinates is known.
 struct Plot<'a> {
     markers: &'a [Marker],
-    filter: &'a MarkerFilter,
-    query: &'a str,
+    summary: &'a MapSummary,
+    cache: &'a canvas::Cache,
+    searching: bool,
+}
+
+impl Plot<'_> {
+    fn draw_markers(&self, frame: &mut Frame, fit: &Fit) {
+        // `visible` already holds only search matches the filter shows.
+        let visible: Vec<&Marker> = self
+            .summary
+            .visible
+            .iter()
+            .map(|&i| &self.markers[i])
+            .collect();
+        for marker in visible.iter().filter(|m| !is_named_place(m)) {
+            let at = fit.point(marker);
+            frame.fill(
+                &Path::circle(at, ICON / 2.0),
+                palette::marker(&marker.category),
+            );
+            let inner = ICON * 0.62;
+            frame.draw_svg(
+                Rectangle::new(
+                    Point::new(at.x - inner / 2.0, at.y - inner / 2.0),
+                    Size::new(inner, inner),
+                ),
+                &handle(glyph(&marker.category, marker.subcategory.as_deref())),
+            );
+            if self.searching {
+                // Ring the matches so they stand out.
+                frame.stroke(
+                    &Path::circle(at, ICON / 2.0 + 1.5),
+                    Stroke::default().with_color(Color::WHITE).with_width(1.5),
+                );
+            }
+        }
+        // Names of places, on top of the icons.
+        for marker in visible.iter().filter(|m| is_named_place(m)) {
+            let at = fit.point(marker);
+            let label = |position: Point, color: Color| canvas::Text {
+                content: marker.title(),
+                position,
+                color,
+                size: 12.0.into(),
+                font: BOLD,
+                align_x: iced::alignment::Horizontal::Center.into(),
+                align_y: iced::alignment::Vertical::Center,
+                ..canvas::Text::default()
+            };
+            // A dark outline keeps names readable over icons.
+            for (dx, dy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)] {
+                frame.fill_text(label(Point::new(at.x + dx, at.y + dy), Color::BLACK));
+            }
+            frame.fill_text(label(at, palette::TEXT));
+        }
+    }
 }
 
 impl canvas::Program<Message> for Plot<'_> {
@@ -253,75 +370,34 @@ impl canvas::Program<Message> for Plot<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
-        frame.fill(
-            &Path::rounded_rectangle(Point::ORIGIN, bounds.size(), 8.0.into()),
-            Color::from_rgb8(0x12, 0x15, 0x1a),
-        );
-        let Some(fit) = Fit::new(self.markers, bounds.size()) else {
-            return vec![frame.into_geometry()];
-        };
-        let searching = !self.query.trim().is_empty();
-        let visible: Vec<(&Marker, Point)> = self
-            .markers
-            .iter()
-            .filter(|m| self.filter.shows(m))
-            .map(|m| (m, fit.point(m)))
-            .collect();
+        let fit = Fit::new(self.markers, bounds.size());
+        let markers = self.cache.draw(renderer, bounds.size(), |frame| {
+            frame.fill(
+                &Path::rounded_rectangle(Point::ORIGIN, bounds.size(), 8.0.into()),
+                Color::from_rgb8(0x12, 0x15, 0x1a),
+            );
+            if let Some(fit) = &fit {
+                self.draw_markers(frame, fit);
+            }
+        });
+        let mut geometry = vec![markers];
 
-        for (marker, at) in &visible {
-            if is_named_place(marker) {
-                continue;
-            }
-            let hit = searching && marker.matches(self.query);
-            let color = palette::marker(&marker.category);
-            let color = if searching && !hit {
-                with_alpha(color, 0.25)
-            } else {
-                color
-            };
-            let radius = if hit { 5.5 } else { 3.5 };
-            frame.fill(&Path::circle(*at, radius), color);
-            if hit {
-                frame.stroke(
-                    &Path::circle(*at, radius + 2.0),
-                    Stroke::default().with_color(Color::WHITE).with_width(1.5),
-                );
-            }
-        }
-        // Names of places, on top of the dots.
-        for (marker, at) in visible.iter().filter(|(m, _)| is_named_place(m)) {
-            let dim = searching && !marker.matches(self.query);
-            let label = |position: Point, color: Color| canvas::Text {
-                content: marker.title(),
-                position,
-                color,
-                size: 12.0.into(),
-                font: BOLD,
-                align_x: iced::alignment::Horizontal::Center.into(),
-                align_y: iced::alignment::Vertical::Center,
-                ..canvas::Text::default()
-            };
-            // A dark outline keeps names readable over dots.
-            for (dx, dy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)] {
-                frame.fill_text(label(Point::new(at.x + dx, at.y + dy), Color::BLACK));
-            }
-            let color = if dim {
-                with_alpha(palette::TEXT, 0.35)
-            } else {
-                palette::TEXT
-            };
-            frame.fill_text(label(*at, color));
-        }
-        // Tooltip for the marker under the cursor.
-        if let Some(cursor) = cursor.position_in(bounds)
-            && let Some((marker, at)) = visible
+        // Tooltip for the marker under the cursor (not cached).
+        if let (Some(fit), Some(cursor)) = (&fit, cursor.position_in(bounds))
+            && let Some((marker, at)) = self
+                .summary
+                .visible
                 .iter()
-                .map(|(m, at)| (m, at, at.distance(cursor)))
-                .filter(|(_, _, d)| *d <= 8.0)
+                .map(|&i| {
+                    let m = &self.markers[i];
+                    let at = fit.point(m);
+                    (m, at, at.distance(cursor))
+                })
+                .filter(|(_, _, d)| *d <= ICON / 2.0 + 2.0)
                 .min_by(|a, b| a.2.total_cmp(&b.2))
                 .map(|(m, at, _)| (m, at))
         {
+            let mut frame = Frame::new(renderer, bounds.size());
             let mut label = marker.title();
             if let Some(sub) = &marker.subcategory
                 && marker.label.is_some()
@@ -333,14 +409,15 @@ impl canvas::Program<Message> for Plot<'_> {
             }
             frame.fill_text(canvas::Text {
                 content: label,
-                position: Point::new(at.x + 10.0, at.y),
+                position: Point::new(at.x + ICON / 2.0 + 6.0, at.y),
                 color: Color::WHITE,
                 size: 13.0.into(),
                 align_y: iced::alignment::Vertical::Center,
                 ..canvas::Text::default()
             });
+            geometry.push(frame.into_geometry());
         }
-        vec![frame.into_geometry()]
+        geometry
     }
 
     /// Redraw on pointer moves inside the plot, for the hover tooltip.
@@ -410,19 +487,6 @@ impl Fit {
             self.offset.y + (marker.position.y - self.min.y) * self.scale,
         )
     }
-}
-
-fn dot<'a>(color: Color) -> Element<'a, Message> {
-    container(Space::new().width(10).height(10))
-        .style(move |_| container::Style {
-            background: Some(color.into()),
-            border: Border {
-                radius: 5.0.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        })
-        .into()
 }
 
 fn pill(label: &str, active: bool, on_press: Message) -> Element<'_, Message> {

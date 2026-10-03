@@ -16,7 +16,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 
-pub const PROTOCOL_VERSION: u32 = 4;
+pub const PROTOCOL_VERSION: u32 = 5;
 
 /// Default socket path: `$XDG_RUNTIME_DIR/arclens.sock`, falling back to the
 /// temp dir when the variable is unset (non-systemd systems).
@@ -80,9 +80,8 @@ pub enum ToOverlay {
         transform: Transform,
     },
     ClearMarkers,
-    /// The in-game map is open: show the panel with its conditions and the
-    /// marker filter (clickable; the rest of the overlay stays
-    /// click-through).
+    /// The in-game map is open: show the marker filter panel (clickable;
+    /// the rest of the overlay stays click-through).
     ShowMapPanel {
         panel: MapPanel,
     },
@@ -90,30 +89,15 @@ pub enum ToOverlay {
     HideMapPanel,
 }
 
-/// What the overlay's map panel shows. The app owns the filter; the
-/// overlay sends toggles back as [`ToApp`] messages and gets a new panel.
+/// What the overlay's map panel shows: the map's marker kinds. The app
+/// owns the filter; the overlay sends toggles back as [`ToApp`] messages
+/// and gets a new panel.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MapPanel {
     pub map_name: String,
-    /// Conditions running now; `at_ms` is when each ends.
-    #[serde(default)]
-    pub active: Vec<PanelEvent>,
-    /// Next conditions; `at_ms` is when each starts.
-    #[serde(default)]
-    pub upcoming: Vec<PanelEvent>,
     /// Marker kinds of this map, with counts and whether they are shown.
     #[serde(default)]
     pub categories: Vec<PanelCategory>,
-    /// Credit for the data shown.
-    #[serde(default)]
-    pub attribution: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PanelEvent {
-    pub name: String,
-    /// Unix milliseconds.
-    pub at_ms: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
