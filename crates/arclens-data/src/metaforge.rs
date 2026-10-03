@@ -68,6 +68,46 @@ pub const MAPS: &[(&str, &str)] = &[
     ("riven-tides", "Riven Tides"),
 ];
 
+/// The map whose name starts the in-game map panel title, e.g.
+/// `"DAM BATTLEGROUNDS - 18:45"` → `"dam"`. Tolerates OCR slips and a
+/// missing "The".
+pub fn map_for_title(title: &str) -> Option<&'static str> {
+    let name: String = title
+        .split(['-', '—', '–'])
+        .next()
+        .unwrap_or_default()
+        .chars()
+        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+        .collect::<String>()
+        .to_uppercase();
+    let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
+    let name = name.strip_prefix("THE ").unwrap_or(&name);
+    MAPS.iter()
+        .map(|&(id, full)| {
+            let full = full.to_uppercase();
+            let full = full.strip_prefix("THE ").unwrap_or(&full).to_owned();
+            (id, strsim::normalized_levenshtein(name, &full))
+        })
+        .filter(|&(_, score)| score >= 0.8)
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(id, _)| id)
+}
+
+/// Whether a schedule entry's `map` ("Dam", "Spaceport", "Blue Gate", …)
+/// names the map with MetaForge id `map_id`.
+pub fn event_on_map(event_map: &str, map_id: &str) -> bool {
+    let squash = |s: &str| -> String {
+        let s = s.to_lowercase();
+        let s = s.strip_prefix("the ").unwrap_or(&s);
+        s.chars().filter(char::is_ascii_alphanumeric).collect()
+    };
+    let event = squash(event_map);
+    !event.is_empty()
+        && MAPS.iter().any(|&(id, name)| {
+            id == map_id && (squash(id) == event || squash(name).starts_with(&event))
+        })
+}
+
 /// Marker endpoint for one map (`id` from [`MAPS`]).
 pub fn map_data_url(map: &str) -> String {
     format!("https://metaforge.app/api/game-map-data?tableID=arc_map_data&mapID={map}")
@@ -183,6 +223,26 @@ mod tests {
         // String coordinates and numeric ids are accepted.
         assert!(markers.iter().any(|m| m.id == "42"));
         assert!(markers.iter().any(|m| m.category == "other"));
+    }
+
+    #[test]
+    fn finds_the_map_from_the_panel_title() {
+        assert_eq!(map_for_title("DAM BATTLEGROUNDS - 18:45"), Some("dam"));
+        assert_eq!(map_for_title("DAM BATTLEGR0UNDS — 9:02"), Some("dam"));
+        assert_eq!(map_for_title("THE SPACEPORT - 12:00"), Some("spaceport"));
+        assert_eq!(map_for_title("BLUE GATE"), Some("blue-gate"));
+        assert_eq!(map_for_title("STELLA MONTIS - 1:00"), Some("stella-montis"));
+        assert_eq!(map_for_title("Stay1444"), None);
+    }
+
+    #[test]
+    fn matches_schedule_map_names() {
+        assert!(event_on_map("Dam", "dam"));
+        assert!(event_on_map("Dam Battlegrounds", "dam"));
+        assert!(event_on_map("The Spaceport", "spaceport"));
+        assert!(event_on_map("Blue Gate", "blue-gate"));
+        assert!(!event_on_map("Blue Gate", "dam"));
+        assert!(!event_on_map("", "dam"));
     }
 
     #[test]

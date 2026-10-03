@@ -20,9 +20,14 @@ green CI.
 - [x] **Unmap when hidden.** The overlay runs in `iced_layershell` daemon
       mode and only has a layer surface while something is drawn, so KWin can
       scan the game out directly the rest of the time.
-- [ ] **Interactive mode.** Swap the input region (`SetInputRegion`) to
-      cover only the overlay's panels, and add a search box in the overlay
-      (`ToApp::Search` already exists).
+- [x] **Input region.** `SetInputRegion` makes the whole surface
+      clickable in interactive mode, only the map panel while the in-game
+      map is open, and nothing otherwise. Keyboard is `OnDemand` while any
+      region is clickable, so the panel's search box takes typing after a
+      click.
+- [ ] Verify clicks and typing in the map panel on KDE (the headless seat
+      has no pointer).
+- [ ] Quick item search in the overlay (`ToApp::Search` already exists).
 - [ ] Overlay position and scale settings (anchor corner, per-monitor
       `StartMode::TargetScreen`).
 - [ ] Settings file (`$XDG_CONFIG_HOME/arclens/config.toml`): data refresh
@@ -102,7 +107,16 @@ green CI.
         (no value cell) → salvage outputs and SALVAGE wording in raid;
   - [x] map screen: read map name, raid time and condition from the right
         panel (`read_map_header`, ~90 ms, 0.06 ms when the map is closed);
-        not yet shown in the UI;
+  - [x] map-open detector: outlined "MAP" tab + bright panel title, no
+        OCR (`is_map_screen`); passes on all 23 fixture frames (Dam at
+        1440p only so far). The header is re-read every 5 s while open;
+        the title picks the map (`metaforge::map_for_title`);
+  - [x] overlay **map panel** while the map is open: the map's active and
+        next conditions with countdowns, plus the marker filter (search,
+        per-category and per-subcategory toggles, show/hide all) shared
+        with the app's Map tab (`ShowMapPanel`, protocol v4).
+        Verified headlessly by replaying the Dam frames
+        (`docs/assets/overlay-map-panel.png`);
   - [ ] map label finder (white outlined text in the viewport) +
         recognition-only OCR; full ocrs pipeline reads the labels but takes
         ~2 s/frame, see the map findings doc;

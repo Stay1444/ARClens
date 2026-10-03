@@ -115,3 +115,21 @@ fn finds_every_name_line_and_nothing_else() {
 
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
+
+/// The map screen is told apart from inventory, raid and trader screens.
+#[test]
+fn recognises_the_map_screen() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    for (sub, expected) in [("map", true), ("frames", false)] {
+        for entry in std::fs::read_dir(dir.join(sub)).unwrap() {
+            let path = entry.unwrap().path();
+            let frame = image::open(&path).unwrap().to_rgb8();
+            assert_eq!(
+                arclens_vision::is_map_screen(&frame),
+                expected,
+                "{}",
+                path.display()
+            );
+        }
+    }
+}

@@ -13,9 +13,22 @@ use std::time::Duration;
 /// Events surfaced to the overlay's update loop.
 #[derive(Debug, Clone)]
 pub enum Event {
-    Connected,
+    /// Connected; send replies through the [`Outbox`].
+    Connected(Outbox),
     Message(ToOverlay),
     Disconnected,
+}
+
+/// Sends messages to the companion app while connected.
+#[derive(Debug, Clone)]
+pub struct Outbox(tokio::sync::mpsc::UnboundedSender<ToApp>);
+
+impl Outbox {
+    pub fn send(&self, msg: ToApp) {
+        // Fails only once the connection is gone, which `Disconnected`
+        // reports anyway.
+        let _ = self.0.send(msg);
+    }
 }
 
 pub fn subscription() -> Subscription<Event> {
@@ -84,15 +97,25 @@ async fn connect_once(
     }))
     .await?;
 
-    while let Some(msg) = rx.recv::<ToOverlay>().await? {
-        if let ToOverlay::Hello(hello) = &msg {
-            arclens_ipc::check_version(hello)?;
-            *connected = true;
-            let _ = output.send(Event::Connected).await;
-            continue;
-        }
-        if output.send(Event::Message(msg)).await.is_err() {
-            break;
+    let (outbox, mut outgoing) = tokio::sync::mpsc::unbounded_channel();
+    let mut outbox = Some(Outbox(outbox));
+    loop {
+        tokio::select! {
+            incoming = rx.recv::<ToOverlay>() => {
+                let Some(msg) = incoming? else { break };
+                if let ToOverlay::Hello(hello) = &msg {
+                    arclens_ipc::check_version(hello)?;
+                    *connected = true;
+                    if let Some(outbox) = outbox.take() {
+                        let _ = output.send(Event::Connected(outbox)).await;
+                    }
+                    continue;
+                }
+                if output.send(Event::Message(msg)).await.is_err() {
+                    break;
+                }
+            }
+            Some(msg) = outgoing.recv() => tx.send(&msg).await?,
         }
     }
     Ok(())

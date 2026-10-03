@@ -8,6 +8,13 @@ use iced::{Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
 
 pub fn view(state: &Overlay) -> Element<'_, Message> {
     let hover = hover_layer(state);
+    let panel = state
+        .screen
+        .and_then(|screen| crate::map_panel::view(&state.panel, screen, state.now_ms));
+    let hover: Element<'_, Message> = match panel {
+        Some(panel) => stack![panel, hover].into(),
+        None => hover,
+    };
     if !state.visible {
         return hover;
     }

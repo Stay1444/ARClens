@@ -71,6 +71,12 @@ impl Analyzer {
         }
     }
 
+    /// The map panel header, if `frame` shows the map screen (OCR; call it
+    /// sparingly, e.g. every few seconds while [`crate::is_map_screen`]).
+    pub fn read_map_header(&self, frame: &RgbImage) -> anyhow::Result<Option<crate::MapHeader>> {
+        crate::read_map_header(&self.reader, frame)
+    }
+
     /// The hovered tooltip in `frame`, if any.
     ///
     /// When several panels are visible (trader screen: persistent purchase

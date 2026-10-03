@@ -7,7 +7,9 @@
 
 use crate::data;
 use crate::paths::Paths;
-use arclens_vision::{Analyzer, Hover, NameReader, RECOGNITION_MODEL_URL};
+use arclens_vision::{
+    Analyzer, Hover, MapHeader, NameReader, RECOGNITION_MODEL_URL, is_map_screen,
+};
 use futures::channel::mpsc;
 use iced::Subscription;
 use image::RgbImage;
@@ -18,6 +20,9 @@ use std::time::{Duration, Instant};
 const FAST_INTERVAL: Duration = Duration::from_millis(100);
 /// How long to stay fast after the last tooltip was seen.
 const FAST_FOR: Duration = Duration::from_secs(3);
+/// How often the map header is re-read while the map is open (its clock
+/// ticks every second; the map name and condition rarely change).
+const MAP_REREAD: Duration = Duration::from_secs(5);
 
 /// Directory of captured frames (PNG/JPEG) to replay instead of capturing.
 pub const REPLAY_DIR_ENV: &str = "ARCLENS_REPLAY_DIR";
@@ -33,6 +38,10 @@ pub enum Event {
     Hover(Hover),
     /// No tooltip on screen any more.
     Gone,
+    /// The map screen is open (sent again every few seconds while it is).
+    MapOpen(MapHeader),
+    /// The map screen closed.
+    MapClosed,
     /// Vision isn't running; why.
     Unavailable(String),
 }
@@ -101,7 +110,12 @@ fn run(mut output: mpsc::Sender<Event>) {
 
     let mut last: Option<Hover> = None;
     let mut fast_until = Instant::now();
+    // When the map header was last read, while the map is open.
+    let mut map_read: Option<Instant> = None;
     while let Some(frame) = source.next_frame() {
+        if !watch_map(&analyzer, &frame, &mut map_read, &mut send) {
+            return;
+        }
         let hover = match analyzer.analyze(&frame) {
             Ok(hover) => hover,
             Err(error) => {
@@ -130,6 +144,34 @@ fn run(mut output: mpsc::Sender<Event>) {
         last = hover;
         if !send(event) {
             return; // UI gone or hopelessly behind.
+        }
+    }
+}
+
+/// Reports the map screen opening, staying open (header re-read every
+/// [`MAP_REREAD`]) and closing. `false` when the UI is gone.
+fn watch_map(
+    analyzer: &Analyzer,
+    frame: &RgbImage,
+    map_read: &mut Option<Instant>,
+    send: &mut impl FnMut(Event) -> bool,
+) -> bool {
+    if !is_map_screen(frame) {
+        return map_read.take().is_none() || send(Event::MapClosed);
+    }
+    if map_read.is_some_and(|at| at.elapsed() < MAP_REREAD) {
+        return true;
+    }
+    match analyzer.read_map_header(frame) {
+        Ok(Some(header)) => {
+            *map_read = Some(Instant::now());
+            send(Event::MapOpen(header))
+        }
+        Ok(None) => true,
+        Err(error) => {
+            tracing::warn!(error = format!("{error:#}"), "map header unreadable");
+            *map_read = Some(Instant::now());
+            true
         }
     }
 }

@@ -10,12 +10,14 @@
 //! compositor from scanning the game out directly, which costs frames.
 
 mod ipc;
+mod map_panel;
 mod outputs;
 mod view;
 
 use arclens_core::{Advice, Item, Marker, Transform};
 use arclens_ipc::ToOverlay;
 use iced::{Color, Subscription, Task};
+use iced_layershell::actions::ActionCallback;
 use iced_layershell::daemon;
 use iced_layershell::reexport::{
     Anchor, IcedId, KeyboardInteractivity, Layer, NewLayerShellSettings, OutputOption,
@@ -103,6 +105,14 @@ pub struct Overlay {
     hover: Option<(ShownItem, arclens_ipc::NormRect)>,
     markers: Vec<Marker>,
     transform: Option<Transform>,
+    /// Map-screen panel (conditions + marker filter), the clickable part.
+    panel: map_panel::PanelState,
+    /// Sends to the companion app while connected.
+    outbox: Option<ipc::Outbox>,
+    /// Surface size in logical pixels, once known.
+    screen: Option<iced::Size>,
+    /// Wall clock (Unix ms) for the panel's countdowns.
+    now_ms: i64,
 }
 
 impl Overlay {
@@ -120,6 +130,7 @@ impl Overlay {
     fn has_content(&self) -> bool {
         self.visible
             || self.hover.is_some()
+            || self.panel.panel.is_some()
             || (!self.markers.is_empty() && self.transform.is_some())
     }
 
@@ -130,7 +141,7 @@ impl Overlay {
                 let (id, task) = Message::layershell_open(surface_settings(self.output.as_ref()));
                 tracing::debug!("mapping overlay surface");
                 self.surface = Some(id);
-                task
+                task.chain(self.input_task())
             }
             (false, Some(id)) => {
                 tracing::debug!("unmapping overlay surface");
@@ -140,12 +151,62 @@ impl Overlay {
             _ => Task::none(),
         }
     }
+
+    /// Where the surface takes pointer input: everywhere while interactive,
+    /// the map panel while it is shown, nowhere otherwise (click-through).
+    fn input_rect(&self) -> Option<iced::Rectangle> {
+        let screen = self.screen?;
+        if self.interactive {
+            return Some(iced::Rectangle::with_size(screen));
+        }
+        self.panel.bounds(screen)
+    }
+
+    /// Applies [`Self::input_rect`] and the matching keyboard mode.
+    fn input_task(&self) -> Task<Message> {
+        let Some(id) = self.surface else {
+            return Task::none();
+        };
+        #[allow(clippy::cast_possible_truncation, reason = "screen pixels fit i32")]
+        let rect = self.input_rect().map(|r| {
+            (
+                r.x as i32,
+                r.y as i32,
+                r.width.ceil() as i32,
+                r.height.ceil() as i32,
+            )
+        });
+        // Keyboard only on demand (after a click on the panel), so the game
+        // keeps focus otherwise.
+        let keyboard = if rect.is_some() {
+            KeyboardInteractivity::OnDemand
+        } else {
+            KeyboardInteractivity::None
+        };
+        Task::done(Message::SetInputRegion {
+            id,
+            callback: ActionCallback::new(move |region| {
+                if let Some((x, y, width, height)) = rect {
+                    region.add(x, y, width, height);
+                }
+            }),
+        })
+        .chain(Task::done(Message::KeyboardInteractivityChange {
+            id,
+            keyboard_interactivity: keyboard,
+        }))
+    }
 }
 
 #[to_layer_message(multi)]
 #[derive(Debug, Clone)]
 pub enum Message {
     Ipc(ipc::Event),
+    Panel(map_panel::PanelMessage),
+    /// Surface size changed (logical pixels).
+    Resized(iced::Size),
+    /// Once a second while the map panel is up (countdowns).
+    Tick,
 }
 
 fn namespace() -> String {
@@ -153,28 +214,75 @@ fn namespace() -> String {
     String::from("arclens-overlay")
 }
 
-fn subscription(_: &Overlay) -> Subscription<Message> {
+fn subscription(state: &Overlay) -> Subscription<Message> {
     // Surfaces closed by the compositor (e.g. output unplugged) are forgotten
     // by `sync_surface` on the next change; nothing to listen for here.
-    ipc::subscription().map(Message::Ipc)
+    let mut subscriptions = vec![
+        ipc::subscription().map(Message::Ipc),
+        iced::event::listen_with(|event, _, _| match event {
+            iced::Event::Window(
+                iced::window::Event::Resized(size) | iced::window::Event::Opened { size, .. },
+            ) => Some(Message::Resized(size)),
+            _ => None,
+        }),
+    ];
+    if state.panel.panel.is_some() {
+        subscriptions
+            .push(iced::time::every(std::time::Duration::from_secs(1)).map(|_| Message::Tick));
+    }
+    Subscription::batch(subscriptions)
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
 }
 
 fn update(state: &mut Overlay, message: Message) -> Task<Message> {
-    let Message::Ipc(event) = message else {
-        return Task::none();
+    let event = match message {
+        Message::Ipc(event) => event,
+        Message::Panel(msg) => {
+            let resize = matches!(msg, map_panel::PanelMessage::ToggleExpanded);
+            if let Some(to_app) = state.panel.update(msg)
+                && let Some(outbox) = &state.outbox
+            {
+                outbox.send(to_app);
+            }
+            return if resize {
+                state.input_task()
+            } else {
+                Task::none()
+            };
+        }
+        Message::Resized(size) => {
+            if state.screen == Some(size) {
+                return Task::none();
+            }
+            state.screen = Some(size);
+            return state.input_task();
+        }
+        Message::Tick => {
+            state.now_ms = now_ms();
+            return Task::none();
+        }
+        _ => return Task::none(),
     };
     let task = match event {
-        ipc::Event::Connected => {
+        ipc::Event::Connected(outbox) => {
             tracing::info!("connected to companion app");
             state.connected = true;
+            state.outbox = Some(outbox);
             Task::none()
         }
         ipc::Event::Disconnected => {
             // Without the companion app there is nothing trustworthy to show.
-            let (output, surface) = (state.output.take(), state.surface.take());
+            let (output, surface, screen) =
+                (state.output.take(), state.surface.take(), state.screen);
             *state = Overlay {
                 output,
                 surface,
+                screen,
                 ..Overlay::default()
             };
             Task::none()
@@ -194,19 +302,7 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
         ToOverlay::SetInteractive { interactive } => {
             tracing::info!(interactive, "overlay interactivity changed");
             state.interactive = interactive;
-            let keyboard = if interactive {
-                KeyboardInteractivity::OnDemand
-            } else {
-                KeyboardInteractivity::None
-            };
-            // TODO(input-region): also swap the input region so clicks reach
-            // the overlay while interactive; see docs/ROADMAP.md (M1).
-            if let Some(id) = state.surface {
-                return Task::done(Message::KeyboardInteractivityChange {
-                    id,
-                    keyboard_interactivity: keyboard,
-                });
-            }
+            return state.input_task();
         }
         ToOverlay::ShowItem {
             item,
@@ -254,6 +350,19 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
         ToOverlay::ClearMarkers => {
             state.markers.clear();
             state.transform = None;
+        }
+        ToOverlay::ShowMapPanel { panel } => {
+            let was_shown = state.panel.panel.is_some();
+            state.panel.panel = Some(panel);
+            state.now_ms = now_ms();
+            if !was_shown {
+                return state.input_task();
+            }
+        }
+        ToOverlay::HideMapPanel => {
+            state.panel.panel = None;
+            state.panel.expanded = false;
+            return state.input_task();
         }
     }
     Task::none()

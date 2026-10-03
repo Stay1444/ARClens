@@ -80,5 +80,8 @@ map→screen transform, and the overlay applies it per marker.
 - One JSON object per line, internally tagged with `"type"` in snake_case.
 - Both sides send `hello {protocol}` first. Bump `PROTOCOL_VERSION` on any
   breaking change.
+- The overlay talks back too (`ToApp`): toggles in its map panel are
+  sent to the app, which owns the marker filter, saves it and sends a new
+  `ShowMapPanel`.
 - Handy for debugging: `socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/arclens.sock`,
   or replay `scripts/overlay-demo.jsonl` with `scripts/overlay-demo.sh`.

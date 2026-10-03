@@ -57,6 +57,8 @@ pub struct App {
     marker_filter: arclens_core::MarkerFilter,
     marker_query: String,
     expanded_categories: std::collections::BTreeSet<String>,
+    /// Set while the in-game map is open.
+    map_screen: Option<MapScreen>,
     /// Item currently detected under the cursor in game, and where.
     hover: Option<(ItemId, arclens_ipc::NormRect, Situation)>,
     status: Vec<String>,
@@ -68,6 +70,13 @@ pub enum Tab {
     Map,
     Events,
     Workshop,
+}
+
+/// The in-game map screen, as last read from the screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct MapScreen {
+    /// MetaForge id of the map, if its title was recognised.
+    map: Option<&'static str>,
 }
 
 #[derive(Debug)]
@@ -136,6 +145,7 @@ impl App {
             marker_filter: crate::store::load(&paths.marker_filter()).unwrap_or_default(),
             marker_query: String::new(),
             expanded_categories: std::collections::BTreeSet::new(),
+            map_screen: None,
             paths: paths.clone(),
             status: Vec::new(),
         };
@@ -293,11 +303,27 @@ impl App {
                     interactive: self.overlay_interactive,
                 });
                 self.push_selected_to_overlay();
+                self.push_map_panel();
             }
             overlay_link::Event::Disconnected => self.overlay = None,
             overlay_link::Event::Message(arclens_ipc::ToApp::Search { query }) => {
                 self.query = query;
                 return self.refresh_results();
+            }
+            overlay_link::Event::Message(arclens_ipc::ToApp::ToggleMarkerCategory { category }) => {
+                self.edit_marker_filter(Message::ToggleMarkerCategory(category));
+            }
+            overlay_link::Event::Message(arclens_ipc::ToApp::ToggleMarkerSubcategory {
+                category,
+                subcategory,
+            }) => {
+                self.edit_marker_filter(Message::ToggleMarkerSubcategory(category, subcategory));
+            }
+            overlay_link::Event::Message(arclens_ipc::ToApp::ShowAllMarkers) => {
+                self.edit_marker_filter(Message::ShowAllMarkers);
+            }
+            overlay_link::Event::Message(arclens_ipc::ToApp::HideAllMarkers) => {
+                self.edit_marker_filter(Message::HideAllMarkers);
             }
             overlay_link::Event::Listening | overlay_link::Event::Message(_) => {}
             overlay_link::Event::Failed(error) => {
@@ -354,6 +380,25 @@ impl App {
             vision::Event::Gone => {
                 self.hover = None;
                 self.send(ToOverlay::ClearHover);
+            }
+            vision::Event::MapOpen(header) => {
+                let map = arclens_data::metaforge::map_for_title(&header.title);
+                if self.map_screen != Some(MapScreen { map }) {
+                    tracing::info!(title = %header.title, ?map, condition = ?header.condition, "map open");
+                }
+                self.map_screen = Some(MapScreen { map });
+                let mut task = Task::none();
+                if let Some(map) = map {
+                    map.clone_into(&mut self.map);
+                    task = self.load_map_markers();
+                }
+                self.push_map_panel();
+                return task;
+            }
+            vision::Event::MapClosed => {
+                tracing::info!("map closed");
+                self.map_screen = None;
+                self.send(ToOverlay::HideMapPanel);
             }
             vision::Event::Unavailable(reason) => {
                 tracing::info!(%reason, "item detection off");
@@ -469,6 +514,9 @@ impl App {
                     tracing::warn!(%error, map, "markers unavailable");
                 }
                 let current = self.tab == Tab::Map && map == self.map;
+                let on_screen = self
+                    .map_screen
+                    .is_some_and(|screen| screen.map == Some(map.as_str()));
                 self.markers.insert(
                     map,
                     match result {
@@ -476,6 +524,9 @@ impl App {
                         Err(error) => Load::Failed(error),
                     },
                 );
+                if on_screen {
+                    self.push_map_panel();
+                }
                 // The search box only exists once markers are in.
                 if current {
                     return iced::widget::operation::focus(crate::views::map::SEARCH_ID);
@@ -524,6 +575,51 @@ impl App {
             _ => return,
         }
         crate::store::save(&self.paths.marker_filter(), &self.marker_filter);
+        self.push_map_panel();
+    }
+
+    /// Sends the map panel to the overlay while the in-game map is open.
+    fn push_map_panel(&self) {
+        let Some(MapScreen { map }) = self.map_screen else {
+            return;
+        };
+        let map_name = map
+            .and_then(|id| arclens_data::metaforge::MAPS.iter().find(|m| m.0 == id))
+            .map_or("Unknown map", |m| m.1);
+        let mut panel = arclens_ipc::MapPanel {
+            map_name: map_name.to_owned(),
+            active: Vec::new(),
+            upcoming: Vec::new(),
+            categories: Vec::new(),
+            attribution: format!("Data: {}", arclens_data::metaforge::ATTRIBUTION),
+        };
+        if let (Some(map), Load::Ready(events)) = (map, &self.events) {
+            let here: Vec<_> = events
+                .iter()
+                .filter(|e| arclens_data::metaforge::event_on_map(&e.map, map))
+                .cloned()
+                .collect();
+            let agenda = arclens_core::agenda(&here, now_ms());
+            let entry = |name: &str, at_ms| arclens_ipc::PanelEvent {
+                name: name.to_owned(),
+                at_ms,
+            };
+            panel.active = agenda
+                .active
+                .iter()
+                .map(|e| entry(&e.name, e.end_ms))
+                .collect();
+            panel.upcoming = agenda
+                .upcoming
+                .iter()
+                .take(3)
+                .map(|e| entry(&e.name, e.start_ms))
+                .collect();
+        }
+        if let Some(Load::Ready(markers)) = map.and_then(|m| self.markers.get(m)) {
+            panel.categories = panel_categories(markers, &self.marker_filter);
+        }
+        self.send(ToOverlay::ShowMapPanel { panel });
     }
 
     fn on_events_loaded(&mut self, result: Result<Vec<arclens_core::ScheduledEvent>, String>) {
@@ -538,6 +634,7 @@ impl App {
                 Load::Failed(error)
             }
         };
+        self.push_map_panel();
     }
 
     /// Refetches the schedule once it is older than [`data::EVENTS_MAX_AGE`].
@@ -998,6 +1095,34 @@ fn tab_button(label: &str, active: bool, on_press: Message) -> Element<'_, Messa
         }
     })
     .into()
+}
+
+/// The marker filter as the overlay's map panel lists it.
+fn panel_categories(
+    markers: &[arclens_core::Marker],
+    filter: &arclens_core::MarkerFilter,
+) -> Vec<arclens_ipc::PanelCategory> {
+    use arclens_core::humanize;
+    arclens_core::marker_counts(markers)
+        .into_iter()
+        .map(|(category, subs)| arclens_ipc::PanelCategory {
+            id: category.to_owned(),
+            label: humanize(category),
+            count: subs.values().sum(),
+            shown: filter.shows_category(category),
+            subcategories: subs
+                .into_iter()
+                .filter(|(sub, _)| !sub.is_empty())
+                .map(|(sub, count)| arclens_ipc::PanelCategory {
+                    id: sub.to_owned(),
+                    label: humanize(sub),
+                    count,
+                    shown: filter.shows_subcategory(category, sub),
+                    subcategories: Vec::new(),
+                })
+                .collect(),
+        })
+        .collect()
 }
 
 /// Ctrl+1…4 switch tabs.
