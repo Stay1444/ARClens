@@ -9,9 +9,10 @@
 
 use crate::format::thousands;
 use crate::palette::{self, with_alpha};
+use crate::theme::{self, size};
 use arclens_core::{Advice, Item, Place, RequirementKind, Verdict, breakdown};
 use iced::widget::{Space, column, container, image, row, text};
-use iced::{Alignment, Border, Color, Element, Font, Length, font};
+use iced::{Alignment, Border, Color, Element, Length};
 use std::path::Path;
 
 /// How much of the card to show.
@@ -36,11 +37,7 @@ pub struct ItemCard<'a> {
     pub size: CardSize,
 }
 
-const BOLD: Font = Font {
-    weight: font::Weight::Bold,
-    ..Font::DEFAULT
-};
-const COMPACT_WIDTH: f32 = 360.0;
+const COMPACT_WIDTH: f32 = 380.0;
 const COMPACT_LIST_LIMIT: usize = 3;
 
 pub fn item_card<'a, Message: 'a>(card: &ItemCard<'a>) -> Element<'a, Message> {
@@ -50,12 +47,7 @@ pub fn item_card<'a, Message: 'a>(card: &ItemCard<'a>) -> Element<'a, Message> {
         CardSize::Full => 96.0,
     };
 
-    let mut body = column![
-        header(card, rarity_color, icon_size),
-        verdict_bar(card),
-        values(&card.advice),
-    ]
-    .spacing(10);
+    let mut body = column![verdict_bar(card), values(&card.advice)].spacing(12);
 
     if let Some(section) = recycles_section(card) {
         body = body.push(section);
@@ -77,7 +69,11 @@ pub fn item_card<'a, Message: 'a>(card: &ItemCard<'a>) -> Element<'a, Message> {
     if card.size == CardSize::Full
         && let Some(description) = &card.item.description
     {
-        body = body.push(text(description).size(13).color(palette::TEXT_MUTED));
+        body = body.push(
+            text(description)
+                .size(size::BODY)
+                .color(palette::TEXT_MUTED),
+        );
     }
 
     let width = match card.size {
@@ -85,16 +81,28 @@ pub fn item_card<'a, Message: 'a>(card: &ItemCard<'a>) -> Element<'a, Message> {
         CardSize::Full => Length::Fill,
     };
 
-    // The border carries the rarity colour so the tier registers even in
-    // peripheral vision.
-    container(body.padding(14))
+    // Like the game's tooltip: a cream header with the name in capitals,
+    // over a dark body. The border carries the rarity colour so the tier
+    // registers even in peripheral vision.
+    let head = container(header(card, rarity_color, icon_size))
+        .padding(14)
+        .width(Length::Fill)
+        .style(|_| container::Style {
+            background: Some(theme::CREAM.into()),
+            border: Border {
+                radius: iced::border::Radius::default().top(theme::RADIUS),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        });
+    container(column![head, body.padding(14)])
         .width(width)
         .style(move |_| container::Style {
-            background: Some(palette::SURFACE.into()),
+            background: Some(with_alpha(theme::PANEL, 0.97).into()),
             border: Border {
-                color: with_alpha(rarity_color, 0.55),
-                width: 1.5,
-                radius: 8.0.into(),
+                color: with_alpha(rarity_color, 0.7),
+                width: 2.0,
+                radius: theme::RADIUS.into(),
             },
             text_color: Some(palette::TEXT),
             ..container::Style::default()
@@ -122,37 +130,58 @@ fn header<'a, Message: 'a>(
         .height(icon_size)
         .center(icon_size)
         .style(move |_| container::Style {
-            background: Some(with_alpha(rarity_color, 0.18).into()),
+            background: Some(theme::PANEL.into()),
             border: Border {
-                color: with_alpha(rarity_color, 0.6),
-                width: 1.0,
-                radius: 6.0.into(),
+                color: rarity_color,
+                width: 2.0,
+                radius: theme::RADIUS.into(),
             },
             ..container::Style::default()
         });
 
-    let mut subtitle = palette::rarity_label(card.item.rarity).to_owned();
+    // Tags like the game's: the type, then the rarity on its colour.
+    let mut tags = row![].spacing(3);
     if let Some(category) = &card.item.category {
-        if !subtitle.is_empty() {
-            subtitle.push_str(" · ");
-        }
-        subtitle.push_str(&category.to_uppercase());
+        tags = tags.push(tag(&category.to_uppercase(), theme::INK));
+    }
+    let rarity = palette::rarity_label(card.item.rarity);
+    if !rarity.is_empty() {
+        tags = tags.push(tag(rarity, rarity_color));
     }
 
     let name_size = match card.size {
-        CardSize::Compact => 19,
-        CardSize::Full => 26,
+        CardSize::Compact => 26.0,
+        CardSize::Full => size::TITLE,
     };
     row![
         tile,
         column![
-            text(&card.item.name).size(name_size).font(BOLD),
-            text(subtitle).size(11).color(rarity_color),
+            tags,
+            text(card.item.name.to_uppercase())
+                .size(name_size)
+                .font(theme::DISPLAY)
+                .color(theme::INK),
         ]
-        .spacing(2),
+        .spacing(4),
     ]
-    .spacing(12)
+    .spacing(14)
     .align_y(Alignment::Center)
+    .into()
+}
+
+/// A small tag with light text on `color`.
+fn tag<'a, Message: 'a>(label: &str, color: Color) -> Element<'a, Message> {
+    container(
+        text(label.to_owned())
+            .size(size::TINY)
+            .font(theme::DISPLAY_SEMI)
+            .color(Color::WHITE),
+    )
+    .padding([1, 6])
+    .style(move |_| container::Style {
+        background: Some(color.into()),
+        ..container::Style::default()
+    })
     .into()
 }
 
@@ -162,22 +191,24 @@ fn verdict_bar<'a, Message: 'a>(card: &ItemCard<'a>) -> Element<'a, Message> {
     container(
         row![
             text(palette::verdict_label_in(verdict, card.advice.place))
-                .size(22)
-                .font(BOLD)
-                .color(color),
-            text(reason(card)).size(13).color(palette::TEXT),
+                .size(30)
+                .font(theme::DISPLAY)
+                .color(theme::INK),
+            text(reason(card))
+                .size(size::SMALL)
+                .font(theme::STRONG)
+                .color(theme::INK),
         ]
-        .spacing(12)
+        .spacing(14)
         .align_y(Alignment::Center),
     )
-    .padding([8, 12])
+    .padding([6, 14])
     .width(Length::Fill)
     .style(move |_| container::Style {
-        background: Some(with_alpha(color, 0.14).into()),
+        background: Some(color.into()),
         border: Border {
-            color: with_alpha(color, 0.7),
-            width: 1.0,
-            radius: 6.0.into(),
+            radius: theme::RADIUS.into(),
+            ..Border::default()
         },
         ..container::Style::default()
     })
@@ -227,7 +258,7 @@ fn values<'a, Message: 'a>(advice: &Advice) -> Element<'a, Message> {
         stat(
             sell_label,
             advice.sell_value,
-            !best_is_recycle && advice.verdict != Verdict::Keep
+            advice.verdict == Verdict::Sell
         ),
         stat(
             if in_raid { "SALVAGE" } else { "RECYCLE" },
@@ -252,15 +283,21 @@ fn stat<'a, Message: 'a>(
     };
     container(
         column![
-            text(label).size(10).color(palette::TEXT_MUTED),
-            text(value_text).size(17).font(BOLD).color(value_color),
+            text(label)
+                .size(size::TINY)
+                .font(theme::DISPLAY_SEMI)
+                .color(palette::TEXT_MUTED),
+            text(value_text)
+                .size(size::H2)
+                .font(theme::STRONG)
+                .color(value_color),
         ]
-        .spacing(2),
+        .spacing(1),
     )
-    .padding([6, 10])
+    .padding([7, 12])
     .width(Length::Fill)
     .style(move |_| container::Style {
-        background: Some(palette::SURFACE_RAISED.into()),
+        background: Some(theme::PANEL_RAISED.into()),
         border: Border {
             color: if highlight {
                 with_alpha(palette::COIN, 0.6)
@@ -354,8 +391,14 @@ fn section<'a, Message: 'a>(title: &'a str, lines: Vec<String>) -> Element<'a, M
     lines
         .into_iter()
         .fold(
-            column![text(title).size(10).color(palette::TEXT_MUTED)].spacing(3),
-            |col, line| col.push(text(line).size(13)),
+            column![
+                text(title)
+                    .size(size::TINY)
+                    .font(theme::DISPLAY_SEMI)
+                    .color(palette::TEXT_MUTED)
+            ]
+            .spacing(3),
+            |col, line| col.push(text(line).size(size::SMALL)),
         )
         .into()
 }

@@ -25,7 +25,7 @@ const WEAK_FIT_SCALE_SPAN: f32 = 0.3;
 /// Results sent to the overlay's quick search.
 const SEARCH_HITS: usize = 8;
 const SEARCH_ID: &str = "search";
-const LIST_WIDTH: f32 = 400.0;
+const LIST_WIDTH: f32 = 420.0;
 const BOLD: Font = Font {
     weight: font::Weight::Bold,
     ..Font::DEFAULT
@@ -1751,15 +1751,16 @@ impl App {
         } else {
             format!("{} RESULTS", self.results.len())
         })
-        .size(11)
+        .size(theme::size::TINY)
+        .font(theme::DISPLAY_SEMI)
         .color(palette::TEXT_MUTED);
 
         let list = column![
-            list_header,
-            scrollable(rows.padding([0, 8])).height(Length::Fill)
+            container(list_header).padding([0, 10]),
+            scrollable(rows.padding([0, 10])).height(Length::Fill)
         ]
-        .spacing(8)
-        .padding([12, 8])
+        .spacing(10)
+        .padding([16, 8])
         .width(LIST_WIDTH);
 
         let detail: Element<'_, Message> = {
@@ -1774,19 +1775,21 @@ impl App {
                     });
                     scrollable(
                         container(card)
-                            .padding(24)
-                            .max_width(720),
+                            .padding(theme::PAGE_PADDING)
+                            .max_width(820),
                     )
                     .height(Length::Fill)
                     .into()
                 }
                 None => centered(
                     column![
-                        text("Pick an item").size(22).font(BOLD),
+                        theme::heading("Pick an item", theme::size::H1),
                         text("Search above (Enter opens the top result) or browse the list. The selected item is also shown on the in-game overlay.")
+                            .size(theme::size::BODY)
                             .color(palette::TEXT_MUTED),
                     ]
-                    .spacing(6)
+                    .spacing(8)
+                    .max_width(520)
                     .align_x(Alignment::Center),
                 ),
             }
@@ -1827,10 +1830,10 @@ impl App {
         let verdict_color = palette::verdict(advice.verdict);
 
         let icon: Element<'_, Message> = match self.icons.get(&item.id) {
-            Some(icon) => image(icon.thumb.clone()).width(32).height(32).into(),
-            None => Space::new().width(32).height(32).into(),
+            Some(icon) => image(icon.thumb.clone()).width(40).height(40).into(),
+            None => Space::new().width(40).height(40).into(),
         };
-        let tile = container(icon).center(40).style(move |_| container::Style {
+        let tile = container(icon).center(50).style(move |_| container::Style {
             background: Some(with_alpha(rarity, 0.16).into()),
             border: Border {
                 color: with_alpha(rarity, 0.55),
@@ -1846,34 +1849,33 @@ impl App {
         let content = row![
             tile,
             column![
-                text(&item.name).size(14),
+                text(&item.name).size(theme::size::BODY).font(theme::STRONG),
                 text(palette::rarity_label(item.rarity))
-                    .size(10)
+                    .size(theme::size::TINY)
+                    .font(theme::DISPLAY_SEMI)
                     .color(rarity),
             ]
-            .spacing(1)
             .width(Length::Fill),
             column![
                 text(palette::verdict_label(advice.verdict))
-                    .size(11)
-                    .font(BOLD)
+                    .size(theme::size::SMALL)
+                    .font(theme::DISPLAY)
                     .color(verdict_color),
-                text(value).size(12).color(palette::COIN),
+                text(value).size(theme::size::SMALL).color(palette::COIN),
             ]
-            .spacing(1)
             .align_x(Alignment::End),
         ]
-        .spacing(10)
+        .spacing(12)
         .align_y(Alignment::Center);
 
         let selected = self.selected.as_ref() == Some(&item.id);
         button(content)
             .width(Length::Fill)
-            .padding([6, 8])
+            .padding([7, 10])
             .on_press(Message::Select(item.id.clone()))
             .style(move |_, status| {
                 let background = match (selected, status) {
-                    (true, _) => Some(with_alpha(palette::TEXT, 0.10).into()),
+                    (true, _) => Some(with_alpha(theme::CREAM, 0.14).into()),
                     (false, button::Status::Hovered | button::Status::Pressed) => {
                         Some(with_alpha(palette::TEXT, 0.05).into())
                     }
