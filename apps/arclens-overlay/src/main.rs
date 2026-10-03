@@ -73,7 +73,10 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
         return Task::none();
     };
     match event {
-        ipc::Event::Connected => state.connected = true,
+        ipc::Event::Connected => {
+            tracing::info!("connected to companion app");
+            state.connected = true;
+        }
         ipc::Event::Disconnected => {
             // Without the companion app there is nothing trustworthy to show.
             *state = Overlay::default();
@@ -86,8 +89,12 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
 fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
     match msg {
         ToOverlay::Hello(_) => {}
-        ToOverlay::SetVisible { visible } => state.visible = visible,
+        ToOverlay::SetVisible { visible } => {
+            tracing::info!(visible, "overlay visibility changed");
+            state.visible = visible;
+        }
         ToOverlay::SetInteractive { interactive } => {
+            tracing::info!(interactive, "overlay interactivity changed");
             state.interactive = interactive;
             let keyboard = if interactive {
                 KeyboardInteractivity::OnDemand
@@ -98,7 +105,10 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
             // the overlay while interactive; see docs/ROADMAP.md (M1).
             return Task::done(Message::KeyboardInteractivityChange(keyboard));
         }
-        ToOverlay::ShowItem { item, advice } => state.item = Some((item, advice)),
+        ToOverlay::ShowItem { item, advice } => {
+            tracing::info!(item = %item.name, "showing item");
+            state.item = Some((item, advice));
+        }
         ToOverlay::ShowMarkers {
             markers, transform, ..
         } => {

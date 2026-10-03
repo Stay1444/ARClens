@@ -20,7 +20,7 @@ Early development (milestone M0 done). See [docs/ROADMAP.md](docs/ROADMAP.md).
 | Works today | Planned |
 |---|---|
 | Item search with keep / sell / recycle advice and "needed for" (quests, workshop, projects) | Map markers and calibration, event timers |
-| Click-through overlay on the layer-shell OVERLAY layer (verified on Sway; KDE + fullscreen game still to be tested) | Detecting the hovered item and open map via screen capture and computer vision |
+| Click-through overlay on the layer-shell OVERLAY layer (verified on KDE Plasma 6 over ARC Raiders with native-Wayland Proton) | Detecting the hovered item and open map via screen capture and computer vision |
 | Global hotkeys via the desktop portal | Packaging (COPR / Flatpak) |
 
 ## Safe by design

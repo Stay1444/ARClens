@@ -17,6 +17,13 @@ under Steam/Proton._
 - Wine's "exclusive fullscreen" is emulated on Wayland, so it behaves like
   borderless and the overlay still shows.
 
+## Field test results
+
+| Date | Desktop | Game mode | Result |
+|---|---|---|---|
+| 2026-10-03 | KDE Plasma 6 Wayland, Fedora | ARC Raiders, Proton with `PROTON_ENABLE_WAYLAND=1` | ✅ Overlay drawn above the game, click-through works, GlobalShortcuts bound (Ctrl+Shift+O / Ctrl+Shift+I) |
+| — | KDE Plasma 6 Wayland | Proton via XWayland (default) | Not yet tested |
+
 ## Click-through and interactive mode
 
 - **Passive:** empty input region (`wl_surface.set_input_region`) and

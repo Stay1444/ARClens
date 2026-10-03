@@ -11,7 +11,8 @@ green CI.
 - `arclens-ipc`: protocol and handshake.
 - `arclens-hotkeys`: GlobalShortcuts portal.
 - `arclens`: companion window (search, detail, overlay control).
-- `arclens-overlay`: OVERLAY-layer, click-through, item card and markers.
+- `arclens-overlay`: OVERLAY-layer, click-through, item card and markers,
+  status badge while shown.
   Verified rendering under headless Sway.
 
 ## M1: Overlay you can use in a raid
@@ -26,9 +27,12 @@ green CI.
       `StartMode::TargetScreen`).
 - [ ] Settings file (`$XDG_CONFIG_HOME/arclens/config.toml`): data refresh
       interval, overlay corner, opacity.
-- [ ] Test on KDE Plasma 6 Wayland over fullscreen ARC Raiders: XWayland
-      **and** `PROTON_ENABLE_WAYLAND=1`. Record the results in
+- [x] Test on KDE Plasma 6 Wayland over ARC Raiders with
+      `PROTON_ENABLE_WAYLAND=1` (works, 2026-10-03).
+- [ ] Same test with Proton via XWayland (the default). Record the results in
       `docs/research/wayland-overlay.md`.
+- [ ] Start the overlay automatically from the app, and restart it if it
+      exits.
 - [ ] Packaging: `.desktop` install, Fedora COPR or Flatpak (the Flatpak
       needs the portal permissions).
 

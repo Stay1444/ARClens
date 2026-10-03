@@ -17,19 +17,48 @@ pub fn view(state: &Overlay) -> Element<'_, Message> {
         .width(Length::Fill)
         .height(Length::Fill);
 
-    let card: Element<'_, Message> = match &state.item {
-        Some((item, advice)) => item_card(item, advice),
-        None => Space::new().into(),
-    };
+    // The badge is always drawn while visible, so "is the overlay on screen
+    // at all?" can be answered at a glance, even with nothing selected.
+    let mut panel = column![status_badge(state)]
+        .spacing(8)
+        .align_x(iced::Alignment::End);
+    if let Some((item, advice)) = &state.item {
+        panel = panel.push(item_card(item, advice));
+    }
 
     stack![
         markers,
-        container(card)
+        container(panel)
             .width(Length::Fill)
             .align_right(Length::Fill)
             .padding(24),
     ]
     .into()
+}
+
+fn status_badge(state: &Overlay) -> Element<'_, Message> {
+    let mode = if state.interactive {
+        "interactive"
+    } else {
+        "click-through"
+    };
+    let hint = if state.item.is_none() {
+        " · pick an item in the app"
+    } else {
+        ""
+    };
+    container(text(format!("ARClens · {mode}{hint}")).size(12))
+        .padding([4, 10])
+        .style(|_| container::Style {
+            background: Some(Color::from_rgba8(0x10, 0x12, 0x16, 0.75).into()),
+            border: iced::Border {
+                radius: 10.0.into(),
+                ..Default::default()
+            },
+            text_color: Some(Color::from_rgb8(0xc8, 0xcc, 0xd4)),
+            ..Default::default()
+        })
+        .into()
 }
 
 fn item_card<'a>(item: &'a Item, advice: &'a Advice) -> Element<'a, Message> {

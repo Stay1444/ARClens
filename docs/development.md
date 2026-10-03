@@ -33,6 +33,10 @@ cargo run -p arclens                        # companion app
 cargo run -p arclens-overlay                # overlay (start it after the app)
 ```
 
+The overlay starts hidden. Toggle it with **Ctrl+Shift+O** (or the app's
+"Show overlay" button). While shown, a small "ARClens" badge sits top-right.
+Click an item in the app to put its card on the overlay.
+
 Useful environment variables:
 
 | Variable | Effect |
