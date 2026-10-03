@@ -89,3 +89,45 @@ async fn refresh(paths: &Paths, cache: &DiskCache) -> anyhow::Result<Catalog> {
     })
     .await?
 }
+
+/// Load a saved `events-schedule` response instead of fetching (offline dev).
+pub const EVENTS_FILE_ENV: &str = "ARCLENS_EVENTS_FILE";
+/// Events are refetched after this long.
+pub const EVENTS_MAX_AGE: Duration = Duration::from_secs(30 * 60);
+
+/// The condition schedule: fetched from MetaForge and cached; the cache is
+/// used when offline.
+pub async fn load_events(paths: Paths) -> Result<Vec<arclens_core::ScheduledEvent>, String> {
+    use arclens_data::metaforge;
+    if let Some(file) = std::env::var_os(EVENTS_FILE_ENV) {
+        let bytes = tokio::fs::read(&file).await.map_err(|e| e.to_string())?;
+        return metaforge::parse_events(&bytes).map_err(|e| e.to_string());
+    }
+    let cache = paths.cache.join("events-schedule.json");
+    let fetched = async {
+        let bytes = http_client()
+            .get(metaforge::EVENTS_SCHEDULE_URL)
+            .send()
+            .await?
+            .error_for_status()?
+            .bytes()
+            .await?;
+        let events = metaforge::parse_events(&bytes)?;
+        if let Some(dir) = cache.parent() {
+            let _ = tokio::fs::create_dir_all(dir).await;
+        }
+        let _ = tokio::fs::write(&cache, &bytes).await;
+        Ok::<_, arclens_data::Error>(events)
+    }
+    .await;
+    match fetched {
+        Ok(events) => Ok(events),
+        Err(error) => {
+            tracing::warn!(%error, "event schedule fetch failed; trying cache");
+            let bytes = tokio::fs::read(&cache)
+                .await
+                .map_err(|_| format!("could not load the event schedule: {error}"))?;
+            metaforge::parse_events(&bytes).map_err(|e| e.to_string())
+        }
+    }
+}

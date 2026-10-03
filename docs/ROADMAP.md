@@ -60,8 +60,14 @@ green CI.
 - [ ] **Manual calibration.** The user opens the in-game map and clicks two
       landmarks; `Transform::from_two_points` gives map→screen. Markers then
       render while the view doesn't move. This is the stepping stone to M3.
-- [ ] Event timers: a MetaForge `events-schedule` provider (cached,
-      attributed). Verify the per-region rotation claim first.
+- [x] Event timers: a MetaForge `events-schedule` provider (cached for
+      30 min, offline fallback, attributed) and an **Events** tab in the
+      app: active now, next per map, schedule per condition in local time
+      (`docs/assets/events.png`).
+- [ ] Verify the per-region rotation claim against the live feed and the
+      game; add a region selector if MetaForge exposes one.
+- [ ] Show the active/next condition in the overlay while the map screen is
+      open.
 - [ ] Optional: tail `PioneerGame.log` for the current map. Never persist
       its contents.
 

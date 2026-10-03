@@ -19,6 +19,7 @@ arclens-vision = { workspace = true }
 directories = { workspace = true }
 futures = { workspace = true }
 iced = { workspace = true }
+jiff = "0.2"
 image = { workspace = true, features = ["jpeg"] }
 reqwest = { workspace = true }
 serde_json = { workspace = true }

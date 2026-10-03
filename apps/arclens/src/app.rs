@@ -41,17 +41,26 @@ pub struct App {
     /// The player's workshop levels (`None`: never set, value-only advice).
     progress: Option<Progress>,
     progress_path: std::path::PathBuf,
-    /// What the right-hand pane shows.
-    pane: Pane,
+    /// Which page the window shows.
+    tab: Tab,
+    /// Map-condition schedule (MetaForge).
+    events: Load<Vec<arclens_core::ScheduledEvent>>,
+    events_loaded_at: Option<std::time::Instant>,
+    /// Events tab: only this map's conditions (`None`: all maps).
+    event_map_filter: Option<String>,
+    /// Wall clock in Unix ms, advanced by the 1 s tick while it matters.
+    now_ms: i64,
+    paths: Paths,
     /// Item currently detected under the cursor in game, and where.
     hover: Option<(ItemId, arclens_ipc::NormRect, Situation)>,
     status: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Pane {
-    Item,
+pub enum Tab {
+    Items,
     Workshop,
+    Events,
 }
 
 #[derive(Debug)]
@@ -72,7 +81,11 @@ pub enum Message {
     ToggleOverlay,
     ToggleInteractive,
     ToggleVision,
-    ToggleWorkshop,
+    SetTab(Tab),
+    EventsLoaded(Result<Vec<arclens_core::ScheduledEvent>, String>),
+    /// Once a second while the Events tab is open (countdowns).
+    Tick,
+    FilterEventsMap(Option<String>),
     SetStationLevel(String, u32),
     ClearProgress,
     Overlay(overlay_link::Event),
@@ -98,19 +111,29 @@ impl App {
             hover: None,
             progress: crate::progress::load(&paths.progress()),
             progress_path: paths.progress(),
-            pane: Pane::Item,
+            tab: Tab::Items,
+            events: Load::Loading,
+            events_loaded_at: None,
+            event_map_filter: None,
+            now_ms: now_ms(),
+            paths: paths.clone(),
             status: Vec::new(),
         };
         let tasks = Task::batch([
-            Task::perform(data::load(paths), Message::CatalogLoaded),
+            Task::perform(data::load(paths.clone()), Message::CatalogLoaded),
+            Task::perform(data::load_events(paths), Message::EventsLoaded),
             iced::widget::operation::focus(SEARCH_ID),
         ]);
         (app, tasks)
     }
 
-    #[allow(clippy::unused_self, reason = "signature required by iced")]
     pub fn subscription(&self) -> Subscription<Message> {
         let mut subscriptions = vec![
+            // Also while the search box has focus (it captures every key).
+            iced::event::listen_with(|event, _, _| match event {
+                iced::Event::Keyboard(key) => tab_shortcut(key),
+                _ => None,
+            }),
             overlay_link::subscription().map(Message::Overlay),
             hotkeys::subscription().map(Message::Hotkey),
         ];
@@ -119,6 +142,10 @@ impl App {
         }
         if overlay_process::enabled() {
             subscriptions.push(overlay_process::subscription().map(Message::OverlayProcess));
+        }
+        if self.tab == Tab::Events {
+            subscriptions
+                .push(iced::time::every(std::time::Duration::from_secs(1)).map(|_| Message::Tick));
         }
         Subscription::batch(subscriptions)
     }
@@ -150,7 +177,7 @@ impl App {
                 return self.refresh_results();
             }
             Message::Select(id) => {
-                self.pane = Pane::Item;
+                self.tab = Tab::Items;
                 self.selected = Some(id);
                 self.push_selected_to_overlay();
             }
@@ -200,12 +227,20 @@ impl App {
                     self.send(ToOverlay::ClearHover);
                 }
             }
-            Message::ToggleWorkshop => {
-                self.pane = match self.pane {
-                    Pane::Item => Pane::Workshop,
-                    Pane::Workshop => Pane::Item,
-                };
+            Message::SetTab(tab) => {
+                self.tab = tab;
+                self.now_ms = now_ms();
+                if tab == Tab::Items {
+                    return iced::widget::operation::focus(SEARCH_ID);
+                }
+                return self.refresh_events_if_stale();
             }
+            Message::EventsLoaded(result) => self.on_events_loaded(result),
+            Message::Tick => {
+                self.now_ms = now_ms();
+                return self.refresh_events_if_stale();
+            }
+            Message::FilterEventsMap(map) => self.event_map_filter = map,
             Message::SetStationLevel(station, level) => {
                 self.progress
                     .get_or_insert_with(Progress::default)
@@ -387,8 +422,65 @@ impl App {
         }
     }
 
+    fn on_events_loaded(&mut self, result: Result<Vec<arclens_core::ScheduledEvent>, String>) {
+        self.events_loaded_at = Some(std::time::Instant::now());
+        self.events = match result {
+            Ok(events) => {
+                tracing::info!(events = events.len(), "event schedule loaded");
+                Load::Ready(events)
+            }
+            Err(error) => {
+                tracing::warn!(%error, "event schedule unavailable");
+                Load::Failed(error)
+            }
+        };
+    }
+
+    /// Refetches the schedule once it is older than [`data::EVENTS_MAX_AGE`].
+    fn refresh_events_if_stale(&mut self) -> Task<Message> {
+        match self.events_loaded_at {
+            Some(at) if at.elapsed() >= data::EVENTS_MAX_AGE => {
+                // Keep showing the old schedule until the new one arrives.
+                self.events_loaded_at = Some(std::time::Instant::now());
+                Task::perform(data::load_events(self.paths.clone()), Message::EventsLoaded)
+            }
+            _ => Task::none(),
+        }
+    }
+
     pub fn view(&self) -> Element<'_, Message> {
-        let body: Element<'_, Message> = match &self.catalog {
+        let body: Element<'_, Message> = if self.tab == Tab::Events {
+            self.view_events()
+        } else {
+            self.view_catalog_or_status()
+        };
+        column![self.view_top_bar(), body, self.view_footer()].into()
+    }
+
+    fn view_events(&self) -> Element<'_, Message> {
+        match &self.events {
+            Load::Loading => centered(text("Loading event schedule…").color(palette::TEXT_MUTED)),
+            Load::Failed(error) => centered(
+                column![
+                    text("Could not load the event schedule")
+                        .size(20)
+                        .font(BOLD),
+                    text(error).color(palette::TEXT_MUTED),
+                ]
+                .spacing(6)
+                .align_x(Alignment::Center),
+            ),
+            Load::Ready(events) => crate::views::events::view(
+                events,
+                self.now_ms,
+                self.event_map_filter.as_deref(),
+                arclens_data::metaforge::ATTRIBUTION,
+            ),
+        }
+    }
+
+    fn view_catalog_or_status(&self) -> Element<'_, Message> {
+        match &self.catalog {
             Load::Loading => centered(text("Loading game data…").color(palette::TEXT_MUTED)),
             Load::Failed(error) => centered(
                 column![
@@ -399,9 +491,7 @@ impl App {
                 .align_x(Alignment::Center),
             ),
             Load::Ready(catalog) => self.view_catalog(catalog),
-        };
-
-        column![self.view_top_bar(), body, self.view_footer()].into()
+        }
     }
 
     fn view_top_bar(&self) -> Element<'_, Message> {
@@ -430,25 +520,32 @@ impl App {
         .spacing(6)
         .align_y(Alignment::Center);
 
-        let bar = row![
-            text("ARClens").size(20).font(BOLD),
+        let tabs = [
+            ("Items", Tab::Items),
+            ("Events", Tab::Events),
+            ("Workshop", Tab::Workshop),
+        ]
+        .into_iter()
+        .fold(row![].spacing(4), |r, (label, tab)| {
+            r.push(tab_button(label, self.tab == tab, Message::SetTab(tab)))
+        });
+        let middle: Element<'_, Message> = if self.tab == Tab::Events {
+            Space::new().width(Length::Fill).into()
+        } else {
             text_input("Search items…", &self.query)
                 .id(SEARCH_ID)
                 .on_input(Message::QueryChanged)
                 .on_submit(Message::SelectFirst)
                 .padding([8, 12])
                 .size(15)
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .into()
+        };
+        let bar = row![
+            text("ARClens").size(20).font(BOLD),
+            tabs,
+            middle,
             status,
-            pill_button(
-                if self.pane == Pane::Workshop {
-                    "Items"
-                } else {
-                    "Workshop"
-                },
-                "",
-                Message::ToggleWorkshop,
-            ),
             pill_button(
                 "Detect items",
                 if self.vision_enabled { "on" } else { "off" },
@@ -519,7 +616,7 @@ impl App {
         .padding([12, 8])
         .width(LIST_WIDTH);
 
-        let detail: Element<'_, Message> = if self.pane == Pane::Workshop {
+        let detail: Element<'_, Message> = if self.tab == Tab::Workshop {
             self.view_workshop(catalog)
         } else {
             match self.selected.as_ref().and_then(|id| catalog.item(id)) {
@@ -745,6 +842,69 @@ fn pill_button<'a>(label: &'a str, shortcut: &'a str, on_press: Message) -> Elem
         }
     })
     .into()
+}
+
+fn tab_button(label: &str, active: bool, on_press: Message) -> Element<'_, Message> {
+    button(
+        text(label)
+            .size(14)
+            .font(if active { BOLD } else { Font::DEFAULT }),
+    )
+    .padding([6, 12])
+    .on_press(on_press)
+    .style(move |_, status| {
+        let background = if active {
+            with_alpha(palette::TEXT, 0.14)
+        } else if matches!(status, button::Status::Hovered | button::Status::Pressed) {
+            with_alpha(palette::TEXT, 0.08)
+        } else {
+            Color::TRANSPARENT
+        };
+        button::Style {
+            background: Some(background.into()),
+            text_color: if active {
+                palette::TEXT
+            } else {
+                palette::TEXT_MUTED
+            },
+            border: Border {
+                radius: 6.0.into(),
+                ..Border::default()
+            },
+            ..button::Style::default()
+        }
+    })
+    .into()
+}
+
+/// Ctrl+1/2/3 switch tabs.
+fn tab_shortcut(event: iced::keyboard::Event) -> Option<Message> {
+    use iced::keyboard::{Event, Key};
+    let Event::KeyPressed {
+        key: Key::Character(c),
+        modifiers,
+        ..
+    } = event
+    else {
+        return None;
+    };
+    if !modifiers.command() {
+        return None;
+    }
+    let tab = match c.as_str() {
+        "1" => Tab::Items,
+        "2" => Tab::Events,
+        "3" => Tab::Workshop,
+        _ => return None,
+    };
+    Some(Message::SetTab(tab))
+}
+
+/// Wall-clock time in Unix milliseconds.
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
 }
 
 fn centered<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {

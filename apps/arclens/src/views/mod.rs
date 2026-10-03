@@ -1,0 +1,3 @@
+//! Tab views that don't need the whole `App`.
+
+pub mod events;

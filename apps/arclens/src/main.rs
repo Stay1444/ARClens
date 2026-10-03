@@ -4,7 +4,7 @@
 //! The overlay (`arclens-overlay`) is a separate, dumb renderer that this
 //! app drives over IPC; see `docs/architecture/overview.md`.
 
-mod app;
+pub mod app;
 mod data;
 mod hotkeys;
 mod icons;
@@ -12,6 +12,7 @@ mod overlay_link;
 mod overlay_process;
 mod paths;
 mod progress;
+mod views;
 mod vision;
 
 fn main() -> anyhow::Result<()> {
