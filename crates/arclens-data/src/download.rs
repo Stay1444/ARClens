@@ -49,8 +49,14 @@ pub fn extract_into(archive: impl Read, dest: &Path) -> Result<(), Error> {
         let Some(rel) = dataset_relative(&entry.path()?) else {
             continue;
         };
-        let rel_str = rel.to_string_lossy();
-        let wanted = WANTED_FILES.contains(&rel_str.as_ref())
+        // Compared with `/` separators on every platform (Windows paths
+        // display with `\`).
+        let rel_str = rel
+            .iter()
+            .map(|part| part.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/");
+        let wanted = WANTED_FILES.contains(&rel_str.as_str())
             || WANTED_PREFIXES.iter().any(|p| rel_str.starts_with(p));
         if !wanted || !rel_str.ends_with(".json") && rel_str != "LICENSE" {
             continue;
