@@ -19,7 +19,11 @@ pub const AUTOSTART_ENV: &str = "ARCLENS_OVERLAY_AUTOSTART";
 /// Explicit path to the overlay binary.
 pub const BIN_ENV: &str = "ARCLENS_OVERLAY_BIN";
 
-const OVERLAY_BIN: &str = "arclens-overlay";
+const OVERLAY_BIN: &str = if cfg!(windows) {
+    "arclens-overlay.exe"
+} else {
+    "arclens-overlay"
+};
 const MIN_BACKOFF: Duration = Duration::from_secs(1);
 const MAX_BACKOFF: Duration = Duration::from_secs(30);
 /// A run longer than this counts as healthy and resets the backoff.

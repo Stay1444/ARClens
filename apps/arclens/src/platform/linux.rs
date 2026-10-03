@@ -1,4 +1,5 @@
-//! The desktop entry and icon, for runs outside a package.
+//! Linux: the desktop entry and icon, for runs outside a package, and the
+//! Wayland app id they match.
 //!
 //! On Wayland a window has no icon of its own: KDE shows the icon of the
 //! installed `.desktop` file whose name matches the window's app id, and
@@ -6,30 +7,27 @@
 //! `AppImage` installs bring their own; a plain build (`cargo run`, a copied
 //! binary) writes one to `~/.local/share` pointing at itself.
 
+use super::{ICON_PNG, ICON_SVG};
 use std::path::Path;
 
-/// The window's app id; the desktop file and icon are named after it.
+/// The app's id; the desktop file and icon are named after it.
 pub const APP_ID: &str = "io.github.Stay1444.ARClens";
 /// Set to `1` to leave `~/.local/share` alone.
 pub const DISABLE_ENV: &str = "ARCLENS_NO_DESKTOP_ENTRY";
 
-pub const ICON_SVG: &[u8] =
-    include_bytes!("../../../packaging/icons/io.github.Stay1444.ARClens.svg");
-const DESKTOP: &str = include_str!("../../../packaging/io.github.Stay1444.ARClens.desktop");
-/// 256 px rendering of the icon, for the window icon where the platform
-/// takes one (X11).
-pub const ICON_PNG: &[u8] = include_bytes!("../assets/icon-256.png");
+const DESKTOP: &str = include_str!("../../../../packaging/io.github.Stay1444.ARClens.desktop");
 
-/// The icon for the window itself (used on X11; Wayland ignores it).
-pub fn window_icon() -> Option<iced::window::Icon> {
-    let image = image::load_from_memory(ICON_PNG).ok()?.to_rgba8();
-    let (width, height) = image.dimensions();
-    iced::window::icon::from_rgba(image.into_raw(), width, height).ok()
+/// The window's app id: KDE matches it to the desktop file for the icon.
+pub fn window_platform() -> iced::window::settings::PlatformSpecific {
+    iced::window::settings::PlatformSpecific {
+        application_id: APP_ID.to_owned(),
+        ..Default::default()
+    }
 }
 
 /// Writes the desktop file and icon unless a package provides them or the
 /// user opted out. Only rewrites files that differ. Errors are logged.
-pub fn install() {
+pub fn integrate() {
     let packaged =
         std::env::var_os("FLATPAK_ID").is_some() || std::env::var_os("APPIMAGE").is_some();
     if packaged || std::env::var(DISABLE_ENV).is_ok_and(|v| v == "1") {

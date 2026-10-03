@@ -273,7 +273,7 @@ impl App {
             map_condition: None,
             presets: crate::presets::Presets::load(paths.presets()),
             marker_query: String::new(),
-            logo: iced::widget::svg::Handle::from_memory(crate::desktop_entry::ICON_SVG),
+            logo: iced::widget::svg::Handle::from_memory(crate::platform::ICON_SVG),
             expanded_categories: std::collections::BTreeSet::new(),
             map_screen: None,
             game_view: GameMapView::default(),
