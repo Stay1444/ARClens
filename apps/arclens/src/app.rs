@@ -35,6 +35,9 @@ pub struct App {
     overlay: Option<OverlayHandle>,
     overlay_visible: bool,
     overlay_interactive: bool,
+    /// Whether screen-based item detection runs (opt-in: starting it opens
+    /// the desktop's screen-share dialog the first time).
+    vision_enabled: bool,
     /// Item currently detected under the cursor in game, and where.
     hover: Option<(ItemId, arclens_ipc::NormRect)>,
     status: Vec<String>,
@@ -57,6 +60,7 @@ pub enum Message {
     IconLoaded(ItemId, Option<Icon>),
     ToggleOverlay,
     ToggleInteractive,
+    ToggleVision,
     Overlay(overlay_link::Event),
     Hotkey(hotkeys::Event),
     OverlayProcess(overlay_process::Event),
@@ -75,6 +79,8 @@ impl App {
             overlay: None,
             overlay_visible: false,
             overlay_interactive: false,
+            vision_enabled: std::env::var(vision::ENABLE_ENV).is_ok_and(|v| v == "1")
+                || std::env::var_os(vision::REPLAY_DIR_ENV).is_some(),
             hover: None,
             status: Vec::new(),
         };
@@ -90,8 +96,10 @@ impl App {
         let mut subscriptions = vec![
             overlay_link::subscription().map(Message::Overlay),
             hotkeys::subscription().map(Message::Hotkey),
-            vision::subscription().map(Message::Vision),
         ];
+        if self.vision_enabled {
+            subscriptions.push(vision::subscription().map(Message::Vision));
+        }
         if overlay_process::enabled() {
             subscriptions.push(overlay_process::subscription().map(Message::OverlayProcess));
         }
@@ -167,6 +175,13 @@ impl App {
                 );
             }
             Message::Overlay(event) => return self.on_overlay_event(event),
+            Message::ToggleVision => {
+                self.vision_enabled = !self.vision_enabled;
+                if !self.vision_enabled {
+                    self.hover = None;
+                    self.send(ToOverlay::ClearHover);
+                }
+            }
             Message::Vision(event) => return self.on_vision_event(event),
             Message::OverlayProcess(overlay_process::Event::Unavailable(error)) => {
                 self.status.push(format!("Overlay not started: {error}"));
@@ -362,6 +377,11 @@ impl App {
                 .size(15)
                 .width(Length::Fill),
             status,
+            pill_button(
+                "Detect items",
+                if self.vision_enabled { "on" } else { "off" },
+                Message::ToggleVision,
+            ),
             pill_button(
                 if self.overlay_visible {
                     "Hide overlay"

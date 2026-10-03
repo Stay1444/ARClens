@@ -42,7 +42,7 @@ screen-capture portal OBS uses. See
 
 ```sh
 # Fedora
-sudo dnf install wayland-devel libxkbcommon-devel vulkan-loader-devel
+sudo dnf install wayland-devel libxkbcommon-devel vulkan-loader-devel pipewire-devel clang-devel
 cargo build -p arclens-overlay
 cargo run -p arclens            # companion app; starts the overlay itself
 ```

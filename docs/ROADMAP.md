@@ -83,11 +83,14 @@ green CI.
         `docs/vision/findings-2026-10-03-map-video.md`); calibration tool
         to build per-map label tables;
 - [ ] Benchmarks (`criterion`): a CPU budget per frame at 4 fps.
-- [ ] Live capture: ScreenCast portal (`ashpd`) plus the PipeWire stream
-      (`pipewire` crate) with cursor metadata. Run only while the game is
-      focused.
-- [ ] Wire the detectors to the overlay: hovered item → `ShowItem`, map open →
-      `ShowMarkers` with the live transform.
+- [x] Live capture: ScreenCast portal (`ashpd`) plus the PipeWire stream
+      (`crates/arclens-capture`). Opt-in toggle, restore token persisted,
+      ≤ 5 fps, cursor hidden. **Needs a first run on real KDE.**
+- [ ] Pause capture when the game isn't focused (no direct signal on
+      Wayland; maybe pause when no ARC Raiders UI has been seen for N
+      seconds).
+- [x] Wire the hover detector to the overlay (`ShowHover`).
+- [ ] Map open → `ShowMarkers` with the live transform.
 
 ## Later
 

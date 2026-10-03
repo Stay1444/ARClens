@@ -12,6 +12,7 @@ repository = "https://github.com/Stay1444/ARClens"
 
 [workspace.dependencies]
 # Internal
+arclens-capture = { path = "crates/arclens-capture" }
 arclens-core = { path = "crates/arclens-core" }
 arclens-data = { path = "crates/arclens-data" }
 arclens-hotkeys = { path = "crates/arclens-hotkeys" }

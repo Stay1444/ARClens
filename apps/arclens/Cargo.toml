@@ -10,6 +10,7 @@ repository.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 arclens-core = { workspace = true }
+arclens-capture = { workspace = true }
 arclens-data = { workspace = true }
 arclens-hotkeys = { workspace = true }
 arclens-ipc = { workspace = true }

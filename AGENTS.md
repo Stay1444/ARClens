@@ -42,7 +42,8 @@ crates/arclens-data      RaidTheory provider, download, disk cache, fuzzy search
 crates/arclens-ipc       app <-> overlay protocol (NDJSON over a Unix socket)
 crates/arclens-hotkeys   XDG GlobalShortcuts portal
 crates/arclens-ui        shared iced widgets + design tokens (item card, palette)
-crates/arclens-vision    frame analysis: find tooltip panels + name line (pure image code)
+crates/arclens-vision    frame analysis: tooltip panels, name lines, OCR (pure, no I/O)
+crates/arclens-capture   screen capture: XDG ScreenCast portal + PipeWire
 apps/arclens             companion app (iced): owns all state
 apps/arclens-overlay     overlay (iced_layershell, OVERLAY layer): dumb renderer
 docs/                    research, architecture, guidelines, roadmap

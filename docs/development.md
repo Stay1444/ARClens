@@ -11,14 +11,14 @@ The two apps need Wayland, xkbcommon and Vulkan headers.
 
 ```sh
 sudo dnf install wayland-devel libxkbcommon-devel vulkan-loader-devel \
-    mesa-vulkan-drivers pkgconf-pkg-config openssl-devel
+    mesa-vulkan-drivers pipewire-devel clang-devel pkgconf-pkg-config
 ```
 
 **Debian / Ubuntu:**
 
 ```sh
 sudo apt install libwayland-dev libxkbcommon-dev libvulkan-dev \
-    mesa-vulkan-drivers pkg-config
+    mesa-vulkan-drivers libpipewire-0.3-dev libclang-dev pkg-config
 ```
 
 ## Everyday commands
@@ -67,8 +67,21 @@ Useful environment variables:
   tooltip.
 - On first use it downloads the ocrs recognition model (~10 MB) to
   `$XDG_CACHE_HOME/arclens/models/`.
-- Live screen capture isn't implemented yet. To try the whole path, replay
-  the fixture frames:
+- Turn it on with the **"Detect items"** button, or start with
+  `ARCLENS_VISION=1`.
+  - The first time, KDE asks which screen to share. Pick the one the game is
+    on.
+  - The choice is remembered: the restore token lives in
+    `$XDG_STATE_HOME/arclens/`.
+- Capture goes through the XDG ScreenCast portal and PipeWire
+  (`crates/arclens-capture`):
+  - at most 5 fps;
+  - the cursor is hidden from captures;
+  - frames are converted only when the analyser is ready for one.
+- **Live capture has not yet been run on a real desktop.** In the headless
+  test session the portal handshake succeeds, but Sway's software renderer
+  can't provide screencopy frames.
+- To try the whole path without capture, replay the fixture frames:
 
   ```sh
   ARCLENS_REPLAY_DIR=crates/arclens-vision/tests/fixtures/frames cargo run -p arclens

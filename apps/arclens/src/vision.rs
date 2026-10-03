@@ -1,8 +1,9 @@
 //! Screen analysis: frames in, "the player is hovering item X here" out.
 //!
 //! Runs on its own thread so detection and OCR never block the UI. Frames
-//! come from a [`FrameSource`]: today a replay of recorded frames
-//! (`ARCLENS_REPLAY_DIR`), next the XDG `ScreenCast` portal.
+//! come from a [`FrameSource`]: the XDG `ScreenCast` portal (the desktop asks
+//! once which monitor to share), or a replay of recorded frames
+//! (`ARCLENS_REPLAY_DIR`) for development.
 
 use crate::data;
 use crate::paths::Paths;
@@ -15,6 +16,8 @@ use std::time::Duration;
 
 /// Directory of captured frames (PNG/JPEG) to replay instead of capturing.
 pub const REPLAY_DIR_ENV: &str = "ARCLENS_REPLAY_DIR";
+/// `1` to start with item detection enabled.
+pub const ENABLE_ENV: &str = "ARCLENS_VISION";
 /// Use this OCR model file instead of the cached download.
 pub const MODEL_ENV: &str = "ARCLENS_OCR_MODEL";
 
@@ -47,22 +50,31 @@ pub fn subscription() -> Subscription<Event> {
 fn run(mut output: mpsc::Sender<Event>) {
     let mut send = |event: Event| output.try_send(event).is_ok();
 
-    let Some(mut source) = frame_source() else {
-        send(Event::Unavailable(
-            "screen capture is not implemented yet (set ARCLENS_REPLAY_DIR to replay frames)"
-                .into(),
-        ));
-        return;
+    let paths = match Paths::discover() {
+        Ok(paths) => paths,
+        Err(error) => {
+            send(Event::Unavailable(error.to_string()));
+            return;
+        }
     };
-    let analyzer = Paths::discover()
-        .map_err(|e| e.to_string())
-        .and_then(|paths| ensure_model(&paths).map_err(|e| format!("{e:#}")))
+    let analyzer = ensure_model(&paths)
+        .map_err(|e| format!("{e:#}"))
         .and_then(|model| NameReader::from_model_file(&model).map_err(|e| format!("{e:#}")));
     let mut analyzer = match analyzer {
         Ok(reader) => Analyzer::new(reader),
         Err(error) => {
             send(Event::Unavailable(format!(
                 "OCR model unavailable: {error}"
+            )));
+            return;
+        }
+    };
+
+    let mut source = match frame_source(&paths) {
+        Ok(source) => source,
+        Err(error) => {
+            send(Event::Unavailable(format!(
+                "screen capture unavailable: {error:#}"
             )));
             return;
         }
@@ -91,14 +103,31 @@ fn run(mut output: mpsc::Sender<Event>) {
     }
 }
 
-fn frame_source() -> Option<Box<dyn FrameSource>> {
-    let dir = std::env::var_os(REPLAY_DIR_ENV)?;
-    match Replay::open(Path::new(&dir)) {
-        Ok(replay) => Some(Box::new(replay)),
-        Err(error) => {
-            tracing::warn!(%error, "cannot open replay directory");
-            None
+fn frame_source(paths: &Paths) -> anyhow::Result<Box<dyn FrameSource>> {
+    if let Some(dir) = std::env::var_os(REPLAY_DIR_ENV) {
+        return Ok(Box::new(Replay::open(Path::new(&dir))?));
+    }
+    let token_path = paths.capture_token();
+    let token = std::fs::read_to_string(&token_path)
+        .ok()
+        .map(|t| t.trim().to_owned());
+    let capture = arclens_capture::Capture::start(token)?;
+    // Persist the new token so the monitor picker isn't shown next time.
+    if let Some(token) = &capture.restore_token {
+        if let Some(dir) = token_path.parent() {
+            std::fs::create_dir_all(dir)?;
         }
+        std::fs::write(&token_path, token)?;
+    }
+    Ok(Box::new(Portal(capture)))
+}
+
+/// Live frames from the screen-cast portal.
+struct Portal(arclens_capture::Capture);
+
+impl FrameSource for Portal {
+    fn next_frame(&mut self) -> Option<RgbImage> {
+        self.0.next_frame()
     }
 }
 
