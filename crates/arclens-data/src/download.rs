@@ -58,7 +58,10 @@ pub fn extract_into(archive: impl Read, dest: &Path) -> Result<(), Error> {
             .join("/");
         let wanted = WANTED_FILES.contains(&rel_str.as_str())
             || WANTED_PREFIXES.iter().any(|p| rel_str.starts_with(p));
-        if !wanted || !rel_str.ends_with(".json") && rel_str != "LICENSE" {
+        let json = rel
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"));
+        if !wanted || !json && rel_str != "LICENSE" {
             continue;
         }
         let out = staging.join(&rel);
