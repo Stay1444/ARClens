@@ -40,7 +40,7 @@ overlay state (visibility, interactivity, current item).
 | `arclens-ipc` | lib | Wire protocol, socket framing, version handshake | core, tokio |
 | `arclens-hotkeys` | lib | GlobalShortcuts portal wrapper, stable action ids | ashpd |
 | `arclens-ui` | lib | Design tokens and the shared item card used by app and overlay | core, iced |
-| `arclens-vision` | lib | _planned_: frame → signals (inventory/map open, hovered item, map transform) | core |
+| `arclens-vision` | lib | Frame → tooltip panels → name line (done); name recognition, map registration (planned) | image |
 | `arclens` | bin | Companion app: owns state, wires everything | all libs, iced |
 | `arclens-overlay` | bin | Overlay renderer | core, ipc, iced_layershell |
 

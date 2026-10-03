@@ -62,3 +62,11 @@ todo = "warn"
 lto = "thin"
 codegen-units = 1
 strip = "symbols"
+
+# Pixel loops are ~100× slower unoptimised; keep fixture tests fast in debug.
+[profile.dev.package.arclens-vision]
+opt-level = 3
+[profile.dev.package.zune-jpeg]
+opt-level = 3
+[profile.dev.package.image]
+opt-level = 3

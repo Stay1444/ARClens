@@ -64,8 +64,9 @@ green CI.
 - [ ] `arclens-vision` offline detectors with precision/recall tests:
   - [ ] inventory-open and map-open template matchers;
   - [ ] which-map classifier;
-  - [ ] tooltip detector (cream panel → rectangle) and name-line reader
-        with fuzzy catalogue match; pick the OCR engine (`ocrs` vs
+  - [x] tooltip detector (cream panel → rectangle → name line), golden
+        tests on 18 frames from stash, raid and trader;
+  - [ ] name-line reader with fuzzy catalogue match; pick the OCR engine (`ocrs` vs
         Tesseract) by benchmarking on crops from the stash video;
   - [ ] read the tooltip footer value (weapons differ from the dataset);
   - [ ] place the overlay card next to the detected tooltip;

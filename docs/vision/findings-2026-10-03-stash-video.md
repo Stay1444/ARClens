@@ -65,10 +65,50 @@ real number.
 4. **Read the footer value** (digits only) to improve the verdict for
    weapons.
 
+## Raid and trader footage (verified, same day)
+
+- **Raid backpack:**
+  - same cream tooltip;
+  - the header tab reads "PING ITEM" / "REQUEST AMMO" / "REQUEST SHIELD
+    RECHARGER" instead of "ACTIONS";
+  - "SALVAGES INTO" instead of "RECYCLES INTO";
+  - **the footer shows only weight, with no sell value.** In raid we rely on
+    the dataset value.
+- **Trader screen:**
+  - a **persistent cream purchase panel** ("×25 LIGHT AMMO") is always shown;
+  - hover tooltips appear beside it and can **touch or overlap it**, merging
+    into one cream region;
+  - its name has a quantity prefix (`×25`) that must be stripped before
+    matching;
+  - the selected item tile is also cream but small.
+- **Colours (measured):**
+  - tooltip body (248,232,216);
+  - header tab (200,184,168), deliberately excluded;
+  - name text ≤ 25 per channel;
+  - grey "COMMON" chip ~105;
+  - coloured chips carry dark text too.
+
+## Detector (implemented: `crates/arclens-vision`)
+
+1. **Cream mask:** subsample every 4th pixel and threshold the body colour.
+2. **Panels:** take connected components, keep the large ones.
+3. **Merged panels:** split them where the left edge jumps by more than
+   2.5 % W. A split panel's width is clamped to the fixed tooltip width
+   (0.353 H).
+4. **Header tab:** trim it off by keeping only rows that are ≥ 60 % cream.
+5. **Name:** the first band of near-black rows whose background (across its
+   own ink extent) is ≥ 70 % cream. This skips chips. A following band of
+   similar height is treated as a wrapped second line.
+
+Results on the 18 committed fixture frames:
+- all 17 name lines found;
+- zero false panels.
+
+Speed: **1.4–6.5 ms per 1440p frame** on one core in a release build.
+
 ## Open questions
 
-- **Tooltips in-raid** (backpack during a raid), at trader and crafting
-  screens: same style? (Needs more footage.)
+- **Crafting screens:** not yet seen.
 - **Other resolutions and UI scales:** offsets need to scale. Test 1080p.
 - **OCR engine:**
   - candidates: `ocrs` (pure Rust, ONNX-free models) vs. Tesseract via FFI;
