@@ -36,7 +36,10 @@ modules:
       build-args:
         - --share=network
     build-commands:
-      - cargo build --release --locked -p arclens -p arclens-overlay
+      # The SDK's default CFLAGS add -O2, which aws-lc-sys (TLS) rejects for
+      # its jitterentropy source; let cc-rs pick flags itself.
+      - env -u CFLAGS -u CXXFLAGS -u CFLAGS_x86_64_unknown_linux_gnu -u CXXFLAGS_x86_64_unknown_linux_gnu
+        cargo build --release --locked -p arclens -p arclens-overlay
       - install -Dm755 target/release/arclens /app/bin/arclens
       - install -Dm755 target/release/arclens-overlay /app/bin/arclens-overlay
       - install -Dm644 packaging/arclens.desktop /app/share/applications/io.github.Stay1444.ARClens.desktop
