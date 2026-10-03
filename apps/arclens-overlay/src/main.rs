@@ -95,7 +95,7 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
                 KeyboardInteractivity::None
             };
             // TODO(input-region): also swap the input region so clicks reach
-            // the overlay while interactive; see docs/architecture/overlay.md.
+            // the overlay while interactive; see docs/ROADMAP.md (M1).
             return Task::done(Message::KeyboardInteractivityChange(keyboard));
         }
         ToOverlay::ShowItem { item, advice } => state.item = Some((item, advice)),
