@@ -12,7 +12,12 @@ use futures::channel::mpsc;
 use iced::Subscription;
 use image::RgbImage;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+/// Capture pace right after tooltip activity (10 fps).
+const FAST_INTERVAL: Duration = Duration::from_millis(100);
+/// How long to stay fast after the last tooltip was seen.
+const FAST_FOR: Duration = Duration::from_secs(3);
 
 /// Directory of captured frames (PNG/JPEG) to replay instead of capturing.
 pub const REPLAY_DIR_ENV: &str = "ARCLENS_REPLAY_DIR";
@@ -35,6 +40,9 @@ pub enum Event {
 /// Something that yields frames at its own pace (blocking).
 trait FrameSource: Send {
     fn next_frame(&mut self) -> Option<RgbImage>;
+
+    /// Hint: how soon the next frame is wanted.
+    fn set_interval(&mut self, _interval: Duration) {}
 
     /// The monitor being captured, if known.
     fn monitor(&self) -> Option<arclens_ipc::MonitorRect> {
@@ -92,6 +100,7 @@ fn run(mut output: mpsc::Sender<Event>) {
     }
 
     let mut last: Option<Hover> = None;
+    let mut fast_until = Instant::now();
     while let Some(frame) = source.next_frame() {
         let hover = match analyzer.analyze(&frame) {
             Ok(hover) => hover,
@@ -100,9 +109,20 @@ fn run(mut output: mpsc::Sender<Event>) {
                 None
             }
         };
+        // Sample faster for a moment after something changed on screen, so
+        // the next hover is picked up sooner; idle otherwise.
+        if hover.is_some() || last.is_some() {
+            fast_until = Instant::now() + FAST_FOR;
+        }
+        source.set_interval(if Instant::now() < fast_until {
+            FAST_INTERVAL
+        } else {
+            arclens_capture::IDLE_INTERVAL
+        });
+
         // Only report changes.
         let event = match (&last, &hover) {
-            (Some(a), Some(b)) if a == b => continue,
+            (Some(a), Some(b)) if a.same_as(b) => continue,
             (None, None) => continue,
             (_, Some(h)) => Event::Hover(h.clone()),
             (Some(_), None) => Event::Gone,
@@ -139,6 +159,10 @@ struct Portal(arclens_capture::Capture);
 impl FrameSource for Portal {
     fn next_frame(&mut self) -> Option<RgbImage> {
         self.0.next_frame()
+    }
+
+    fn set_interval(&mut self, interval: Duration) {
+        self.0.set_interval(interval);
     }
 
     fn monitor(&self) -> Option<arclens_ipc::MonitorRect> {

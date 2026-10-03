@@ -86,9 +86,11 @@ green CI.
         labels, fit scale + translation; see
         `docs/vision/findings-2026-10-03-map-video.md`); calibration tool
         to build per-map label tables;
-- [ ] Debounce repeated `Hover` events for the same item (small rect
-      jitter re-sends the card).
-- [ ] Persistent name-crop → item cache, so repeat hovers skip OCR.
+- [x] Debounce repeated `Hover` events for the same item (≤ 8 px jitter).
+- [x] Session cache of name + value crops → reading, so re-hovers skip OCR.
+      (A cross-session cache is possible but fingerprints are fragile; not
+      worth it yet.)
+- [x] Adaptive capture: 10 fps for 3 s after tooltip activity, 4 fps idle.
 - [ ] Benchmarks (`criterion`): a CPU budget per frame at 4 fps.
 - [x] Live capture: ScreenCast portal (`ashpd`) plus the PipeWire stream
       (`crates/arclens-capture`). Opt-in toggle, restore token persisted,

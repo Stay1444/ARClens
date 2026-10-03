@@ -78,7 +78,7 @@ Useful environment variables:
     `--monitor x,y,w,h` (matched to a Wayland output by logical position).
 - Capture goes through the XDG ScreenCast portal and PipeWire
   (`crates/arclens-capture`):
-  - at most 5 fps;
+  - 4 fps when idle, 10 fps for 3 s after a tooltip appears or changes;
   - the cursor is hidden from captures;
   - frames are converted only when the analyser is ready for one.
 - Live capture is verified on KDE Plasma 6 (2026-10-03). It can't be tested

@@ -23,6 +23,16 @@ pub struct Hover {
 }
 
 impl Hover {
+    /// Same item and footer, tooltip in (almost) the same place: nothing
+    /// worth re-sending. Tolerates a few pixels of detection jitter.
+    pub fn same_as(&self, other: &Self) -> bool {
+        const JITTER: u32 = 8;
+        self.name == other.name
+            && self.footer == other.footer
+            && self.panel.x.abs_diff(other.panel.x) <= JITTER
+            && self.panel.y.abs_diff(other.panel.y) <= JITTER
+    }
+
     /// `panel` as `[x, y, width, height]` fractions of the frame.
     pub fn panel_normalized(&self) -> [f32; 4] {
         let (w, h) = (self.frame_width as f32, self.frame_height as f32);
@@ -35,6 +45,10 @@ impl Hover {
     }
 }
 
+/// Distinct tooltips remembered before the cache is reset (a stash holds a
+/// few hundred items; this is a few KB).
+const CACHE_LIMIT: usize = 2048;
+
 /// What OCR made of one tooltip: its name and footer.
 type Reading = (String, Option<FooterInfo>);
 
@@ -43,8 +57,9 @@ type Reading = (String, Option<FooterInfo>);
 pub struct Analyzer {
     reader: NameReader,
     params: PanelParams,
-    /// Fingerprint of the last name + value crops and what they read as.
-    last: Option<(u64, Option<Reading>)>,
+    /// Readings by fingerprint of the name + value crops. Re-hovering an
+    /// item seen this session skips OCR entirely.
+    cache: std::collections::HashMap<u64, Option<Reading>>,
 }
 
 impl Analyzer {
@@ -52,7 +67,7 @@ impl Analyzer {
         Self {
             reader,
             params: PanelParams::default(),
-            last: None,
+            cache: std::collections::HashMap::new(),
         }
     }
 
@@ -80,19 +95,21 @@ impl Analyzer {
             regions.extend(cells.iter().copied());
         }
         let key = fingerprint(frame, &regions);
-        let read = match &self.last {
-            Some((last_key, read)) if *last_key == key => read.clone(),
-            _ => {
-                let read = self
-                    .reader
-                    .read(frame, &lines)?
-                    .map(|name| -> anyhow::Result<_> {
-                        Ok((name, self.read_footer(frame, cells.as_deref())?))
-                    })
-                    .transpose()?;
-                self.last = Some((key, read.clone()));
-                read
+        let read = if let Some(read) = self.cache.get(&key) {
+            read.clone()
+        } else {
+            let read = self
+                .reader
+                .read(frame, &lines)?
+                .map(|name| -> anyhow::Result<_> {
+                    Ok((name, self.read_footer(frame, cells.as_deref())?))
+                })
+                .transpose()?;
+            if self.cache.len() >= CACHE_LIMIT {
+                self.cache.clear();
             }
+            self.cache.insert(key, read.clone());
+            read
         };
         Ok(read.map(|(name, footer)| Hover {
             name,
@@ -147,4 +164,39 @@ fn fingerprint(frame: &RgbImage, lines: &[Rect]) -> u64 {
         }
     }
     hasher.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn hover(name: &str, x: u32, value: Option<u32>) -> Hover {
+        Hover {
+            name: name.into(),
+            panel: Rect::new(x, 300, 508, 700),
+            frame_width: 2560,
+            frame_height: 1440,
+            footer: Some(FooterInfo {
+                sell_value: value,
+                in_raid: false,
+            }),
+        }
+    }
+
+    #[test]
+    fn small_jitter_is_the_same_hover() {
+        assert!(hover("OSPREY II", 800, Some(18_431)).same_as(&hover(
+            "OSPREY II",
+            804,
+            Some(18_431)
+        )));
+    }
+
+    #[test]
+    fn another_slot_or_value_is_a_new_hover() {
+        let a = hover("MEDIUM AMMO", 800, Some(480));
+        assert!(!a.same_as(&hover("MEDIUM AMMO", 1200, Some(480))));
+        assert!(!a.same_as(&hover("MEDIUM AMMO", 800, Some(240))));
+        assert!(!a.same_as(&hover("LIGHT AMMO", 800, Some(480))));
+    }
 }

@@ -23,7 +23,9 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 /// Upper bound on frames requested from the compositor.
-pub const MAX_FPS: u32 = 5;
+pub const MAX_FPS: u32 = 10;
+/// Default pace while nothing interesting is on screen.
+pub const IDLE_INTERVAL: Duration = Duration::from_millis(250);
 
 /// A running capture of one monitor.
 #[derive(Debug)]
@@ -41,6 +43,8 @@ pub struct Capture {
 struct Shared {
     state: Mutex<SharedState>,
     ready: Condvar,
+    /// Minimum time between converted frames, in ms (0 = default).
+    interval_ms: std::sync::atomic::AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -114,6 +118,15 @@ impl Capture {
             restore_token: remote.restore_token,
             monitor: remote.monitor,
         })
+    }
+
+    /// Sets the pace of converted frames: e.g. faster while a tooltip is on
+    /// screen, [`IDLE_INTERVAL`] otherwise. Capped by [`MAX_FPS`].
+    pub fn set_interval(&self, interval: Duration) {
+        let ms = u64::try_from(interval.as_millis()).unwrap_or(u64::MAX);
+        self.shared
+            .interval_ms
+            .store(ms, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Blocks until a frame newer than the previous call is available.
@@ -219,7 +232,6 @@ fn run_pipewire(fd: OwnedFd, node_id: u32, shared: &Arc<Shared>) -> anyhow::Resu
         },
     )?;
 
-    let min_interval = Duration::from_secs(1) / MAX_FPS;
     let shared = Arc::clone(shared);
     let _listener = stream
         .add_local_listener_with_user_data(StreamState::default())
@@ -243,9 +255,14 @@ fn run_pipewire(fd: OwnedFd, node_id: u32, shared: &Arc<Shared>) -> anyhow::Resu
                 return;
             };
             // Throttle and skip work nobody asked for.
-            let due = state
-                .last_convert
-                .is_none_or(|t| t.elapsed() >= min_interval);
+            let interval = match shared
+                .interval_ms
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
+                0 => IDLE_INTERVAL,
+                ms => Duration::from_millis(ms),
+            };
+            let due = state.last_convert.is_none_or(|t| t.elapsed() >= interval);
             let wanted = shared.state.lock().is_ok_and(|s| s.wanted);
             if !due || !wanted {
                 return;

@@ -140,14 +140,14 @@ frame. The CPU has headroom, and the work is small:
 
 | Stage | When | Cost (1 core, release) |
 |---|---|---|
-| Capture | 4 fps, only while the game window is focused | DMA-BUF from PipeWire, no copy (planned) |
+| Capture | 4 fps idle, 10 fps for 3 s after tooltip activity | One BGRx→RGB conversion per used frame; surplus frames dropped |
 | Find panels + name lines | every captured frame | 1.4–6.5 ms at 1440p |
-| OCR | only when the name crop changed since the last frame | 30–75 ms, once per *new* hover |
+| OCR | only for tooltips not seen this session (cache by crop fingerprint) | 30–75 ms, once per *new* tooltip |
 
 - That is under 3% of one core while browsing, plus a short burst per new
   item, run on a low-priority background thread.
-- Perceived latency is at most one capture interval (≤ 250 ms at 4 fps) plus
-  ~35 ms.
+- Perceived latency: one capture interval (≤ 100 ms while browsing, ≤ 250 ms
+  for the first hover after idling), plus ~35 ms for an unseen item.
 - If needed, the capture rate can rise only while a tooltip is visible.
 
 ## First live run (2026-10-03, maintainer's machine)
