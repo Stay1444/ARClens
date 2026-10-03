@@ -11,7 +11,9 @@ Built with Linux in mind, ARClens is a lightweight, native companion that
 stays out of your way while you play. It is a real **Wayland overlay**: a
 `wlr-layer-shell` surface that KDE Plasma draws above your fullscreen game.
 
-![Overlay demo: item card and map markers drawn over another window](docs/assets/overlay-demo.png)
+| In-game overlay | Companion app |
+|---|---|
+| ![Overlay item card: verdict, values, recycling and requirements](docs/assets/overlay-card.png) | ![Companion app: searchable item list and detail card](docs/assets/app.png) |
 
 ## Status
 

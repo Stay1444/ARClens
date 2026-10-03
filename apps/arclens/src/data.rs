@@ -64,11 +64,17 @@ async fn load_inner(paths: Paths) -> anyhow::Result<Catalog> {
     }
 }
 
-async fn refresh(paths: &Paths, cache: &DiskCache) -> anyhow::Result<Catalog> {
-    let client = reqwest::Client::builder()
+/// HTTP client for all upstream requests (identifies us to data providers).
+pub fn http_client() -> reqwest::Client {
+    reqwest::Client::builder()
         .user_agent(concat!("ARClens/", env!("CARGO_PKG_VERSION")))
         .timeout(Duration::from_secs(60))
-        .build()?;
+        .build()
+        .unwrap_or_default()
+}
+
+async fn refresh(paths: &Paths, cache: &DiskCache) -> anyhow::Result<Catalog> {
+    let client = http_client();
     let dir = paths.raidtheory_dir();
     download_raidtheory(&client, &dir)
         .await

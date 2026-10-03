@@ -27,7 +27,10 @@ markers and event timers. Primary target: **KDE Plasma 6 on Wayland
 5. The overlay must stay **wgpu-only**. Don't enable iced's `tiny-skia`
    feature: its Wayland buffers have no alpha, so the overlay would paint
    opaque black over the game.
-6. Don't `cargo update` `winit-core`/`winit-common` past `0.31.0-beta.2`
+6. Never decode images in `view`. Decode once with `arclens_ui::decode_icon`
+   and keep the handle. (iced's lazy `Handle::from_path` draws nothing under
+   `iced_layershell`.)
+7. Don't `cargo update` `winit-core`/`winit-common` past `0.31.0-beta.2`
    until `iced_exdevtools` is fixed upstream (see
    `docs/research/wayland-overlay.md`).
 
@@ -38,6 +41,7 @@ crates/arclens-core      pure domain types + logic (items, advice, maps, transfo
 crates/arclens-data      RaidTheory provider, download, disk cache, fuzzy search
 crates/arclens-ipc       app <-> overlay protocol (NDJSON over a Unix socket)
 crates/arclens-hotkeys   XDG GlobalShortcuts portal
+crates/arclens-ui        shared iced widgets + design tokens (item card, palette)
 apps/arclens             companion app (iced): owns all state
 apps/arclens-overlay     overlay (iced_layershell, OVERLAY layer): dumb renderer
 docs/                    research, architecture, guidelines, roadmap

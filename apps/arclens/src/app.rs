@@ -1,23 +1,34 @@
 //! Companion window state, update loop and view.
 
+use crate::icons::{Icon, Icons};
 use crate::overlay_link::OverlayHandle;
 use crate::paths::Paths;
 use crate::{data, hotkeys, overlay_link, overlay_process};
-use arclens_core::{Item, ItemId, Verdict, advise};
+use arclens_core::{Item, ItemId, advise};
 use arclens_data::{Catalog, ItemSearch};
 use arclens_hotkeys::Action;
 use arclens_ipc::ToOverlay;
-use iced::widget::{button, column, container, row, rule, scrollable, text, text_input};
-use iced::{Element, Length, Subscription, Task, Theme};
+use arclens_ui::format::thousands;
+use arclens_ui::palette::{self, with_alpha};
+use arclens_ui::{CardSize, ItemCard, item_card};
+use iced::widget::{Space, button, column, container, image, row, scrollable, text, text_input};
+use iced::{Alignment, Border, Color, Element, Font, Length, Subscription, Task, Theme, font};
 use std::sync::Arc;
 
-const MAX_RESULTS: usize = 50;
+/// Rows shown in the result list (the whole catalogue is ~600 items).
+const MAX_RESULTS: usize = 100;
 const SEARCH_ID: &str = "search";
+const LIST_WIDTH: f32 = 400.0;
+const BOLD: Font = Font {
+    weight: font::Weight::Bold,
+    ..Font::DEFAULT
+};
 
 #[derive(Debug)]
 pub struct App {
     catalog: Load<Arc<Catalog>>,
     search: ItemSearch,
+    icons: Icons,
     query: String,
     results: Vec<ItemId>,
     selected: Option<ItemId>,
@@ -39,6 +50,9 @@ pub enum Message {
     CatalogLoaded(Result<Arc<Catalog>, String>),
     QueryChanged(String),
     Select(ItemId),
+    /// Enter in the search box: open the top result.
+    SelectFirst,
+    IconLoaded(ItemId, Option<Icon>),
     ToggleOverlay,
     ToggleInteractive,
     Overlay(overlay_link::Event),
@@ -51,6 +65,7 @@ impl App {
         let app = Self {
             catalog: Load::Loading,
             search: ItemSearch::default(),
+            icons: Icons::new(&paths),
             query: String::new(),
             results: Vec::new(),
             selected: None,
@@ -80,20 +95,46 @@ impl App {
 
     #[allow(clippy::unused_self, reason = "signature required by iced")]
     pub fn theme(&self) -> Theme {
-        Theme::TokyoNight
+        Theme::custom(
+            "ARClens".to_owned(),
+            iced::theme::Palette {
+                background: Color::from_rgb8(0x0d, 0x0f, 0x13),
+                text: palette::TEXT,
+                primary: Color::from_rgb8(0x3c, 0xc8, 0xe6),
+                success: palette::verdict(arclens_core::Verdict::Keep),
+                warning: palette::verdict(arclens_core::Verdict::Sell),
+                danger: Color::from_rgb8(0xe5, 0x48, 0x4d),
+            },
+        )
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::CatalogLoaded(Ok(catalog)) => self.catalog = Load::Ready(catalog),
+            Message::CatalogLoaded(Ok(catalog)) => {
+                self.catalog = Load::Ready(catalog);
+                return self.refresh_results();
+            }
             Message::CatalogLoaded(Err(error)) => self.catalog = Load::Failed(error),
             Message::QueryChanged(query) => {
                 self.query = query;
-                self.refresh_results();
+                return self.refresh_results();
             }
             Message::Select(id) => {
                 self.selected = Some(id);
                 self.push_selected_to_overlay();
+            }
+            Message::SelectFirst => {
+                if let Some(first) = self.results.first().cloned() {
+                    return self.update(Message::Select(first));
+                }
+            }
+            Message::IconLoaded(id, icon) => {
+                let is_selected = self.selected.as_ref() == Some(&id);
+                self.icons.insert(id, icon);
+                if is_selected {
+                    // Resend so the overlay picks up the icon path.
+                    self.push_selected_to_overlay();
+                }
             }
             Message::ToggleOverlay
             | Message::Hotkey(hotkeys::Event::Pressed(Action::ToggleOverlay)) => {
@@ -116,7 +157,7 @@ impl App {
                         .to_owned(),
                 );
             }
-            Message::Overlay(event) => self.on_overlay_event(event),
+            Message::Overlay(event) => return self.on_overlay_event(event),
             Message::OverlayProcess(overlay_process::Event::Unavailable(error)) => {
                 self.status.push(format!("Overlay not started: {error}"));
             }
@@ -124,7 +165,7 @@ impl App {
         Task::none()
     }
 
-    fn on_overlay_event(&mut self, event: overlay_link::Event) {
+    fn on_overlay_event(&mut self, event: overlay_link::Event) -> Task<Message> {
         match event {
             overlay_link::Event::Connected(handle) => {
                 self.overlay = Some(handle);
@@ -140,13 +181,14 @@ impl App {
             overlay_link::Event::Disconnected => self.overlay = None,
             overlay_link::Event::Message(arclens_ipc::ToApp::Search { query }) => {
                 self.query = query;
-                self.refresh_results();
+                return self.refresh_results();
             }
             overlay_link::Event::Listening | overlay_link::Event::Message(_) => {}
             overlay_link::Event::Failed(error) => {
                 self.status.push(format!("Overlay link failed: {error}"));
             }
         }
+        Task::none()
     }
 
     fn send(&self, msg: ToOverlay) {
@@ -155,16 +197,35 @@ impl App {
         }
     }
 
-    fn refresh_results(&mut self) {
+    /// Recomputes the result list and starts loading icons for it. An empty
+    /// query lists the catalogue alphabetically so it can be browsed.
+    fn refresh_results(&mut self) -> Task<Message> {
         let Load::Ready(catalog) = &self.catalog else {
-            return;
+            return Task::none();
         };
-        self.results = self
-            .search
-            .search(&catalog.items, &self.query, MAX_RESULTS)
-            .into_iter()
-            .map(|item| item.id.clone())
+        self.results = if self.query.trim().is_empty() {
+            let mut all: Vec<&Item> = catalog.items.iter().collect();
+            all.sort_by(|a, b| a.name.cmp(&b.name));
+            all.into_iter()
+                .take(MAX_RESULTS)
+                .map(|i| i.id.clone())
+                .collect()
+        } else {
+            self.search
+                .search(&catalog.items, &self.query, MAX_RESULTS)
+                .into_iter()
+                .map(|item| item.id.clone())
+                .collect()
+        };
+
+        let loads: Vec<_> = self
+            .results
+            .iter()
+            .filter_map(|id| catalog.item(id))
+            .filter_map(|item| self.icons.request(item))
+            .map(|load| Task::perform(load, |(id, icon)| Message::IconLoaded(id, icon)))
             .collect();
+        Task::batch(loads)
     }
 
     fn push_selected_to_overlay(&self) {
@@ -172,157 +233,301 @@ impl App {
             return;
         };
         if let Some(item) = catalog.item(id) {
-            let advice = advise(item, |id| catalog.item(id));
             self.send(ToOverlay::ShowItem {
                 item: Box::new(item.clone()),
-                advice,
+                advice: advise(item, |id| catalog.item(id)),
+                icon: self.icons.get(id).map(|icon| icon.path.clone()),
+                recycle_names: recycle_names(item, catalog),
             });
         }
     }
 
     pub fn view(&self) -> Element<'_, Message> {
         let body: Element<'_, Message> = match &self.catalog {
-            Load::Loading => text("Loading game data…").into(),
-            Load::Failed(error) => text(format!("Could not load game data: {error}")).into(),
+            Load::Loading => centered(text("Loading game data…").color(palette::TEXT_MUTED)),
+            Load::Failed(error) => centered(
+                column![
+                    text("Could not load game data").size(20).font(BOLD),
+                    text(error).color(palette::TEXT_MUTED),
+                ]
+                .spacing(6)
+                .align_x(Alignment::Center),
+            ),
             Load::Ready(catalog) => self.view_catalog(catalog),
         };
 
-        column![
-            self.view_toolbar(),
-            rule::horizontal(1),
-            body,
-            self.view_footer()
-        ]
-        .spacing(12)
-        .padding(16)
-        .into()
+        column![self.view_top_bar(), body, self.view_footer()].into()
     }
 
-    fn view_toolbar(&self) -> Element<'_, Message> {
-        let overlay_state = match (&self.overlay, self.overlay_visible) {
-            (None, _) => "Overlay: not running",
-            (Some(_), true) => "Overlay: shown",
-            (Some(_), false) => "Overlay: hidden",
+    fn view_top_bar(&self) -> Element<'_, Message> {
+        let (dot, label) = match (&self.overlay, self.overlay_visible) {
+            (None, _) => (palette::TEXT_MUTED, "Overlay offline"),
+            (Some(_), true) => (
+                palette::verdict(arclens_core::Verdict::Keep),
+                "Overlay shown",
+            ),
+            (Some(_), false) => (
+                palette::verdict(arclens_core::Verdict::Sell),
+                "Overlay hidden",
+            ),
         };
-        row![
+        let status = row![
+            container(Space::new().width(8).height(8)).style(move |_| container::Style {
+                background: Some(dot.into()),
+                border: Border {
+                    radius: 4.0.into(),
+                    ..Border::default()
+                },
+                ..container::Style::default()
+            }),
+            text(label).size(13).color(palette::TEXT_MUTED),
+        ]
+        .spacing(6)
+        .align_y(Alignment::Center);
+
+        let bar = row![
+            text("ARClens").size(20).font(BOLD),
             text_input("Search items…", &self.query)
                 .id(SEARCH_ID)
                 .on_input(Message::QueryChanged)
-                .padding(8)
+                .on_submit(Message::SelectFirst)
+                .padding([8, 12])
+                .size(15)
                 .width(Length::Fill),
-            button(if self.overlay_visible {
-                "Hide overlay"
-            } else {
-                "Show overlay"
-            })
-            .on_press(Message::ToggleOverlay),
-            button(if self.overlay_interactive {
-                "Click-through"
-            } else {
-                "Interactive"
-            })
-            .on_press(Message::ToggleInteractive),
-            text(overlay_state),
+            status,
+            pill_button(
+                if self.overlay_visible {
+                    "Hide overlay"
+                } else {
+                    "Show overlay"
+                },
+                "Ctrl+Shift+O",
+                Message::ToggleOverlay,
+            ),
+            pill_button(
+                if self.overlay_interactive {
+                    "Click-through"
+                } else {
+                    "Interactive"
+                },
+                "Ctrl+Shift+I",
+                Message::ToggleInteractive,
+            ),
         ]
-        .spacing(8)
-        .align_y(iced::Alignment::Center)
-        .into()
+        .spacing(16)
+        .align_y(Alignment::Center);
+
+        container(bar)
+            .padding([12, 16])
+            .width(Length::Fill)
+            .style(|_| container::Style {
+                background: Some(Color::from_rgb8(0x14, 0x17, 0x1c).into()),
+                border: Border {
+                    color: palette::BORDER,
+                    width: 1.0,
+                    radius: 0.0.into(),
+                },
+                ..container::Style::default()
+            })
+            .into()
     }
 
     fn view_catalog<'a>(&'a self, catalog: &'a Catalog) -> Element<'a, Message> {
-        let list = self.results.iter().filter_map(|id| catalog.item(id)).fold(
-            column![].spacing(2),
-            |col, item| {
-                col.push(
-                    button(text(&item.name))
-                        .width(Length::Fill)
-                        .style(button::text)
-                        .on_press(Message::Select(item.id.clone())),
-                )
-            },
-        );
+        let rows = self
+            .results
+            .iter()
+            .filter_map(|id| catalog.item(id))
+            .fold(column![].spacing(2), |col, item| {
+                col.push(self.view_row(item, catalog))
+            });
+        let list_header = text(if self.query.trim().is_empty() {
+            format!(
+                "BROWSING {} OF {} ITEMS · TYPE TO SEARCH",
+                self.results.len(),
+                catalog.items.len()
+            )
+        } else {
+            format!("{} RESULTS", self.results.len())
+        })
+        .size(11)
+        .color(palette::TEXT_MUTED);
+
+        let list = column![
+            list_header,
+            scrollable(rows.padding([0, 8])).height(Length::Fill)
+        ]
+        .spacing(8)
+        .padding([12, 8])
+        .width(LIST_WIDTH);
 
         let detail: Element<'_, Message> =
             match self.selected.as_ref().and_then(|id| catalog.item(id)) {
-                Some(item) => view_item(item, catalog),
-                None => text(if self.query.is_empty() {
-                    "Type to search the item database."
-                } else {
-                    "Select an item."
-                })
-                .into(),
+                Some(item) => {
+                    let card = item_card(&ItemCard {
+                        item,
+                        advice: advise(item, |id| catalog.item(id)),
+                        icon: self.icons.get(&item.id).map(|icon| &icon.large),
+                        recycle_names: recycle_names(item, catalog),
+                        size: CardSize::Full,
+                    });
+                    scrollable(
+                        container(card)
+                            .padding(24)
+                            .max_width(720),
+                    )
+                    .height(Length::Fill)
+                    .into()
+                }
+                None => centered(
+                    column![
+                        text("Pick an item").size(22).font(BOLD),
+                        text("Search above (Enter opens the top result) or browse the list. The selected item is also shown on the in-game overlay.")
+                            .color(palette::TEXT_MUTED),
+                    ]
+                    .spacing(6)
+                    .align_x(Alignment::Center),
+                ),
             };
 
         row![
-            scrollable(list)
-                .width(Length::FillPortion(2))
-                .height(Length::Fill),
-            container(detail).width(Length::FillPortion(3)).padding(8),
+            list,
+            container(Space::new().width(1).height(Length::Fill))
+                .style(|_| container::Style::default().background(palette::BORDER)),
+            container(detail).width(Length::Fill).height(Length::Fill),
         ]
-        .spacing(16)
         .height(Length::Fill)
         .into()
     }
 
+    fn view_row<'a>(&'a self, item: &'a Item, catalog: &'a Catalog) -> Element<'a, Message> {
+        let rarity = palette::rarity(item.rarity);
+        let advice = advise(item, |id| catalog.item(id));
+        let verdict_color = palette::verdict(advice.verdict);
+
+        let icon: Element<'_, Message> = match self.icons.get(&item.id) {
+            Some(icon) => image(icon.thumb.clone()).width(32).height(32).into(),
+            None => Space::new().width(32).height(32).into(),
+        };
+        let tile = container(icon).center(40).style(move |_| container::Style {
+            background: Some(with_alpha(rarity, 0.16).into()),
+            border: Border {
+                color: with_alpha(rarity, 0.55),
+                width: 1.0,
+                radius: 5.0.into(),
+            },
+            ..container::Style::default()
+        });
+
+        let value = item
+            .value
+            .map_or_else(String::new, |v| format!("{} ¢", thousands(v)));
+        let content = row![
+            tile,
+            column![
+                text(&item.name).size(14),
+                text(palette::rarity_label(item.rarity))
+                    .size(10)
+                    .color(rarity),
+            ]
+            .spacing(1)
+            .width(Length::Fill),
+            column![
+                text(palette::verdict_label(advice.verdict))
+                    .size(11)
+                    .font(BOLD)
+                    .color(verdict_color),
+                text(value).size(12).color(palette::COIN),
+            ]
+            .spacing(1)
+            .align_x(Alignment::End),
+        ]
+        .spacing(10)
+        .align_y(Alignment::Center);
+
+        let selected = self.selected.as_ref() == Some(&item.id);
+        button(content)
+            .width(Length::Fill)
+            .padding([6, 8])
+            .on_press(Message::Select(item.id.clone()))
+            .style(move |_, status| {
+                let background = match (selected, status) {
+                    (true, _) => Some(with_alpha(palette::TEXT, 0.10).into()),
+                    (false, button::Status::Hovered | button::Status::Pressed) => {
+                        Some(with_alpha(palette::TEXT, 0.05).into())
+                    }
+                    _ => None,
+                };
+                button::Style {
+                    background,
+                    text_color: palette::TEXT,
+                    border: Border {
+                        radius: 6.0.into(),
+                        ..Border::default()
+                    },
+                    ..button::Style::default()
+                }
+            })
+            .into()
+    }
+
     fn view_footer(&self) -> Element<'_, Message> {
-        let mut footer = column![].spacing(2);
+        let mut parts = Vec::new();
         if let Load::Ready(catalog) = &self.catalog {
-            footer = footer.push(text(format!("Data: {}", catalog.source)).size(12));
+            parts.push(format!("Data: {}", catalog.source));
         }
-        for line in &self.status {
-            footer = footer.push(text(line).size(12));
-        }
-        footer.into()
+        parts.extend(self.status.iter().cloned());
+        container(
+            text(parts.join("   ·   "))
+                .size(11)
+                .color(palette::TEXT_MUTED),
+        )
+        .padding([6, 16])
+        .width(Length::Fill)
+        .into()
     }
 }
 
-fn view_item<'a>(item: &'a Item, catalog: &'a Catalog) -> Element<'a, Message> {
-    let advice = advise(item, |id| catalog.item(id));
-    let verdict = match advice.verdict {
-        Verdict::Keep => "Keep",
-        Verdict::Recycle => "Recycle",
-        Verdict::Sell => "Sell",
-        Verdict::Unknown => "Unknown",
-    };
+fn recycle_names(item: &Item, catalog: &Catalog) -> Vec<String> {
+    item.recycles_into
+        .iter()
+        .map(|q| {
+            catalog
+                .item(&q.item)
+                .map_or_else(|| q.item.to_string(), |i| i.name.clone())
+        })
+        .collect()
+}
 
-    let mut col = column![
-        text(&item.name).size(24),
-        text(format!("Verdict: {verdict}")).size(18),
-    ]
-    .spacing(6);
-    if let Some(rarity) = item.rarity {
-        col = col.push(text(format!("Rarity: {rarity:?}")));
-    }
-    if let Some(category) = &item.category {
-        col = col.push(text(format!("Type: {category}")));
-    }
-    if let Some(value) = advice.sell_value {
-        col = col.push(text(format!("Sell value: {value}")));
-    }
-    if let Some(value) = advice.recycle_value {
-        col = col.push(text(format!("Recycle value: {value}")));
-    }
-    if !item.recycles_into.is_empty() {
-        let outputs: Vec<String> = item
-            .recycles_into
-            .iter()
-            .map(|q| {
-                let name = catalog
-                    .item(&q.item)
-                    .map_or(q.item.as_str(), |i| i.name.as_str());
-                format!("{name} ×{}", q.quantity)
-            })
-            .collect();
-        col = col.push(text(format!("Recycles into: {}", outputs.join(", "))));
-    }
-    if !item.required_for.is_empty() {
-        col = col.push(text("Needed for:"));
-        for req in &item.required_for {
-            col = col.push(text(format!("  • {} ×{}", req.name, req.quantity)));
+fn pill_button<'a>(label: &'a str, shortcut: &'a str, on_press: Message) -> Element<'a, Message> {
+    button(
+        row![
+            text(label).size(13),
+            text(shortcut).size(11).color(palette::TEXT_MUTED),
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center),
+    )
+    .padding([6, 12])
+    .on_press(on_press)
+    .style(|_, status| {
+        let alpha = match status {
+            button::Status::Hovered | button::Status::Pressed => 0.12,
+            _ => 0.06,
+        };
+        button::Style {
+            background: Some(with_alpha(palette::TEXT, alpha).into()),
+            text_color: palette::TEXT,
+            border: Border {
+                color: palette::BORDER,
+                width: 1.0,
+                radius: 6.0.into(),
+            },
+            ..button::Style::default()
         }
-    }
-    if let Some(description) = &item.description {
-        col = col.push(text(description).size(13));
-    }
-    scrollable(col).into()
+    })
+    .into()
+}
+
+fn centered<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
+    container(content).center(Length::Fill).padding(24).into()
 }

@@ -7,10 +7,12 @@ mod cache;
 mod catalog;
 pub mod download;
 mod error;
+mod icons;
 pub mod raidtheory;
 mod search;
 
 pub use cache::DiskCache;
 pub use catalog::Catalog;
 pub use error::Error;
+pub use icons::IconCache;
 pub use search::ItemSearch;

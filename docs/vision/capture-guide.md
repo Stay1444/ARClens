@@ -14,13 +14,17 @@ capture exists.
 
 ## What to capture
 
+We only need to **find** things on screen and **identify** the item. Rarity,
+value and everything else come from the item database once we know which
+item it is, so a small set is enough.
+
 | # | Set | Count | Notes | Filename |
 |---|---|---|---|---|
-| 1 | Inventory, item hovered | ~40 | ~30 different items across all rarities and types (materials, weapons, mods, quick-use, keys). 3–4 items in different slots, including near the right/bottom edges (tooltip flips). Stacked items. Both hideout stash and in-raid backpack, plus a trader and a crafting screen | `inv_<item>_<where>.png` |
-| 2 | Inventory open, nothing hovered | ~5 | Each tab or screen variant | `inv_none_<where>.png` |
-| 3 | Map screen | ~6 per map | Fully zoomed out, fully zoomed in, 3–4 pans at mid zoom, player marker visible; one or two during a map condition | `map_<map>_<zoom>_<n>.png` |
-| 4 | Negatives | ~10 | Gameplay HUD, main menu, lobby, loading screen, pause menu | `neg_<what>.png` |
-| 5 | Recordings (optional) | 2 × 20–30 s | OBS, native resolution: mouse sweeping a full inventory; opening the map, then panning and zooming | `rec_<what>.mkv` |
+| 1 | Inventory, item hovered | ~10 | Any mix of items; 2 of them near the right or bottom screen edge, where the tooltip flips | `inv_<item>.png` |
+| 2 | Inventory open, nothing hovered | 2–3 | | `inv_none_<n>.png` |
+| 3 | Map screen | 3 per map | Zoomed out, zoomed in, panned | `map_<map>_<n>.png` |
+| 4 | Negatives | ~5 | Gameplay HUD, menu, lobby | `neg_<what>.png` |
+| 5 | Recording (optional) | 20–30 s | OBS: mouse sweeping across a full inventory | `rec_inventory.mkv` |
 
 ## Storage
 

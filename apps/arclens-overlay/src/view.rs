@@ -1,12 +1,11 @@
 //! Rendering. Everything outside the drawn widgets stays fully transparent.
 
 use crate::{Message, Overlay};
-use arclens_core::{Advice, Item, MarkerKind, Verdict};
+use arclens_core::MarkerKind;
+use arclens_ui::{CardSize, ItemCard, item_card};
 use iced::widget::canvas::{self, Canvas, Frame, Geometry, Path};
 use iced::widget::{Space, column, container, stack, text};
 use iced::{Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
-
-const CARD_WIDTH: f32 = 320.0;
 
 pub fn view(state: &Overlay) -> Element<'_, Message> {
     if !state.visible {
@@ -22,8 +21,14 @@ pub fn view(state: &Overlay) -> Element<'_, Message> {
     let mut panel = column![status_badge(state)]
         .spacing(8)
         .align_x(iced::Alignment::End);
-    if let Some((item, advice)) = &state.item {
-        panel = panel.push(item_card(item, advice));
+    if let Some(shown) = &state.item {
+        panel = panel.push(item_card(&ItemCard {
+            item: &shown.item,
+            advice: shown.advice.clone(),
+            icon: shown.icon.as_ref(),
+            recycle_names: shown.recycle_names.clone(),
+            size: CardSize::Compact,
+        }));
     }
 
     stack![
@@ -56,41 +61,6 @@ fn status_badge(state: &Overlay) -> Element<'_, Message> {
                 ..Default::default()
             },
             text_color: Some(Color::from_rgb8(0xc8, 0xcc, 0xd4)),
-            ..Default::default()
-        })
-        .into()
-}
-
-fn item_card<'a>(item: &'a Item, advice: &'a Advice) -> Element<'a, Message> {
-    let (label, color) = match advice.verdict {
-        Verdict::Keep => ("KEEP", Color::from_rgb8(0x4c, 0xaf, 0x50)),
-        Verdict::Recycle => ("RECYCLE", Color::from_rgb8(0x29, 0x8f, 0xd6)),
-        Verdict::Sell => ("SELL", Color::from_rgb8(0xf2, 0xb1, 0x34)),
-        Verdict::Unknown => ("?", Color::from_rgb8(0x9e, 0x9e, 0x9e)),
-    };
-
-    let mut lines =
-        column![text(&item.name).size(20), text(label).size(16).color(color),].spacing(4);
-    if let Some(value) = advice.sell_value {
-        lines = lines.push(text(format!("Sell: {value}")));
-    }
-    if let Some(value) = advice.recycle_value {
-        lines = lines.push(text(format!("Recycle: {value}")));
-    }
-    for req in item.required_for.iter().take(4) {
-        lines = lines.push(text(format!("• {} ×{}", req.name, req.quantity)).size(13));
-    }
-
-    container(lines)
-        .width(CARD_WIDTH)
-        .padding(12)
-        .style(|_| container::Style {
-            background: Some(Color::from_rgba8(0x10, 0x12, 0x16, 0.85).into()),
-            border: iced::Border {
-                radius: 8.0.into(),
-                ..Default::default()
-            },
-            text_color: Some(Color::WHITE),
             ..Default::default()
         })
         .into()

@@ -1,0 +1,16 @@
+[package]
+name = "arclens-ui"
+description = "Shared iced widgets and design tokens for the ARClens app and overlay"
+version.workspace = true
+publish.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+arclens-core = { workspace = true }
+iced = { workspace = true }
+image = { workspace = true }
+
+[lints]
+workspace = true

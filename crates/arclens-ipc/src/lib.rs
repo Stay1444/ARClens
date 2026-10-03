@@ -49,6 +49,14 @@ pub enum ToOverlay {
     ShowItem {
         item: Box<Item>,
         advice: Advice,
+        /// Local path of the item's icon, if cached. Optional, so older
+        /// peers keep working without a protocol bump.
+        #[serde(default)]
+        icon: Option<PathBuf>,
+        /// Display names aligned with `item.recycles_into` (the overlay has
+        /// no catalog to resolve ids).
+        #[serde(default)]
+        recycle_names: Vec<String>,
     },
     /// Draw these markers using `transform` (map space → screen pixels).
     ShowMarkers {

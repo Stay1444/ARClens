@@ -7,6 +7,7 @@
 mod app;
 mod data;
 mod hotkeys;
+mod icons;
 mod overlay_link;
 mod overlay_process;
 mod paths;
@@ -28,7 +29,7 @@ fn main() -> anyhow::Result<()> {
     .title("ARClens")
     .subscription(app::App::subscription)
     .theme(app::App::theme)
-    .window_size((900.0, 640.0))
+    .window_size((1180.0, 760.0))
     .run()?;
     Ok(())
 }

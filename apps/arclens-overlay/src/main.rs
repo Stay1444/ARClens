@@ -42,13 +42,22 @@ fn main() -> Result<(), iced_layershell::Error> {
         .run()
 }
 
+/// The item card currently on screen.
+#[derive(Debug)]
+pub struct ShownItem {
+    item: Box<Item>,
+    advice: Advice,
+    icon: Option<iced::widget::image::Handle>,
+    recycle_names: Vec<String>,
+}
+
 /// Everything the overlay currently displays.
 #[derive(Debug, Default)]
 pub struct Overlay {
     connected: bool,
     visible: bool,
     interactive: bool,
-    item: Option<(Box<Item>, Advice)>,
+    item: Option<ShownItem>,
     markers: Vec<Marker>,
     transform: Option<Transform>,
 }
@@ -105,9 +114,23 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
             // the overlay while interactive; see docs/ROADMAP.md (M1).
             return Task::done(Message::KeyboardInteractivityChange(keyboard));
         }
-        ToOverlay::ShowItem { item, advice } => {
+        ToOverlay::ShowItem {
+            item,
+            advice,
+            icon,
+            recycle_names,
+        } => {
             tracing::info!(item = %item.name, "showing item");
-            state.item = Some((item, advice));
+            state.item = Some(ShownItem {
+                item,
+                advice,
+                // Icons are ~256² PNGs; decoding once here is cheap and keeps
+                // `view` free of I/O.
+                icon: icon
+                    .as_deref()
+                    .and_then(|p| arclens_ui::decode_icon(p, 128)),
+                recycle_names,
+            });
         }
         ToOverlay::ShowMarkers {
             markers, transform, ..

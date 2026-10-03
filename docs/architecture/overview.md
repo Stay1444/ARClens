@@ -36,9 +36,10 @@ overlay state (visibility, interactivity, current item).
 | Crate | Kind | Responsibility | May depend on |
 |---|---|---|---|
 | `arclens-core` | lib | Domain types (`Item`, `Marker`, `Transform`), loot advice. **Pure: no I/O, async or UI** | serde |
-| `arclens-data` | lib | Providers (RaidTheory), download, disk cache, fuzzy search | core |
+| `arclens-data` | lib | Providers (RaidTheory), download, disk cache, icon cache, fuzzy search | core |
 | `arclens-ipc` | lib | Wire protocol, socket framing, version handshake | core, tokio |
 | `arclens-hotkeys` | lib | GlobalShortcuts portal wrapper, stable action ids | ashpd |
+| `arclens-ui` | lib | Design tokens and the shared item card used by app and overlay | core, iced |
 | `arclens-vision` | lib | _planned_: frame → signals (inventory/map open, hovered item, map transform) | core |
 | `arclens` | bin | Companion app: owns state, wires everything | all libs, iced |
 | `arclens-overlay` | bin | Overlay renderer | core, ipc, iced_layershell |

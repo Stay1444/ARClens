@@ -82,7 +82,7 @@ Edit the JSONL file to try new messages. The format is
 ## Headless screenshots (CI, cloud agents)
 
 The overlay and app can run inside a headless Sway with software Vulkan
-(lavapipe). This is how `docs/assets/overlay-demo.png` was produced.
+(lavapipe). This is how the screenshots in `docs/assets/` were produced.
 
 ```sh
 sudo apt install sway grim wtype socat mesa-vulkan-drivers
@@ -92,6 +92,10 @@ cargo run -p arclens &           # needs ARCLENS_RAIDTHEORY_DIR if offline
 wtype "rusted gear"              # keyboard input works
 grim shot.png
 ```
+
+`wtype` drops the first key of each invocation, so lead with a throwaway key
+(`wtype -k Shift_L -k Return`). Enter in the search box opens the top result,
+which is enough to reach the detail view without a mouse.
 
 Known limitation: the headless seat has no pointer, so simulated clicks
 (`swaymsg seat … cursor`, `wlrctl`) don't reach clients. Use keyboard input

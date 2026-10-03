@@ -22,6 +22,10 @@ impl Paths {
         self.cache.join("catalog.json")
     }
 
+    pub fn icons_dir(&self) -> PathBuf {
+        self.cache.join("icons")
+    }
+
     pub fn raidtheory_dir(&self) -> PathBuf {
         self.cache.join("raidtheory")
     }
