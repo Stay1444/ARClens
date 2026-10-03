@@ -35,8 +35,8 @@ screen-capture portal OBS uses. See
 ```sh
 # Fedora
 sudo dnf install wayland-devel libxkbcommon-devel vulkan-loader-devel
-cargo run -p arclens            # companion app
-cargo run -p arclens-overlay    # overlay, in a second terminal
+cargo build -p arclens-overlay
+cargo run -p arclens            # companion app; starts the overlay itself
 ```
 
 More in [docs/development.md](docs/development.md).

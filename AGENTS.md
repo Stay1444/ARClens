@@ -53,8 +53,7 @@ Start with `docs/architecture/overview.md`. Plans live in `docs/ROADMAP.md`.
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-cargo run -p arclens            # app
-cargo run -p arclens-overlay    # overlay
+cargo build -p arclens-overlay && cargo run -p arclens   # app (auto-starts the overlay)
 ```
 
 Plain `cargo build`/`cargo test` builds only the library crates

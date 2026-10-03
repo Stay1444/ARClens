@@ -2,7 +2,7 @@
 
 use crate::overlay_link::OverlayHandle;
 use crate::paths::Paths;
-use crate::{data, hotkeys, overlay_link};
+use crate::{data, hotkeys, overlay_link, overlay_process};
 use arclens_core::{Item, ItemId, Verdict, advise};
 use arclens_data::{Catalog, ItemSearch};
 use arclens_hotkeys::Action;
@@ -43,6 +43,7 @@ pub enum Message {
     ToggleInteractive,
     Overlay(overlay_link::Event),
     Hotkey(hotkeys::Event),
+    OverlayProcess(overlay_process::Event),
 }
 
 impl App {
@@ -67,10 +68,14 @@ impl App {
 
     #[allow(clippy::unused_self, reason = "signature required by iced")]
     pub fn subscription(&self) -> Subscription<Message> {
-        Subscription::batch([
+        let mut subscriptions = vec![
             overlay_link::subscription().map(Message::Overlay),
             hotkeys::subscription().map(Message::Hotkey),
-        ])
+        ];
+        if overlay_process::enabled() {
+            subscriptions.push(overlay_process::subscription().map(Message::OverlayProcess));
+        }
+        Subscription::batch(subscriptions)
     }
 
     #[allow(clippy::unused_self, reason = "signature required by iced")]
@@ -112,6 +117,9 @@ impl App {
                 );
             }
             Message::Overlay(event) => self.on_overlay_event(event),
+            Message::OverlayProcess(overlay_process::Event::Unavailable(error)) => {
+                self.status.push(format!("Overlay not started: {error}"));
+            }
         }
         Task::none()
     }

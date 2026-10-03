@@ -29,9 +29,20 @@ cargo test --workspace                      # everything
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all
 
-cargo run -p arclens                        # companion app
-cargo run -p arclens-overlay                # overlay (start it after the app)
+cargo run -p arclens                        # companion app (starts the overlay)
 ```
+
+`arclens` launches `arclens-overlay` from the same directory (or `$PATH`) and
+restarts it if it exits. The overlay is started with `--exit-with-app`, so it
+quits when the app does. To run the overlay by hand while working on it:
+
+```sh
+ARCLENS_OVERLAY_AUTOSTART=0 cargo run -p arclens
+cargo run -p arclens-overlay
+```
+
+Build the overlay first (`cargo build -p arclens-overlay`), or
+`cargo run -p arclens` won't find it.
 
 The overlay starts hidden. Toggle it with **Ctrl+Shift+O** (or the app's
 "Show overlay" button). While shown, a small "ARClens" badge sits top-right.
@@ -43,6 +54,8 @@ Useful environment variables:
 |---|---|
 | `RUST_LOG=arclens=debug,arclens_overlay=debug` | Verbose logs |
 | `ARCLENS_RAIDTHEORY_DIR=~/src/arcraiders-data` | Load the dataset from a local checkout; skip cache and network |
+| `ARCLENS_OVERLAY_AUTOSTART=0` | Don't launch the overlay from the app |
+| `ARCLENS_OVERLAY_BIN=/path/to/arclens-overlay` | Overlay binary to launch |
 
 ## Global hotkeys
 

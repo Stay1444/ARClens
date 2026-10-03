@@ -43,20 +43,40 @@ fn run(mut output: mpsc::Sender<Event>) {
         }
     };
 
+    // When the companion app spawned us, we must not outlive it: exit once the
+    // connection drops, or if it never comes up.
+    let exit_with_app = std::env::args().any(|a| a == EXIT_WITH_APP_FLAG);
+
     runtime.block_on(async move {
+        let mut failed_attempts = 0u32;
         loop {
-            if let Err(error) = connect_once(&mut output).await {
+            let mut connected = false;
+            if let Err(error) = connect_once(&mut output, &mut connected).await {
                 tracing::debug!(%error, "IPC connection ended");
             }
+            if exit_with_app && (connected || failed_attempts >= MAX_ATTEMPTS_WHEN_SPAWNED) {
+                tracing::info!("companion app gone; exiting");
+                std::process::exit(0);
+            }
+            failed_attempts = if connected { 0 } else { failed_attempts + 1 };
             if output.send(Event::Disconnected).await.is_err() {
                 return; // UI is gone.
             }
-            tokio::time::sleep(Duration::from_secs(2)).await;
+            tokio::time::sleep(RETRY_DELAY).await;
         }
     });
 }
 
-async fn connect_once(output: &mut mpsc::Sender<Event>) -> Result<(), arclens_ipc::Error> {
+/// Passed by the companion app when it spawns the overlay.
+pub const EXIT_WITH_APP_FLAG: &str = "--exit-with-app";
+const RETRY_DELAY: Duration = Duration::from_secs(2);
+/// ~10 s of retries before a spawned overlay gives up.
+const MAX_ATTEMPTS_WHEN_SPAWNED: u32 = 5;
+
+async fn connect_once(
+    output: &mut mpsc::Sender<Event>,
+    connected: &mut bool,
+) -> Result<(), arclens_ipc::Error> {
     let stream = tokio::net::UnixStream::connect(arclens_ipc::socket_path()).await?;
     let (mut rx, mut tx) = arclens_ipc::split(stream);
     tx.send(&ToApp::Hello(Hello {
@@ -67,6 +87,7 @@ async fn connect_once(output: &mut mpsc::Sender<Event>) -> Result<(), arclens_ip
     while let Some(msg) = rx.recv::<ToOverlay>().await? {
         if let ToOverlay::Hello(hello) = &msg {
             arclens_ipc::check_version(hello)?;
+            *connected = true;
             let _ = output.send(Event::Connected).await;
             continue;
         }

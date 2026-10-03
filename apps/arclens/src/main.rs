@@ -8,6 +8,7 @@ mod app;
 mod data;
 mod hotkeys;
 mod overlay_link;
+mod overlay_process;
 mod paths;
 
 fn main() -> anyhow::Result<()> {

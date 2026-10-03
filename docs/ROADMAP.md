@@ -31,7 +31,7 @@ green CI.
       `PROTON_ENABLE_WAYLAND=1` (works, 2026-10-03).
 - [ ] Same test with Proton via XWayland (the default). Record the results in
       `docs/research/wayland-overlay.md`.
-- [ ] Start the overlay automatically from the app, and restart it if it
+- [x] Start the overlay automatically from the app, and restart it if it
       exits.
 - [ ] Packaging: `.desktop` install, Fedora COPR or Flatpak (the Flatpak
       needs the portal permissions).
@@ -56,7 +56,7 @@ green CI.
 
 ## M3: Vision (see `docs/research/game-state-detection.md`)
 
-- [ ] **Collect fixtures.** Screenshots and short recordings at 1080p and
+- [ ] **Collect fixtures** (see `docs/vision/capture-guide.md`). Screenshots and short recordings at 1080p and
       1440p of the inventory (with tooltips), the map screen at several
       zooms and pans on each map, and the HUD. Store them under
       `crates/arclens-vision/tests/fixtures/` (git LFS if large).
