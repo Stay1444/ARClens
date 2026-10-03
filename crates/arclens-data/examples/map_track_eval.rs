@@ -16,7 +16,27 @@
     reason = "offline evaluation tool"
 )]
 
-use arclens_vision::{Motion, MotionTracker};
+use arclens_vision::{Footprint, Motion, MotionTracker};
+
+/// With `FOOTPRINT=orange`: the recording shows ARClens's own orange
+/// marker badges; find them by colour, standing in for the footprint the
+/// app knows exactly.
+fn drawn_badges(frame: &image::RgbImage) -> Footprint {
+    let mut footprint = Footprint::default();
+    if std::env::var("FOOTPRINT").as_deref() != Ok("orange") {
+        return footprint;
+    }
+    for y in (0..frame.height()).step_by(6) {
+        for x in (0..frame.width()).step_by(6) {
+            let [r, g, b] = frame.get_pixel(x, y).0;
+            if r > 200 && (130..220).contains(&g) && b < 110 {
+                #[allow(clippy::cast_precision_loss, reason = "pixels")]
+                footprint.circles.push((x as f32, y as f32, 8.0));
+            }
+        }
+    }
+    footprint
+}
 use std::collections::HashMap;
 
 /// Map → frame-pixel view: `p = scale · m + (tx, ty)`.
@@ -126,7 +146,7 @@ fn main() -> anyhow::Result<()> {
             size = (frame.width() as f32, frame.height() as f32);
         }
         let start = std::time::Instant::now();
-        let estimate = tracker.track(&frame);
+        let estimate = tracker.track_ignoring(&frame, &drawn_badges(&frame));
         times.push(start.elapsed().as_secs_f32() * 1000.0);
         let view = truth.get(&name).copied().filter(|v| v.agree >= min_agree);
 

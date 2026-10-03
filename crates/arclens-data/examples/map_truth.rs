@@ -4,6 +4,8 @@
 //!
 //! `ARCLENS_OCR_MODEL=… cargo run --release -p arclens-data --example map_truth -- MAP FRAME...`
 
+#![allow(clippy::many_single_char_names, reason = "offline evaluation tool")]
+
 use arclens_data::anchors::{ScreenLabel, locate_view};
 use arclens_vision::{Analyzer, NameReader};
 
@@ -38,6 +40,30 @@ fn main() -> anyhow::Result<()> {
             .unwrap_or_default()
             .to_string_lossy()
             .into_owned();
+        if std::env::var_os("VERBOSE").is_some() {
+            let fit = locate_view(&labels, size, &known).map(|(t, _)| t);
+            for label in &labels {
+                let pair = arclens_data::anchors::match_labels(std::slice::from_ref(label), &known);
+                match (pair.first(), fit) {
+                    (Some(&(m, s)), Some(t)) => {
+                        let (x, y) = t.apply(m);
+                        let (px, py) = (x * size.0, y * size.1);
+                        eprintln!(
+                            "  {:<28} screen ({:6.0},{:6.0}) fit ({px:6.0},{py:6.0}) off {:5.0}px",
+                            label.text,
+                            s.0,
+                            s.1,
+                            (px - s.0).hypot(py - s.1)
+                        );
+                    }
+                    (Some(&(m, s)), None) => eprintln!(
+                        "  {:<28} screen ({:6.0},{:6.0}) map {m:?}",
+                        label.text, s.0, s.1
+                    ),
+                    (None, _) => eprintln!("  {:<28} (no match)", label.text),
+                }
+            }
+        }
         match locate_view(&labels, size, &known) {
             // Back to pixels: x_px = a·x·W + tx·W.
             Some((t, agree)) => println!(

@@ -123,6 +123,9 @@ struct GameMapView {
     quest_panel_open: bool,
     /// The overlay has the current marker set (only the view changes).
     markers_sent: bool,
+    /// What that set is: single markers, and areas' outlines and centres.
+    shown: Vec<arclens_core::MapPoint>,
+    shown_areas: Vec<(arclens_core::MapPoint, Vec<arclens_core::MapPoint>)>,
 }
 
 impl GameMapView {
@@ -576,6 +579,7 @@ impl App {
                 self.game_view = GameMapView::default();
                 self.send(ToOverlay::HideMapPanel);
                 self.send(ToOverlay::ClearMarkers);
+                vision::set_drawn(vision::Drawn::default());
             }
             vision::Event::MapLabels(read) => self.on_map_labels(&read),
             vision::Event::MapMotion(motion) => {
@@ -690,6 +694,7 @@ impl App {
             self.send(ToOverlay::ClearHover);
             self.send(ToOverlay::HideMapPanel);
             self.send(ToOverlay::ClearMarkers);
+            vision::set_drawn(vision::Drawn::default());
         }
     }
 
@@ -914,6 +919,7 @@ impl App {
             None => {
                 if std::mem::take(&mut self.game_view.markers_sent) {
                     self.send(ToOverlay::ClearMarkers);
+                    vision::set_drawn(vision::Drawn::default());
                 }
             }
             Some(transform) if self.game_view.markers_sent => {
@@ -921,6 +927,7 @@ impl App {
                     transform,
                     clip: Some(self.map_clip()),
                 });
+                self.report_drawn(transform);
             }
             Some(_) => self.push_map_markers(),
         }
@@ -939,6 +946,7 @@ impl App {
         };
         let Some(transform) = self.game_view.current() else {
             self.send(ToOverlay::ClearMarkers);
+            vision::set_drawn(vision::Drawn::default());
             return;
         };
         let bit = self.condition_bit(map);
@@ -951,6 +959,12 @@ impl App {
         let layout = arclens_core::layout(markers, enabled.map(|(i, _)| i));
         let shown: Vec<arclens_core::Marker> =
             layout.singles.iter().map(|&i| markers[i].clone()).collect();
+        self.game_view.shown = shown.iter().map(|m| m.position).collect();
+        self.game_view.shown_areas = layout
+            .areas
+            .iter()
+            .map(|a| (a.center, a.hull.clone()))
+            .collect();
         self.send(ToOverlay::ShowMarkers {
             map: arclens_core::MapId::new(map),
             markers: shown,
@@ -959,6 +973,48 @@ impl App {
             clip: Some(self.map_clip()),
         });
         self.game_view.markers_sent = true;
+        self.report_drawn(transform);
+    }
+
+    /// Tells tracking where the overlay now draws (inside the viewport),
+    /// so it ignores our own markers in the capture.
+    fn report_drawn(&self, transform: arclens_core::Transform) {
+        let clip = self.map_clip();
+        let inside = |(x, y): (f32, f32)| {
+            (clip.x - 0.02..=clip.x + clip.width + 0.02).contains(&x)
+                && (clip.y - 0.02..=clip.y + clip.height + 0.02).contains(&y)
+        };
+        let at = |p: arclens_core::MapPoint| transform.apply((p.x, p.y));
+        let badges = self
+            .game_view
+            .shown
+            .iter()
+            .map(|&p| at(p))
+            .filter(|&p| inside(p))
+            .collect();
+        let mut outlines = Vec::new();
+        for (center, hull) in &self.game_view.shown_areas {
+            let c = at(*center);
+            outlines.push(c);
+            // Points along the outline, ~0.4 % of the screen apart.
+            for (i, &a) in hull.iter().enumerate() {
+                let (a, b) = (at(a), at(hull[(i + 1) % hull.len()]));
+                let len = (b.0 - a.0).hypot(b.1 - a.1);
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "small counts"
+                )]
+                let steps = ((len / 0.004).ceil() as usize).clamp(1, 400);
+                #[allow(clippy::cast_precision_loss, reason = "small counts")]
+                for k in 0..steps {
+                    let t = k as f32 / steps as f32;
+                    outlines.push((a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t));
+                }
+            }
+        }
+        outlines.retain(|&p| inside(p));
+        vision::set_drawn(vision::Drawn { badges, outlines });
     }
 
     /// The in-game map's viewport, normalised: markers outside it would sit

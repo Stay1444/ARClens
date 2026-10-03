@@ -39,6 +39,8 @@ const FLAT_VARIANCE: f32 = 4.0;
 /// Gauss–Newton iterations, and the thumbnail border left out.
 const REFINE_ITERATIONS: usize = 8;
 const REFINE_MARGIN: usize = 6;
+/// Neighbourhood (thumbnail pixels) masked pixels are filled from.
+const FILL_RADIUS: usize = 3;
 /// A peak this high is a sure match (noise stays under ~0.05).
 const CONFIDENT: f32 = 0.12;
 /// Largest zoom between two frames searched: e^0.4 ≈ 1.5×.
@@ -94,11 +96,32 @@ pub struct Estimate {
     pub confidence: f32,
 }
 
+/// What we drew on screen ourselves, in frame pixels: the overlay is in
+/// the capture too. Its markers only follow the map a step behind, so left
+/// in they look like a still map and drag every estimate towards "nothing
+/// moved" (field report 2026-10-03: a fast zoom-out on Blue Gate froze the
+/// markers in place). The tracker ignores these pixels.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Footprint {
+    /// Badges: centre and radius.
+    pub circles: Vec<(f32, f32, f32)>,
+    /// Shaded areas: their outlines.
+    pub polygons: Vec<Vec<(f32, f32)>>,
+}
+
+impl Footprint {
+    pub fn is_empty(&self) -> bool {
+        self.circles.is_empty() && self.polygons.is_empty()
+    }
+}
+
 /// Downsampled grey crop of one frame.
 #[derive(Debug, Clone)]
 struct Thumb {
     /// `N × N`, zero mean.
     pixels: Vec<f32>,
+    /// Pixels covered by our own drawing (empty: none).
+    mask: Vec<bool>,
     /// Frame size it came from.
     frame: (u32, u32),
     /// Frame pixels per thumbnail pixel, per axis.
@@ -158,7 +181,14 @@ impl MotionTracker {
     /// How the map moved since the previous frame given; `None` for the
     /// first frame or after a size change.
     pub fn track(&mut self, frame: &RgbImage) -> Option<Estimate> {
-        let thumb = thumbnail(frame);
+        self.track_ignoring(frame, &Footprint::default())
+    }
+
+    /// [`Self::track`], ignoring what we drew ourselves (`drawn`, in this
+    /// frame's pixels).
+    pub fn track_ignoring(&mut self, frame: &RgbImage, drawn: &Footprint) -> Option<Estimate> {
+        let mut thumb = thumbnail(frame);
+        thumb.mask = rasterize(drawn, &thumb);
         let prev = self.prev.replace(thumb);
         let prev = prev?;
         let thumb = self.prev.as_ref()?;
@@ -171,6 +201,24 @@ impl MotionTracker {
     }
 
     fn estimate(&self, prev: &Thumb, cur: &Thumb) -> Estimate {
+        // Our drawing in either frame is left out of both: filled in from
+        // around it, so no hard edge stays put between them.
+        let mask = union(&prev.mask, &cur.mask);
+        let (prev, cur) = if mask.is_empty() {
+            (prev.clone(), cur.clone())
+        } else {
+            (
+                Thumb {
+                    pixels: fill_masked(&prev.pixels, &mask),
+                    ..prev.clone()
+                },
+                Thumb {
+                    pixels: fill_masked(&cur.pixels, &mask),
+                    ..cur.clone()
+                },
+            )
+        };
+        let (prev, cur) = (&prev, &cur);
         let cur_spectrum = self.spectrum(&cur.pixels);
         // Correlation peaks per log-scale tried.
         let mut tried: Vec<(f32, Vec<Shift>)> = Vec::new();
@@ -248,8 +296,14 @@ impl MotionTracker {
         let shift = self.choose_peak(&peaks, &warp(&prev.pixels, scale), &cur.pixels);
         // Phase correlation lands within a pixel or two and a percent of
         // zoom; direct alignment makes it exact.
-        let (scale, (sx, sy)) =
-            refine(&prev.pixels, &cur.pixels, scale, (shift.dx, shift.dy), !pan);
+        let (scale, (sx, sy)) = refine(
+            &prev.pixels,
+            &cur.pixels,
+            &mask,
+            scale,
+            (shift.dx, shift.dy),
+            !pan,
+        );
         // Thumbnail: p' = c + s(p − c) + d about the centre; in frame
         // pixels that is p' = s·p + (1 − s)·C + step·d.
         let (cx, cy) = cur.center;
@@ -422,6 +476,7 @@ fn support(prev: &[f32], cur: &[f32], shift: Shift) -> usize {
 fn refine(
     prev: &[f32],
     cur: &[f32],
+    mask: &[bool],
     scale: f32,
     shift: (f32, f32),
     zoom: bool,
@@ -442,6 +497,10 @@ fn refine(
                 let qx = c + (x as f32 - c - theta[1]) / s;
                 let qy = c + (y as f32 - c - theta[2]) / s;
                 if !(1.0..(N - 2) as f32).contains(&qx) || !(1.0..(N - 2) as f32).contains(&qy) {
+                    continue;
+                }
+                let at = |px: f32, py: f32| (py.round() as usize) * N + px.round() as usize;
+                if !mask.is_empty() && (mask[y * N + x] || mask[at(qx, qy)]) {
                     continue;
                 }
                 let r = bilinear(prev, qx, qy) + theta[3] - cur[y * N + x];
@@ -615,10 +674,162 @@ fn thumbnail(frame: &RgbImage) -> Thumb {
     }
     Thumb {
         pixels,
+        mask: Vec::new(),
         frame: (width, height),
         step,
         center: (x0 + 0.5 * fw * width as f32, y0 + 0.5 * fh * height as f32),
     }
+}
+
+/// Thumbnail pixels covered by `drawn` (grown by a pixel for the blur of
+/// downsampling); empty when nothing is.
+fn rasterize(drawn: &Footprint, thumb: &Thumb) -> Vec<bool> {
+    if drawn.is_empty() {
+        return Vec::new();
+    }
+    let (ox, oy) = (
+        thumb.center.0 - thumb.step.0 * N as f32 / 2.0,
+        thumb.center.1 - thumb.step.1 * N as f32 / 2.0,
+    );
+    // Frame point → thumbnail pixel (fractional), and back.
+    let to_thumb = |x: f32, y: f32| ((x - ox) / thumb.step.0, (y - oy) / thumb.step.1);
+    let to_frame = |tx: usize, ty: usize| {
+        (
+            ox + (tx as f32 + 0.5) * thumb.step.0,
+            oy + (ty as f32 + 0.5) * thumb.step.1,
+        )
+    };
+    let span = |lo: f32, hi: f32| {
+        let lo = (lo.floor() - 1.0).max(0.0) as usize;
+        let hi = ((hi.ceil() + 1.0).max(0.0) as usize).min(N - 1);
+        lo..=hi
+    };
+    let mut mask = vec![false; N * N];
+    let grow = thumb.step.0.max(thumb.step.1);
+    for &(cx, cy, r) in &drawn.circles {
+        let r = r + grow;
+        let (x0, y0) = to_thumb(cx - r, cy - r);
+        let (x1, y1) = to_thumb(cx + r, cy + r);
+        for ty in span(y0, y1) {
+            for tx in span(x0, x1) {
+                let (fx, fy) = to_frame(tx, ty);
+                if (fx - cx).hypot(fy - cy) <= r {
+                    mask[ty * N + tx] = true;
+                }
+            }
+        }
+    }
+    for polygon in &drawn.polygons {
+        let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+        for &(x, y) in polygon {
+            let (tx, ty) = to_thumb(x, y);
+            (x0, y0, x1, y1) = (x0.min(tx), y0.min(ty), x1.max(tx), y1.max(ty));
+        }
+        if x0 > x1 {
+            continue;
+        }
+        for ty in span(y0, y1) {
+            for tx in span(x0, x1) {
+                let (fx, fy) = to_frame(tx, ty);
+                if inside(polygon, fx, fy) {
+                    mask[ty * N + tx] = true;
+                }
+            }
+        }
+    }
+    mask
+}
+
+/// Even-odd point-in-polygon test.
+fn inside(polygon: &[(f32, f32)], x: f32, y: f32) -> bool {
+    let mut odd = false;
+    let mut j = polygon.len().wrapping_sub(1);
+    for (i, &(xi, yi)) in polygon.iter().enumerate() {
+        let (xj, yj) = polygon[j];
+        if (yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi {
+            odd = !odd;
+        }
+        j = i;
+    }
+    odd
+}
+
+fn union(a: &[bool], b: &[bool]) -> Vec<bool> {
+    match (a.is_empty(), b.is_empty()) {
+        (true, true) => Vec::new(),
+        (false, true) => a.to_vec(),
+        (true, false) => b.to_vec(),
+        (false, false) => a.iter().zip(b).map(|(x, y)| *x || *y).collect(),
+    }
+}
+
+/// Masked pixels replaced by the average of the unmasked ones around them
+/// (normalised box filter, widened until something is found), so the
+/// holes carry no edges of their own.
+fn fill_masked(pixels: &[f32], mask: &[bool]) -> Vec<f32> {
+    let mut out = pixels.to_vec();
+    for radius in [FILL_RADIUS, 2 * FILL_RADIUS, 4 * FILL_RADIUS] {
+        let (sum, count) = box_sums(&out, mask, radius);
+        let mut left = false;
+        for i in 0..N * N {
+            if mask[i] {
+                if count[i] > 0.0 {
+                    out[i] = sum[i] / count[i];
+                } else {
+                    left = true;
+                }
+            }
+        }
+        if !left {
+            return out;
+        }
+    }
+    // Nothing unmasked anywhere near: the mean.
+    for (p, &m) in out.iter_mut().zip(mask) {
+        if m && !p.is_finite() {
+            *p = 0.0;
+        }
+    }
+    out
+}
+
+/// Sums of unmasked values and their counts over `(2r+1)²` boxes.
+fn box_sums(pixels: &[f32], mask: &[bool], radius: usize) -> (Vec<f32>, Vec<f32>) {
+    let value = |i: usize| {
+        if mask[i] {
+            (0.0, 0.0)
+        } else {
+            (pixels[i], 1.0)
+        }
+    };
+    // Rows, then columns.
+    let mut row_sum = vec![(0.0f32, 0.0f32); N * N];
+    for y in 0..N {
+        for x in 0..N {
+            let (lo, hi) = (x.saturating_sub(radius), (x + radius).min(N - 1));
+            let mut acc = (0.0, 0.0);
+            for k in lo..=hi {
+                let (v, c) = value(y * N + k);
+                acc = (acc.0 + v, acc.1 + c);
+            }
+            row_sum[y * N + x] = acc;
+        }
+    }
+    let mut sum = vec![0.0; N * N];
+    let mut count = vec![0.0; N * N];
+    for y in 0..N {
+        for x in 0..N {
+            let (lo, hi) = (y.saturating_sub(radius), (y + radius).min(N - 1));
+            let mut acc = (0.0, 0.0);
+            for k in lo..=hi {
+                let (v, c) = row_sum[k * N + x];
+                acc = (acc.0 + v, acc.1 + c);
+            }
+            sum[y * N + x] = acc.0;
+            count[y * N + x] = acc.1;
+        }
+    }
+    (sum, count)
 }
 
 /// `pixels` zoomed by `scale` about the centre (bilinear; zero outside).
@@ -685,6 +896,64 @@ mod tests {
                 (a.0 - b.0).hypot(a.1 - b.1)
             })
             .fold(0.0, f32::max)
+    }
+
+    /// Our own badges, drawn at the same screen spots in two frames while
+    /// the map zooms out under them (the overlay lagging a step), must not
+    /// pin the estimate to "no motion" once tracking is told about them.
+    #[test]
+    fn ignores_the_overlay_drawn_over_the_map() {
+        // Zoomed out the map is dim and low in contrast, and a zoom step
+        // between two frames is small: the case that failed in the field.
+        let mut frame = fixture();
+        for p in frame.pixels_mut() {
+            for c in &mut p.0 {
+                *c = (f32::from(*c) * 0.35) as u8;
+            }
+        }
+        let size = (frame.width() as f32, frame.height() as f32);
+        let truth = Motion {
+            scale: 0.95,
+            dx: 0.05 * 1280.0,
+            dy: 0.05 * 720.0,
+        };
+        let mut badges = Footprint::default();
+        for gy in 0..22 {
+            for gx in 0..26 {
+                let (x, y) = (740.0 + gx as f32 * 46.0, 190.0 + gy as f32 * 48.0);
+                badges.circles.push((x, y, 13.0));
+            }
+        }
+        let paint = |mut image: RgbImage| {
+            for &(x, y, r) in &badges.circles {
+                for py in (y - r) as u32..=(y + r) as u32 {
+                    for px in (x - r) as u32..=(x + r) as u32 {
+                        let d = (px as f32 - x).hypot(py as f32 - y);
+                        if d <= r - 2.0 {
+                            image.put_pixel(px, py, image::Rgb([245, 170, 40]));
+                        } else if d <= r {
+                            image.put_pixel(px, py, image::Rgb([10, 10, 10]));
+                        }
+                    }
+                }
+            }
+            image
+        };
+        let (a, b) = (paint(frame.clone()), paint(moved(&frame, truth)));
+
+        let mut blind = MotionTracker::new();
+        blind.track(&a);
+        let fooled = blind.track(&b).unwrap().motion;
+        assert!(
+            error(fooled, truth, size) > 20.0,
+            "badges should mislead plain tracking ({fooled:?})"
+        );
+
+        let mut aware = MotionTracker::new();
+        aware.track_ignoring(&a, &badges);
+        let estimate = aware.track_ignoring(&b, &badges).unwrap().motion;
+        let err = error(estimate, truth, size);
+        assert!(err < 4.0, "got {estimate:?} (error {err:.1} px)");
     }
 
     #[test]

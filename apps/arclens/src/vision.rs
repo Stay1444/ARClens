@@ -84,6 +84,60 @@ enum Sent {
     Motion(Option<Motion>),
 }
 
+/// What the overlay draws on the map, normalised to the screen: markers'
+/// centres and the outlines of shaded areas. Tracking ignores these pixels
+/// (they are in the capture but lag the map; see
+/// [`arclens_vision::Footprint`]).
+#[derive(Debug, Clone, Default)]
+pub struct Drawn {
+    pub badges: Vec<(f32, f32)>,
+    /// Points along area outlines and their count badges.
+    pub outlines: Vec<(f32, f32)>,
+}
+
+/// The last two [`Drawn`]: the overlay may still show the previous one.
+fn drawn() -> &'static std::sync::Mutex<[Drawn; 2]> {
+    static DRAWN: std::sync::OnceLock<std::sync::Mutex<[Drawn; 2]>> = std::sync::OnceLock::new();
+    DRAWN.get_or_init(Default::default)
+}
+
+/// Tells tracking what the overlay now draws.
+pub fn set_drawn(now: Drawn) {
+    let mut d = drawn()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    d[0] = std::mem::replace(&mut d[1], now);
+}
+
+/// Badge radius on screen, logical pixels (the overlay's badge is 22 px
+/// across with a rim), plus slack for anti-aliasing.
+const BADGE_RADIUS: f32 = 14.0;
+/// Half-width of an area's outline band, logical pixels: the outline is
+/// drawn 9 px outside the hull, with its count badge at the centre.
+const OUTLINE_RADIUS: f32 = 12.0;
+
+/// [`Drawn`] in frame pixels, for a frame of `size` showing a monitor
+/// `px_per_logical` frame pixels per logical pixel wide.
+fn footprint(size: (f32, f32), px_per_logical: f32) -> arclens_vision::Footprint {
+    let d = drawn()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut footprint = arclens_vision::Footprint::default();
+    for drawn in d.iter() {
+        for &(x, y) in &drawn.badges {
+            footprint
+                .circles
+                .push((x * size.0, y * size.1, BADGE_RADIUS * px_per_logical));
+        }
+        for &(x, y) in &drawn.outlines {
+            footprint
+                .circles
+                .push((x * size.0, y * size.1, OUTLINE_RADIUS * px_per_logical));
+        }
+    }
+    footprint
+}
+
 /// Place names read on one map frame.
 #[derive(Debug, Clone)]
 pub struct MapLabels {
@@ -253,7 +307,8 @@ fn run(output: mpsc::Sender<Event>) {
         }
     };
 
-    if let Some(monitor) = source.monitor() {
+    let monitor = source.monitor();
+    if let Some(monitor) = monitor {
         out.send(Event::Monitor(monitor));
     }
 
@@ -277,7 +332,13 @@ fn run(output: mpsc::Sender<Event>) {
             // Only frames that do show the map.
             if map_watch.missing_since.is_none()
                 && let Some(labels) = &labels
-                && !follow_map(labels, &frame, &mut map_view, &mut out)
+                && !follow_map(
+                    labels,
+                    &frame,
+                    &mut map_view,
+                    &mut out,
+                    monitor.map(|m| m.width),
+                )
             {
                 return;
             }
@@ -368,11 +429,17 @@ fn follow_map(
     frame: &RgbImage,
     view: &mut MapView,
     out: &mut Outbox,
+    monitor_width: Option<i32>,
 ) -> bool {
     #[allow(clippy::cast_precision_loss, reason = "pixel sizes")]
     let size = (frame.width() as f32, frame.height() as f32);
+    #[allow(clippy::cast_precision_loss, reason = "pixel sizes")]
+    let px_per_logical = monitor_width
+        .filter(|&w| w > 0)
+        .map_or(1.0, |w| size.0 / w as f32);
     // Motion since the previous frame (`None`: unknown).
-    let step = match view.tracker.track(frame) {
+    let drawn = footprint(size, px_per_logical);
+    let step = match view.tracker.track_ignoring(frame, &drawn) {
         Some(e) if e.confidence >= MIN_CONFIDENCE => Some(e.motion),
         Some(e) => {
             tracing::debug!(confidence = e.confidence, "map motion lost");

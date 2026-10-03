@@ -36,7 +36,7 @@ pub use geometry::Rect;
 pub use hovered_side::{Side, hovered_side, item_side};
 pub use map_header::{MapHeader, is_map_screen, quest_panel_open, read_map_header};
 pub use map_labels::{LabelParams, find_map_labels};
-pub use map_motion::{Estimate, Motion, MotionTracker, TRACK_REGION};
+pub use map_motion::{Estimate, Footprint, Motion, MotionTracker, TRACK_REGION};
 pub use panel::{PanelParams, find_panels};
 pub use read::{NameReader, RECOGNITION_MODEL_URL};
 pub use text::{name_line, name_lines};

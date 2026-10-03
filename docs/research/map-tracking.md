@@ -72,6 +72,31 @@ What the overlay shows while the map moves (reads arrive 330 ms late):
 Same at 15 fps and 10 fps (Dam median 2.3 / 2.2 px). Time per frame:
 ~15 ms median, ~110 ms worst (a big zoom step scans all scales).
 
+## Our own overlay is in the capture (2026-10-03, field report)
+
+On Blue Gate a fast zoom-out left the markers bunched up off the island.
+The screen capture includes ARClens's overlay; its badges sit still for
+a frame or more while the map moves under them, and hundreds of
+high-contrast dots outvote a dim, zoomed-out map: the tracker saw "no
+zoom" (×0.74 tracked over the zoom-out, ×0.32 real), so the markers
+didn't move, so they kept looking still. A feedback loop the earlier
+recordings (without the overlay) couldn't show.
+
+Fix: the app tells the tracker where the overlay draws (badge centres
+and area outlines, the last two updates), and the tracker fills those
+pixels from around them in both frames before comparing and leaves
+them out of the refinement (`Footprint`, `track_ignoring`). Filling
+rather than zeroing matters: a hard-edged hole at the same place in
+both frames is itself a still feature. A first attempt that masked
+every unchanged pixel made Buried City worse and didn't fix Blue Gate.
+
+On the user's Blue Gate recording (markers found by colour standing in
+for the footprint), reads 330 ms late: p90 error 230 → 10 px, worst
+1330 → 76 px (at the widest zoom, where the truth itself is ~50 px off).
+Dam and Buried City are unchanged. A unit test paints a grid of badges
+over a dimmed, zooming fixture: plain tracking is fooled, footprint-aware
+tracking lands within 4 px.
+
 ## Findings along the way
 
 - The game zooms about the pointer, up to ×1.3 per frame at 30 fps. Labels
