@@ -42,31 +42,29 @@ pub fn read_map_header(reader: &NameReader, frame: &RgbImage) -> anyhow::Result<
 }
 
 /// Tight box around bright (white-ish) text inside the fractional `region`.
-fn bright_text(frame: &RgbImage, [fx, fy, fw, fh]: [f32; 4]) -> Option<Rect> {
-    let (w, h) = (frame.width() as f32, frame.height() as f32);
+fn bright_text(frame: &RgbImage, fraction: [f32; 4]) -> Option<Rect> {
+    let (width, height) = (frame.width() as f32, frame.height() as f32);
     let region = Rect::new(
-        (fx * w) as u32,
-        (fy * h) as u32,
-        (fw * w) as u32,
-        (fh * h) as u32,
+        (fraction[0] * width) as u32,
+        (fraction[1] * height) as u32,
+        (fraction[2] * width) as u32,
+        (fraction[3] * height) as u32,
     );
-    let bright = |x: u32, y: u32| {
-        let [r, g, b] = frame.get_pixel(x, y).0;
-        r.min(g).min(b) >= 190
-    };
-    let (mut x0, mut y0, mut x1, mut y1) = (u32::MAX, u32::MAX, 0, 0);
+    let bright = |col: u32, row: u32| frame.get_pixel(col, row).0.iter().all(|&c| c >= 190);
+    let (mut left, mut top, mut right, mut bottom) = (u32::MAX, u32::MAX, 0, 0);
     let mut count = 0u32;
     for row in region.y..region.bottom().min(frame.height()) {
         for col in region.x..region.right().min(frame.width()) {
             if bright(col, row) {
                 count += 1;
-                x0 = x0.min(col);
-                y0 = y0.min(row);
-                x1 = x1.max(col);
-                y1 = y1.max(row);
+                left = left.min(col);
+                top = top.min(row);
+                right = right.max(col);
+                bottom = bottom.max(row);
             }
         }
     }
     // Text, not a stray highlight: enough pixels, and wider than tall.
-    (count >= 40 && x1 > x0 + 2 * (y1 - y0)).then(|| Rect::new(x0, y0, x1 - x0 + 1, y1 - y0 + 1))
+    (count >= 40 && right > left + 2 * (bottom - top))
+        .then(|| Rect::new(left, top, right - left + 1, bottom - top + 1))
 }
