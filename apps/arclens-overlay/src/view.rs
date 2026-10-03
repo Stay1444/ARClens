@@ -150,38 +150,33 @@ impl canvas::Program<Message> for MarkerLayer<'_> {
             .state
             .marker_cache
             .draw(renderer, bounds.size(), |frame| {
-                frame.with_clip(clip, |frame| {
-                    // Inside `with_clip` the origin is the clip's corner.
-                    let offset = clip.position();
-                    let to_frame = |nx: f32, ny: f32| {
-                        Point::new(nx * bounds.width - offset.x, ny * bounds.height - offset.y)
-                    };
-                    for area in &self.state.areas {
-                        let (cx, cy) = transform.apply((area.center.x, area.center.y));
-                        if !clip.contains(Point::new(cx * bounds.width, cy * bounds.height)) {
-                            continue;
-                        }
-                        arclens_ui::markers::draw_area(
-                            frame,
-                            area,
-                            |p| {
-                                let (nx, ny) = transform.apply((p.x, p.y));
-                                to_frame(nx, ny)
-                            },
-                            BADGE,
-                        );
+                // Only what lies in the viewport (by centre: a badge on the
+                // edge may overhang a little). `Frame::with_clip` drew
+                // nothing here under iced 0.14, so no clipping.
+                let to_frame = |nx: f32, ny: f32| Point::new(nx * bounds.width, ny * bounds.height);
+                for area in &self.state.areas {
+                    let (cx, cy) = transform.apply((area.center.x, area.center.y));
+                    if !clip.contains(to_frame(cx, cy)) {
+                        continue;
                     }
-                    for marker in &self.state.markers {
-                        // The transform targets the screen normalised to 0..=1.
-                        let (nx, ny) = transform.apply((marker.position.x, marker.position.y));
-                        let at = Point::new(nx * bounds.width, ny * bounds.height);
-                        // Partly outside is fine (clipped); wholly outside is skipped.
-                        if !clip.expand(BADGE).contains(at) {
-                            continue;
-                        }
-                        draw_badge(frame, marker, to_frame(nx, ny));
+                    arclens_ui::markers::draw_area(
+                        frame,
+                        area,
+                        |p| {
+                            let (nx, ny) = transform.apply((p.x, p.y));
+                            to_frame(nx, ny)
+                        },
+                        BADGE,
+                    );
+                }
+                for marker in &self.state.markers {
+                    // The transform targets the screen normalised to 0..=1.
+                    let (nx, ny) = transform.apply((marker.position.x, marker.position.y));
+                    let at = to_frame(nx, ny);
+                    if clip.contains(at) {
+                        draw_badge(frame, marker, at);
                     }
-                });
+                }
             });
         vec![geometry]
     }

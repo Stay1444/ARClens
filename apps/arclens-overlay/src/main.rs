@@ -1,83 +1,51 @@
 //! `arclens-overlay` — the in-game overlay.
 //!
-//! A full-screen `wlr-layer-shell` surface on the **OVERLAY** layer (the only
-//! layer KWin stacks above fullscreen windows), click-through by default.
-//! It is a dumb renderer: all state comes from the companion app over IPC
-//! (see `arclens-ipc`). It never touches the game process.
+//! A full-screen, transparent, click-through layer over the game. It is a
+//! dumb renderer: all state comes from the companion app over IPC (see
+//! `arclens-ipc`). It never touches the game process.
 //!
-//! The surface only exists while there is something to draw. A mapped
-//! surface — even a fully transparent one — over a fullscreen game stops the
-//! compositor from scanning the game out directly, which costs frames.
+//! The overlay itself (state, update, view) is the same everywhere; how it
+//! gets on screen is the platform's [`shell`]:
+//! - Linux: a `wlr-layer-shell` surface on the OVERLAY layer
+//!   (`shell/layer.rs`);
+//! - Windows: a topmost transparent window (`shell/window.rs`).
 
 mod ipc;
 mod map_panel;
-mod outputs;
 mod view;
 
-use arclens_core::{Advice, Item, Marker, Transform};
-use arclens_ipc::ToOverlay;
-use iced::{Color, Subscription, Task};
-use iced_layershell::actions::ActionCallback;
-use iced_layershell::daemon;
-use iced_layershell::reexport::{
-    Anchor, IcedId, KeyboardInteractivity, Layer, NewLayerShellSettings, OutputOption,
-};
-use iced_layershell::settings::{LayerShellSettings, Settings, StartMode};
-use iced_layershell::to_layer_message;
+#[cfg(target_os = "linux")]
+#[path = "shell/layer.rs"]
+mod shell;
+#[cfg(windows)]
+#[path = "shell/window.rs"]
+mod shell;
 
-fn main() -> Result<(), iced_layershell::Error> {
+use arclens_core::{Advice, Item, Marker, Transform};
+use arclens_ipc::{MonitorRect, ToOverlay};
+use iced::{Color, Subscription, Task};
+
+fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "arclens_overlay=info".into()),
         )
         .init();
-
-    // Open on the monitor the game is captured from, if the app told us.
-    let output = outputs::requested_monitor().and_then(|monitor| {
-        let name = outputs::output_for(monitor);
-        tracing::info!(?monitor, output = ?name, "target monitor");
-        name
-    });
-
-    daemon(
-        move || Overlay::new(output.clone()),
-        namespace,
-        update,
-        view_window,
-    )
-    .style(style)
-    .subscription(subscription)
-    .settings(Settings {
-        layer_settings: LayerShellSettings {
-            // No surface until there is something to show.
-            start_mode: StartMode::Background,
-            ..Default::default()
-        },
-        ..Default::default()
-    })
-    .run()
+    shell::run()
 }
 
 /// One surface, one view.
-fn view_window(state: &Overlay, _window: IcedId) -> iced::Element<'_, Message> {
+fn view_window(state: &Overlay, _window: iced::window::Id) -> iced::Element<'_, Message> {
     view::view(state)
 }
 
-/// The full-screen, click-through surface on the OVERLAY layer.
-fn surface_settings(output: Option<&String>) -> NewLayerShellSettings {
-    NewLayerShellSettings {
-        anchor: Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right,
-        layer: Layer::Overlay,
-        exclusive_zone: Some(-1),
-        keyboard_interactivity: KeyboardInteractivity::None,
-        events_transparent: true,
-        output_option: output.map_or(OutputOption::Active, |name| {
-            OutputOption::OutputName(name.clone())
-        }),
-        namespace: Some(namespace()),
-        ..NewLayerShellSettings::default()
-    }
+/// The `--monitor` argument (the captured monitor), if given.
+pub fn requested_monitor() -> Option<MonitorRect> {
+    let mut args = std::env::args()
+        .skip_while(|a| a != MonitorRect::FLAG)
+        .skip(1);
+    args.next().as_deref().and_then(MonitorRect::from_arg)
 }
 
 /// The item card currently on screen.
@@ -92,10 +60,10 @@ pub struct ShownItem {
 /// Everything the overlay currently displays.
 #[derive(Debug, Default)]
 pub struct Overlay {
-    /// Output (monitor) name to open on; `None` = the active one.
-    output: Option<String>,
-    /// The layer surface, while one exists.
-    surface: Option<IcedId>,
+    /// What the platform's shell keeps.
+    shell: shell::State,
+    /// The surface (window), while one exists.
+    surface: Option<iced::window::Id>,
     connected: bool,
     visible: bool,
     interactive: bool,
@@ -119,14 +87,11 @@ pub struct Overlay {
 }
 
 impl Overlay {
-    fn new(output: Option<String>) -> (Self, Task<Message>) {
-        (
-            Self {
-                output,
-                ..Self::default()
-            },
-            Task::none(),
-        )
+    fn new(shell: shell::State) -> Self {
+        Self {
+            shell,
+            ..Self::default()
+        }
     }
 
     /// Whether anything would be drawn.
@@ -137,25 +102,7 @@ impl Overlay {
             || ((!self.markers.is_empty() || !self.areas.is_empty()) && self.transform.is_some())
     }
 
-    /// Creates or removes the surface to match [`Self::has_content`].
-    fn sync_surface(&mut self) -> Task<Message> {
-        match (self.has_content(), self.surface) {
-            (true, None) => {
-                let (id, task) = Message::layershell_open(surface_settings(self.output.as_ref()));
-                tracing::debug!("mapping overlay surface");
-                self.surface = Some(id);
-                task.chain(self.input_task())
-            }
-            (false, Some(id)) => {
-                tracing::debug!("unmapping overlay surface");
-                self.surface = None;
-                Task::done(Message::RemoveWindow(id))
-            }
-            _ => Task::none(),
-        }
-    }
-
-    /// Where the surface takes pointer input: everywhere while interactive,
+    /// Where the overlay takes pointer input: everywhere while interactive,
     /// the map panel while it is shown, nowhere otherwise (click-through).
     fn input_rect(&self) -> Option<iced::Rectangle> {
         let screen = self.screen?;
@@ -164,58 +111,20 @@ impl Overlay {
         }
         self.panel.bounds(screen)
     }
-
-    /// Applies [`Self::input_rect`] and the matching keyboard mode.
-    fn input_task(&self) -> Task<Message> {
-        let Some(id) = self.surface else {
-            return Task::none();
-        };
-        #[allow(clippy::cast_possible_truncation, reason = "screen pixels fit i32")]
-        let rect = self.input_rect().map(|r| {
-            (
-                r.x as i32,
-                r.y as i32,
-                r.width.ceil() as i32,
-                r.height.ceil() as i32,
-            )
-        });
-        // Keyboard only while interactive or the pointer is on the panel:
-        // otherwise the compositor may hand us focus and the game loses it.
-        let keyboard = if self.interactive || (rect.is_some() && self.panel.hovered) {
-            KeyboardInteractivity::OnDemand
-        } else {
-            KeyboardInteractivity::None
-        };
-        Task::done(Message::SetInputRegion {
-            id,
-            callback: ActionCallback::new(move |region| {
-                if let Some((x, y, width, height)) = rect {
-                    region.add(x, y, width, height);
-                }
-            }),
-        })
-        .chain(Task::done(Message::KeyboardInteractivityChange {
-            id,
-            keyboard_interactivity: keyboard,
-        }))
-    }
 }
 
-#[to_layer_message(multi)]
+#[cfg_attr(target_os = "linux", iced_layershell::to_layer_message(multi))]
 #[derive(Debug, Clone)]
 pub enum Message {
     Ipc(ipc::Event),
     Panel(map_panel::PanelMessage),
     /// Surface size changed (logical pixels).
     Resized(iced::Size),
+    /// For the platform's shell.
+    Shell(shell::ShellMessage),
 }
 
-fn namespace() -> String {
-    // Shown by compositors (e.g. KWin window rules) to identify the surface.
-    String::from("arclens-overlay")
-}
-
-fn subscription(_: &Overlay) -> Subscription<Message> {
+fn subscription(state: &Overlay) -> Subscription<Message> {
     // Surfaces closed by the compositor (e.g. output unplugged) are forgotten
     // by `sync_surface` on the next change; nothing to listen for here.
     Subscription::batch([
@@ -226,6 +135,7 @@ fn subscription(_: &Overlay) -> Subscription<Message> {
             ) => Some(Message::Resized(size)),
             _ => None,
         }),
+        shell::subscription(state),
     ])
 }
 
@@ -243,7 +153,7 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
                 outbox.send(to_app);
             }
             return if resize {
-                state.input_task()
+                shell::input_task(state)
             } else {
                 Task::none()
             };
@@ -254,8 +164,11 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
             }
             state.screen = Some(size);
             state.marker_cache.clear();
-            return state.input_task();
+            return shell::input_task(state);
         }
+        Message::Shell(msg) => return shell::update(state, msg),
+        // Layer-shell requests, which only exist on Linux.
+        #[allow(unreachable_patterns, reason = "the layer-shell variants")]
         _ => return Task::none(),
     };
     let task = match event {
@@ -267,19 +180,17 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
         }
         ipc::Event::Disconnected => {
             // Without the companion app there is nothing trustworthy to show.
-            let (output, surface, screen) =
-                (state.output.take(), state.surface.take(), state.screen);
             *state = Overlay {
-                output,
-                surface,
-                screen,
+                shell: std::mem::take(&mut state.shell),
+                surface: state.surface.take(),
+                screen: state.screen,
                 ..Overlay::default()
             };
             Task::none()
         }
         ipc::Event::Message(msg) => apply(state, msg),
     };
-    task.chain(state.sync_surface())
+    task.chain(shell::sync_surface(state))
 }
 
 fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
@@ -292,7 +203,7 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
         ToOverlay::SetInteractive { interactive } => {
             tracing::info!(interactive, "overlay interactivity changed");
             state.interactive = interactive;
-            return state.input_task();
+            return shell::input_task(state);
         }
         ToOverlay::ShowItem {
             item,
@@ -361,14 +272,14 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
             let was_shown = state.panel.panel.is_some();
             state.panel.panel = Some(panel);
             if !was_shown {
-                return state.input_task();
+                return shell::input_task(state);
             }
         }
         ToOverlay::HideMapPanel => {
             state.panel.panel = None;
             state.panel.expanded = false;
             state.panel.hovered = false;
-            return state.input_task();
+            return shell::input_task(state);
         }
     }
     Task::none()

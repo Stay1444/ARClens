@@ -1,6 +1,6 @@
 [package]
 name = "arclens-overlay"
-description = "ARClens in-game overlay (wlr-layer-shell surface on the OVERLAY layer)"
+description = "ARClens in-game overlay: layer-shell surface on Linux, topmost window on Windows"
 version.workspace = true
 publish.workspace = true
 edition.workspace = true
@@ -15,13 +15,18 @@ arclens-ui = { workspace = true }
 futures = { workspace = true }
 iced = { workspace = true }
 image = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
 iced_layershell = { workspace = true }
 # Same versions iced_layershell uses; only for listing outputs.
 smithay-client-toolkit = "0.20"
 wayland-client = "0.31"
-tokio = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+mouse_position = "0.1"
 
 [lints]
 workspace = true

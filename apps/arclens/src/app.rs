@@ -965,6 +965,12 @@ impl App {
             .iter()
             .map(|a| (a.center, a.hull.clone()))
             .collect();
+        tracing::debug!(
+            markers = shown.len(),
+            areas = layout.areas.len(),
+            ?transform,
+            "markers sent"
+        );
         self.send(ToOverlay::ShowMarkers {
             map: arclens_core::MapId::new(map),
             markers: shown,

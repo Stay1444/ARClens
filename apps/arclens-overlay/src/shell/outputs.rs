@@ -20,14 +20,6 @@ pub struct Output {
     pub rect: MonitorRect,
 }
 
-/// The `--monitor` argument, if given.
-pub fn requested_monitor() -> Option<MonitorRect> {
-    let mut args = std::env::args()
-        .skip_while(|a| a != MonitorRect::FLAG)
-        .skip(1);
-    args.next().as_deref().and_then(MonitorRect::from_arg)
-}
-
 /// Name of the output matching `monitor`, if any.
 pub fn output_for(monitor: MonitorRect) -> Option<String> {
     match list_outputs() {
