@@ -67,6 +67,8 @@ pub struct App {
     map_condition: Option<&'static str>,
     presets: crate::presets::Presets,
     marker_query: String,
+    /// The app icon, for the Home tab (parsed once).
+    logo: iced::widget::svg::Handle,
     expanded_categories: std::collections::BTreeSet<String>,
     /// Map tab: what the view derives from markers, query and filter, and
     /// the plot's cached marker layer. Rebuilt on change, not per frame.
@@ -90,6 +92,8 @@ pub struct App {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
+    /// Where the app opens: status, conditions now, shortcuts.
+    Home,
     Items,
     Map,
     Events,
@@ -193,6 +197,10 @@ pub enum Message {
     ToggleVision,
     GameRunning(bool),
     SetTab(Tab),
+    /// Typing in the Home search box: look it up on the Items tab.
+    HomeSearch(String),
+    /// Open the Map tab on this map.
+    OpenMap(String),
     EventsLoaded(Result<arclens_data::metaforge::Schedule, String>),
     /// The player picked their server region.
     SetRegion(String),
@@ -249,7 +257,7 @@ impl App {
             hover: None,
             progress: crate::progress::load(&paths.progress()),
             progress_path: paths.progress(),
-            tab: Tab::Items,
+            tab: Tab::Home,
             events: Load::Loading,
             events_region: None,
             settings: settings.clone(),
@@ -262,6 +270,7 @@ impl App {
             map_condition: None,
             presets: crate::presets::Presets::load(paths.presets()),
             marker_query: String::new(),
+            logo: iced::widget::svg::Handle::from_memory(crate::desktop_entry::ICON_SVG),
             expanded_categories: std::collections::BTreeSet::new(),
             map_screen: None,
             game_view: GameMapView::default(),
@@ -277,7 +286,7 @@ impl App {
                 data::load_events(paths, settings.region),
                 Message::EventsLoaded,
             ),
-            iced::widget::operation::focus(SEARCH_ID),
+            iced::widget::operation::focus(crate::views::home::SEARCH_ID),
         ]);
         (app, tasks)
     }
@@ -301,7 +310,7 @@ impl App {
         if overlay_process::enabled() {
             subscriptions.push(overlay_process::subscription().map(Message::OverlayProcess));
         }
-        if self.tab == Tab::Events {
+        if matches!(self.tab, Tab::Events | Tab::Home) {
             subscriptions
                 .push(iced::time::every(std::time::Duration::from_secs(1)).map(|_| Message::Tick));
         }
@@ -390,6 +399,8 @@ impl App {
                 self.capture_changed(was);
             }
             Message::SetTab(tab) => return self.set_tab(tab),
+            Message::HomeSearch(query) => return self.home_search(query),
+            Message::OpenMap(map) => return self.open_map(map),
             Message::EventsLoaded(result) => return self.on_events_loaded(result),
             Message::EventIconLoaded(url, icon) => self.event_icons.insert(url, icon),
             Message::Tick => {
@@ -686,6 +697,10 @@ impl App {
         self.tab = tab;
         self.now_ms = now_ms();
         match tab {
+            Tab::Home => Task::batch([
+                iced::widget::operation::focus(crate::views::home::SEARCH_ID),
+                self.refresh_events_if_stale(),
+            ]),
             Tab::Items => iced::widget::operation::focus(SEARCH_ID),
             Tab::Map => Task::batch([
                 self.load_map_markers(),
@@ -1095,6 +1110,7 @@ impl App {
 
     pub fn view(&self) -> Element<'_, Message> {
         let body: Element<'_, Message> = match self.tab {
+            Tab::Home => self.view_home(),
             Tab::Events => self.view_events(),
             Tab::Map => self.view_map(),
             Tab::Items | Tab::Workshop => self.view_catalog_or_status(),
@@ -1128,6 +1144,101 @@ impl App {
             suited: self.presets.suited(&self.map, self.map_condition),
             presets: &self.presets,
         }
+    }
+
+    /// Typing on Home: look it up on the Items tab.
+    fn home_search(&mut self, query: String) -> Task<Message> {
+        self.query = query;
+        self.tab = Tab::Items;
+        Task::batch([
+            self.refresh_results(),
+            iced::widget::operation::focus(SEARCH_ID),
+        ])
+    }
+
+    fn open_map(&mut self, map: String) -> Task<Message> {
+        let load = self.update_map(Message::SelectMap(map));
+        Task::batch([load, self.set_tab(Tab::Map)])
+    }
+
+    fn view_home(&self) -> Element<'_, Message> {
+        use crate::views::home::{HomeView, LastMap, Status};
+        let catalog = match &self.catalog {
+            Load::Ready(catalog) => Some(catalog),
+            _ => None,
+        };
+        let workshop = self
+            .progress
+            .as_ref()
+            .zip(catalog)
+            .map(|(progress, catalog)| {
+                catalog
+                    .stations
+                    .iter()
+                    .fold((0, 0), |(built, total), station| {
+                        (
+                            built + progress.level(&station.id).min(station.max_level),
+                            total + station.max_level,
+                        )
+                    })
+            });
+        let last_map = self.last_map.and_then(|id| {
+            let name = arclens_data::metaforge::MAPS.iter().find(|m| m.0 == id)?.1;
+            let here = self.map == id;
+            Some(LastMap {
+                name,
+                condition: self.map_condition.filter(|_| here),
+                preset: self
+                    .presets
+                    .active()
+                    .filter(|_| here)
+                    .map(|p| p.name.as_str()),
+            })
+        });
+        let status = vec![
+            Status {
+                label: "GAME",
+                value: if self.game_running {
+                    "Running".to_owned()
+                } else {
+                    "Not running".to_owned()
+                },
+                ok: self.game_running,
+            },
+            Status {
+                label: "GAME CAPTURE",
+                value: match self.capture {
+                    CaptureMode::Auto if self.game_running => "On (auto)".to_owned(),
+                    CaptureMode::Auto => "Waits for game".to_owned(),
+                    CaptureMode::Always => "Always on".to_owned(),
+                    CaptureMode::Off => "Off".to_owned(),
+                },
+                ok: self.capturing(),
+            },
+            Status {
+                label: "OVERLAY",
+                value: match (&self.overlay, self.overlay_visible) {
+                    (None, _) => "Offline".to_owned(),
+                    (Some(_), true) => "Shown".to_owned(),
+                    (Some(_), false) => "Ready".to_owned(),
+                },
+                ok: self.overlay.is_some(),
+            },
+        ];
+        crate::views::home::view(&HomeView {
+            icon: &self.logo,
+            status,
+            events: match &self.events {
+                Load::Ready(events) => Some(events),
+                _ => None,
+            },
+            icons: &self.event_icons,
+            now_ms: self.now_ms,
+            maps: arclens_data::metaforge::MAPS,
+            last_map,
+            workshop,
+            item_count: catalog.map(|c| c.items.len()),
+        })
     }
 
     fn view_events(&self) -> Element<'_, Message> {
@@ -1196,6 +1307,7 @@ impl App {
         .align_y(Alignment::Center);
 
         let tabs = [
+            ("Home", Tab::Home),
             ("Items", Tab::Items),
             ("Map", Tab::Map),
             ("Events", Tab::Events),
@@ -1205,7 +1317,8 @@ impl App {
         .fold(row![].spacing(4), |r, (label, tab)| {
             r.push(tab_button(label, self.tab == tab, Message::SetTab(tab)))
         });
-        let middle: Element<'_, Message> = if matches!(self.tab, Tab::Events | Tab::Map) {
+        let middle: Element<'_, Message> = if matches!(self.tab, Tab::Home | Tab::Events | Tab::Map)
+        {
             Space::new().width(Length::Fill).into()
         } else {
             text_input("Search items…", &self.query)
@@ -1614,7 +1727,7 @@ fn game_condition(map: &str, line: Option<&str>) -> ConditionLine {
     }
 }
 
-/// Ctrl+1…4 switch tabs.
+/// Ctrl+1…5 switch tabs.
 fn tab_shortcut(event: iced::keyboard::Event) -> Option<Message> {
     use iced::keyboard::{Event, Key};
     let Event::KeyPressed {
@@ -1629,10 +1742,11 @@ fn tab_shortcut(event: iced::keyboard::Event) -> Option<Message> {
         return None;
     }
     let tab = match c.as_str() {
-        "1" => Tab::Items,
-        "2" => Tab::Map,
-        "3" => Tab::Events,
-        "4" => Tab::Workshop,
+        "1" => Tab::Home,
+        "2" => Tab::Items,
+        "3" => Tab::Map,
+        "4" => Tab::Events,
+        "5" => Tab::Workshop,
         _ => return None,
     };
     Some(Message::SetTab(tab))

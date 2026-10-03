@@ -33,7 +33,7 @@ export LDAI_OUTPUT="ARClens-${version}-x86_64.AppImage"
 "$tool" --appdir "$appdir" \
   --executable "$appdir/usr/bin/arclens" \
   --executable "$appdir/usr/bin/arclens-overlay" \
-  --desktop-file packaging/arclens.desktop \
-  --icon-file packaging/icons/arclens.svg \
+  --desktop-file packaging/io.github.Stay1444.ARClens.desktop \
+  --icon-file packaging/icons/io.github.Stay1444.ARClens.svg \
   --output appimage
 echo "built $LDAI_OUTPUT"

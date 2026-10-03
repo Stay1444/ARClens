@@ -79,7 +79,8 @@ against `winit-core 0.31.0-beta.3`, which adds a variant to a matched enum.
 - KDE shows a confirmation dialog on first bind. Bindings then appear in
   System Settings → Shortcuts.
 - The app needs a `.desktop` file for its id to persist
-  (`packaging/arclens.desktop`).
+  (`packaging/io.github.Stay1444.ARClens.desktop`; the app installs it
+  itself when run outside a package, see `desktop_entry.rs`).
 - Keys still reach the game; the portal only notifies us.
 - Fallbacks: reading `/dev/input` via `evdev` needs the `input` group, which is
   a security smell. Only add it opt-in.

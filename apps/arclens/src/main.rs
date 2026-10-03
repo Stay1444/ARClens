@@ -6,6 +6,7 @@
 
 pub mod app;
 mod data;
+mod desktop_entry;
 mod event_icons;
 mod game_process;
 mod hotkeys;
@@ -28,6 +29,7 @@ fn main() -> anyhow::Result<()> {
         .init();
 
     let paths = paths::Paths::discover()?;
+    desktop_entry::install();
     iced::application(
         move || app::App::boot(paths.clone()),
         app::App::update,
@@ -36,7 +38,17 @@ fn main() -> anyhow::Result<()> {
     .title("ARClens")
     .subscription(app::App::subscription)
     .theme(app::App::theme)
-    .window_size((1180.0, 760.0))
+    .window(iced::window::Settings {
+        size: iced::Size::new(1180.0, 760.0),
+        // Wayland: KDE finds the icon through the desktop file named
+        // after this id. X11 takes the icon directly.
+        platform_specific: iced::window::settings::PlatformSpecific {
+            application_id: desktop_entry::APP_ID.to_owned(),
+            ..Default::default()
+        },
+        icon: desktop_entry::window_icon(),
+        ..Default::default()
+    })
     .run()?;
     Ok(())
 }

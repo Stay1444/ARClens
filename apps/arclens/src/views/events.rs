@@ -13,8 +13,8 @@ const BOLD: Font = Font {
     weight: font::Weight::Bold,
     ..Font::DEFAULT
 };
-const ACTIVE: Color = Color::from_rgb(0.30, 0.82, 0.50);
-const UPCOMING: Color = Color::from_rgb(0.36, 0.62, 0.98);
+pub(crate) const ACTIVE: Color = Color::from_rgb(0.30, 0.82, 0.50);
+pub(crate) const UPCOMING: Color = Color::from_rgb(0.36, 0.62, 0.98);
 const CARD_WIDTH: f32 = 230.0;
 /// Backgrounds for conditions without an icon.
 const COLORS: [Color; 5] = [
@@ -234,7 +234,7 @@ fn pill(label: &str, active: bool, on_press: Message) -> Element<'_, Message> {
         .into()
 }
 
-fn card<'a>(
+pub(crate) fn card<'a>(
     event: &ScheduledEvent,
     icons: &'a EventIcons,
     when: String,
@@ -356,7 +356,7 @@ fn schedule_card<'a>(
     .into()
 }
 
-fn tile(accent: Color) -> container::Style {
+pub(crate) fn tile(accent: Color) -> container::Style {
     container::Style {
         background: Some(palette::SURFACE.into()),
         border: Border {

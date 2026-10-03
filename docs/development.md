@@ -105,11 +105,11 @@ AppImage and Flatpak builds, and how to cut a release:
 
 - These need `xdg-desktop-portal` with a GlobalShortcuts backend
   (`xdg-desktop-portal-kde` on Plasma).
-- For the binding to persist, install the desktop file:
-
-  ```sh
-  install -Dm644 packaging/arclens.desktop ~/.local/share/applications/arclens.desktop
-  ```
+- For the binding to persist, the app needs a desktop file matching its
+  app id (`io.github.Stay1444.ARClens`). Run outside a Flatpak or
+  AppImage, the app writes one (and its icon) to `~/.local/share` on start,
+  pointing at the running binary; KDE also takes the window icon from it.
+  `ARCLENS_NO_DESKTOP_ENTRY=1` turns that off.
 
 - Defaults are `Ctrl+Shift+O` (toggle overlay) and `Ctrl+Shift+I` (toggle
   interactive). Change them in System Settings → Shortcuts.
@@ -140,8 +140,8 @@ grim shot.png
 `wtype` drops the first key of each invocation, so lead with a throwaway key
 (`wtype -k Shift_L -k Return`).
 Send modifier chords in the same invocation:
-`wtype -k Shift_L -k Shift_L -M ctrl -k 2 -m ctrl` opens the Map tab
-(Ctrl+1/2/3/4 switch between Items, Map, Events and Workshop). Enter in the search box opens the top result,
+`wtype -k Shift_L -k Shift_L -M ctrl -k 3 -m ctrl` opens the Map tab
+(Ctrl+1…5 switch between Home, Items, Map, Events and Workshop). Enter in the search box opens the top result,
 which is enough to reach the detail view without a mouse.
 
 Known limitation: the headless seat has no pointer, so simulated clicks

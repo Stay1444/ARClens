@@ -46,9 +46,8 @@ modules:
         cargo build --release --locked -p arclens -p arclens-overlay
       - install -Dm755 target/release/arclens /app/bin/arclens
       - install -Dm755 target/release/arclens-overlay /app/bin/arclens-overlay
-      - install -Dm644 packaging/arclens.desktop /app/share/applications/io.github.Stay1444.ARClens.desktop
-      - desktop-file-edit --set-icon=io.github.Stay1444.ARClens /app/share/applications/io.github.Stay1444.ARClens.desktop
-      - install -Dm644 packaging/icons/arclens.svg /app/share/icons/hicolor/scalable/apps/io.github.Stay1444.ARClens.svg
+      - install -Dm644 packaging/io.github.Stay1444.ARClens.desktop /app/share/applications/io.github.Stay1444.ARClens.desktop
+      - install -Dm644 packaging/icons/io.github.Stay1444.ARClens.svg /app/share/icons/hicolor/scalable/apps/io.github.Stay1444.ARClens.svg
       - install -Dm644 packaging/io.github.Stay1444.ARClens.metainfo.xml /app/share/metainfo/io.github.Stay1444.ARClens.metainfo.xml
     sources:
       - type: dir

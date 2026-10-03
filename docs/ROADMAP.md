@@ -43,6 +43,16 @@ green CI.
 - [ ] Verify both packages on Fedora/KDE (portals inside the Flatpak).
 - [ ] Optional: Fedora COPR, Flathub (needs vendored crates).
 
+- [x] **Home tab** (2026-10-03), where the app opens: game / capture /
+      overlay status, item lookup, conditions running now and next, maps
+      (last one seen in game, its condition and preset), workshop progress,
+      in-game tips (`docs/assets/home.png`). Ctrl+1…5 switch tabs.
+- [x] **App icon** (lens over a map pin) and app id
+      `io.github.Stay1444.ARClens`. KDE on Wayland takes a window's icon
+      from the desktop file matching its app id, so a plain build writes
+      that file and the icon to `~/.local/share` on start (not in Flatpak
+      or AppImage; `ARCLENS_NO_DESKTOP_ENTRY=1` turns it off).
+
 ## M1.5: Smarter advice (done 2026-10-03)
 
 - [x] Workshop progress editor in the app (`~/.config/arclens/progress.json`).
