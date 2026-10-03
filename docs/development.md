@@ -96,6 +96,11 @@ Useful environment variables:
   (e.g. `imv -f frame.jpg`). This is how `docs/assets/hover-detected.png` was
   made.
 
+## Packaging
+
+AppImage and Flatpak builds, and how to cut a release:
+[packaging.md](packaging.md).
+
 ## Global hotkeys
 
 - These need `xdg-desktop-portal` with a GlobalShortcuts backend

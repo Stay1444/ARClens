@@ -6,6 +6,6 @@ Comment=Item lookup, map markers and an in-game overlay for ARC Raiders
 Exec=arclens
 Icon=arclens
 Terminal=false
-Categories=Game;Utility;
+Categories=Game;
 Keywords=arc;raiders;overlay;companion;
 StartupNotify=true

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.Stay1444.ARClens</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <name>ARClens</name>
+  <summary>Companion app and in-game overlay for ARC Raiders</summary>
+  <description>
+    <p>
+      Item lookup with keep, sell and recycle advice, map markers and map
+      condition timers, plus a Wayland overlay drawn above the game.
+      ARClens never touches the game process: it uses public community data
+      and the desktop's screen-capture portal.
+    </p>
+    <p>
+      Community project, not affiliated with or endorsed by Embark Studios.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.Stay1444.ARClens.desktop</launchable>
+  <url type="homepage">https://github.com/Stay1444/ARClens</url>
+  <url type="bugtracker">https://github.com/Stay1444/ARClens/issues</url>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-10-03"/>
+  </releases>
+</component>

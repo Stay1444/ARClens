@@ -38,8 +38,10 @@ green CI.
       `docs/research/wayland-overlay.md`.
 - [x] Start the overlay automatically from the app, and restart it if it
       exits.
-- [ ] Packaging: `.desktop` install, Fedora COPR or Flatpak (the Flatpak
-      needs the portal permissions).
+- [x] Packaging: AppImage and Flatpak bundle built by the release
+      workflow on `v*` tags (`docs/packaging.md`).
+- [ ] Verify both packages on Fedora/KDE (portals inside the Flatpak).
+- [ ] Optional: Fedora COPR, Flathub (needs vendored crates).
 
 ## M1.5: Smarter advice (done 2026-10-03)
 

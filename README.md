@@ -29,7 +29,8 @@ Early development (milestone M0 done). See [docs/ROADMAP.md](docs/ROADMAP.md).
 |---|---|
 | Item search with keep / sell / recycle advice and "needed for" (quests, workshop, projects) | Map markers and calibration, event timers |
 | Click-through overlay on the layer-shell OVERLAY layer (verified on KDE Plasma 6 over ARC Raiders with native-Wayland Proton) | Detecting the hovered item and open map via screen capture and computer vision |
-| Global hotkeys via the desktop portal | Packaging (COPR / Flatpak) |
+| Global hotkeys via the desktop portal | COPR / Flathub |
+| AppImage and Flatpak bundles on each release ([docs/packaging.md](docs/packaging.md)) | |
 
 ## Safe by design
 

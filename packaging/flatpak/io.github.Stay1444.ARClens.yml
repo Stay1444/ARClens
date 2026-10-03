@@ -1,0 +1,51 @@
+# Flatpak build of ARClens (app + overlay). CI builds a .flatpak bundle from
+# it (.github/workflows/release.yml); locally:
+#   flatpak-builder --user --install --force-clean build-dir \
+#     packaging/flatpak/io.github.Stay1444.ARClens.yml
+#
+# Cargo fetches crates during the build (network allowed for this module),
+# which is fine for our own bundles. A Flathub submission would need
+# vendored sources (flatpak-cargo-generator) instead.
+id: io.github.Stay1444.ARClens
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: arclens
+finish-args:
+  # The overlay is a wlr-layer-shell surface: Wayland only.
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  # wgpu (Vulkan) rendering.
+  - --device=dri
+  # Game data, map markers, event schedule and icons.
+  - --share=network
+  # Screen capture and global shortcuts go through portals, which a
+  # sandboxed app reaches without extra permissions.
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/arclens/cargo
+    CARGO_TERM_COLOR: always
+modules:
+  - name: arclens
+    buildsystem: simple
+    build-options:
+      build-args:
+        - --share=network
+    build-commands:
+      - cargo build --release --locked -p arclens -p arclens-overlay
+      - install -Dm755 target/release/arclens /app/bin/arclens
+      - install -Dm755 target/release/arclens-overlay /app/bin/arclens-overlay
+      - install -Dm644 packaging/arclens.desktop /app/share/applications/io.github.Stay1444.ARClens.desktop
+      - desktop-file-edit --set-icon=io.github.Stay1444.ARClens /app/share/applications/io.github.Stay1444.ARClens.desktop
+      - install -Dm644 packaging/icons/arclens.svg /app/share/icons/hicolor/scalable/apps/io.github.Stay1444.ARClens.svg
+      - install -Dm644 packaging/io.github.Stay1444.ARClens.metainfo.xml /app/share/metainfo/io.github.Stay1444.ARClens.metainfo.xml
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - target
+          - .git
