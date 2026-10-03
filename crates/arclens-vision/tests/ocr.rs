@@ -69,3 +69,48 @@ fn reads_every_fixture_name_exactly() {
     }
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
+
+/// (fixture, expected footer: `Some(value)` in the menu, `None` in raid)
+const FOOTERS: &[(&str, Option<u32>)] = &[
+    ("raid_jolt_mine", None),
+    ("raid_light_shield", None),
+    ("raid_medium_ammo", None),
+    ("raid_renegade_iv", None),
+    ("stash_combat_mk3_aggressive", Some(2_000)),
+    ("stash_energy_clip", Some(1_000)),
+    ("stash_medium_ammo", Some(480)),
+    ("stash_osprey_ii", Some(18_431)),
+    ("stash_shield_recharger", Some(2_080)),
+    ("stash_torrente_ii", Some(23_569)),
+    ("trader_hairpin_i", Some(450)),
+];
+
+#[test]
+#[ignore = "needs ARCLENS_OCR_MODEL (see module docs)"]
+fn reads_footer_value_and_raid_context() {
+    let model = std::env::var_os("ARCLENS_OCR_MODEL").map(PathBuf::from);
+    let model = model.expect("ARCLENS_OCR_MODEL must point at text-recognition.rten");
+    let mut analyzer =
+        arclens_vision::Analyzer::new(NameReader::from_model_file(&model).expect("model loads"));
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/frames");
+
+    let mut failures = Vec::new();
+    for (fixture, expected) in FOOTERS {
+        let frame = image::open(dir.join(format!("{fixture}.jpg")))
+            .expect("fixture")
+            .into_rgb8();
+        let footer = analyzer
+            .analyze(&frame)
+            .expect("analysis")
+            .and_then(|hover| hover.footer);
+        let ok = match (footer, expected) {
+            (Some(f), None) => f.in_raid && f.sell_value.is_none(),
+            (Some(f), Some(v)) => !f.in_raid && f.sell_value == Some(*v),
+            (None, _) => false,
+        };
+        if !ok {
+            failures.push(format!("{fixture}: want {expected:?}, got {footer:?}"));
+        }
+    }
+    assert!(failures.is_empty(), "\n{}", failures.join("\n"));
+}

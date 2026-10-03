@@ -65,9 +65,12 @@ pub struct Item {
     pub weight: Option<f32>,
     #[serde(default)]
     pub stack_size: Option<u32>,
-    /// What the item breaks down into when recycled.
+    /// What the item breaks down into when recycled at the workshop.
     #[serde(default)]
     pub recycles_into: Vec<ItemQuantity>,
+    /// What it breaks down into when salvaged during a raid (usually less).
+    #[serde(default)]
+    pub salvages_into: Vec<ItemQuantity>,
     /// Workshop / hideout upgrades and quests that consume this item.
     #[serde(default)]
     pub required_for: Vec<Requirement>,

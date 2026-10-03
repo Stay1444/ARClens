@@ -21,7 +21,7 @@ const PAD: u32 = 6;
 
 /// Item names only use these characters (plus `×` in trader quantities,
 /// which we drop before matching anyway).
-const ALLOWED: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .-'()&:/x×";
+const ALLOWED: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,-'()&:/x×";
 
 pub struct NameReader {
     engine: OcrEngine,
@@ -59,7 +59,18 @@ impl NameReader {
         Ok((!text.trim().is_empty()).then(|| text.trim().to_owned()))
     }
 
+    /// Recognises one line of text in `rect` as-is (no name-specific fixes).
+    pub fn read_text(&self, frame: &RgbImage, rect: Rect) -> anyhow::Result<Option<String>> {
+        self.recognise(frame, rect)
+    }
+
     fn read_line(&self, frame: &RgbImage, line: Rect) -> anyhow::Result<Option<String>> {
+        Ok(self
+            .recognise(frame, line)?
+            .map(|text| fix_roman_tail(&text, trailing_i_count(frame, line))))
+    }
+
+    fn recognise(&self, frame: &RgbImage, line: Rect) -> anyhow::Result<Option<String>> {
         let x = line.x.saturating_sub(PAD);
         let y = line.y.saturating_sub(PAD);
         let w = (line.width + 2 * PAD).min(frame.width() - x);
@@ -74,7 +85,7 @@ impl NameReader {
             .into_iter()
             .flatten()
             .next()
-            .map(|text| fix_roman_tail(&text.to_string(), trailing_i_count(frame, line))))
+            .map(|text| text.to_string()))
     }
 }
 

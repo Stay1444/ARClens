@@ -168,6 +168,30 @@ frame. The CPU has headroom, and the work is small:
   hovered, probably small changes in the detected rectangle between frames.
   Harmless, but it re-sends the card. Worth debouncing.
 
+## Raid vs. menu, and the real value (implemented 2026-10-03)
+
+- **The footer** is a darker beige bar (203,191,174) under the body, ~0.044 H
+  tall. It has full-height cells:
+  - `[weight]` in raid;
+  - `[weight, value]` in the menu, stash and trader.
+
+  A smaller stack-count cell ("80/80") is ignored by height.
+- **The value** reads as e.g. "S 23.569": the coin icon becomes a letter, and
+  the comma sometimes becomes a period. Keeping only the digits gives the
+  value exactly on all 7 menu fixtures. Raid is detected on all 4 raid
+  fixtures.
+- **Why it matters:**
+  - The game's value already includes durability (Combat Mk. 2 at 41/100
+    sells for 800, not the dataset's 2,000) and upgrades (Torrente II 23,569
+    vs 10,000).
+  - In raid, items are *salvaged* (`salvagesInto`, usually fewer outputs),
+    not recycled. Example: Hairpin I salvages into Metal Parts ×2, but
+    recycles into Metal Parts ×2 + Rubber Parts ×1.
+- **Still unknown:** the in-raid value of damaged items. The raid footer has
+  no value, so the card shows the dataset's base value, labelled "SELL (BASE
+  VALUE)". No simple durability formula fits both data points (2000 × 0.41 =
+  820 vs 800 shown; weapons include upgrades), so we don't guess.
+
 ## Open questions
 
 - **Crafting screens:** not yet seen.

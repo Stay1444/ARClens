@@ -75,7 +75,8 @@ green CI.
         headlessly on stash and trader frames;
   - [ ] avoid covering other panels when placing (trader purchase panel); pick the OCR engine (`ocrs` vs
         Tesseract) by benchmarking on crops from the stash video;
-  - [ ] read the tooltip footer value (weapons differ from the dataset);
+  - [x] read the tooltip footer: real sell value in the menu, raid detection
+        (no value cell) → salvage outputs and SALVAGE wording in raid;
   - [ ] map screen: read map name, raid time and condition from the right
         panel (text, same OCR);
   - [ ] map label finder (white outlined text in the viewport) +

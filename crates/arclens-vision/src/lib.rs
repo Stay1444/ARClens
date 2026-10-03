@@ -20,12 +20,14 @@
 )]
 
 mod analyzer;
+mod footer;
 mod geometry;
 mod panel;
 mod read;
 mod text;
 
 pub use analyzer::{Analyzer, Hover};
+pub use footer::{FooterInfo, footer, footer_cells, parse_value, value_cells};
 pub use geometry::Rect;
 pub use panel::{PanelParams, find_panels};
 pub use read::{NameReader, RECOGNITION_MODEL_URL};

@@ -2,7 +2,7 @@
 //!
 //! `cargo run -p arclens-vision --example annotate -- in.jpg out.png`
 
-use arclens_vision::{PanelParams, Rect, find_panels, name_line};
+use arclens_vision::{PanelParams, Rect, find_panels, footer, footer_cells, name_line};
 use image::{Rgb, RgbImage};
 
 fn main() {
@@ -27,6 +27,13 @@ fn main() {
         outline(&mut frame, *panel, Rgb([255, 0, 0]));
         if let Some(name) = name {
             outline(&mut frame, name, Rgb([0, 200, 0]));
+        }
+        if let Some(foot) = footer(&frame, *panel) {
+            let cells = footer_cells(&frame, foot);
+            println!("  footer {foot:?} cells {cells:?}");
+            for cell in cells {
+                outline(&mut frame, cell, Rgb([0, 0, 255]));
+            }
         }
     }
     if let Err(error) = frame.save(&output) {

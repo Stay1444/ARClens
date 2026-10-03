@@ -9,7 +9,7 @@
 
 use crate::format::thousands;
 use crate::palette::{self, with_alpha};
-use arclens_core::{Advice, Item, RequirementKind, Verdict};
+use arclens_core::{Advice, Item, Place, RequirementKind, Verdict, breakdown};
 use iced::widget::{Space, column, container, image, row, text};
 use iced::{Alignment, Border, Color, Element, Font, Length, font};
 use std::path::Path;
@@ -30,7 +30,8 @@ pub struct ItemCard<'a> {
     pub advice: Advice,
     /// Pre-decoded icon (see [`decode_icon`]). Never decode in `view`.
     pub icon: Option<&'a image::Handle>,
-    /// Display names aligned with `item.recycles_into`.
+    /// Display names aligned with the breakdown outputs for `advice.place`
+    /// (`recycles_into` at the workshop, `salvages_into` in raid).
     pub recycle_names: Vec<String>,
     pub size: CardSize,
 }
@@ -149,7 +150,7 @@ fn verdict_bar<'a, Message: 'a>(card: &ItemCard<'a>) -> Element<'a, Message> {
     let color = palette::verdict(verdict);
     container(
         row![
-            text(palette::verdict_label(verdict))
+            text(palette::verdict_label_in(verdict, card.advice.place))
                 .size(22)
                 .font(BOLD)
                 .color(color),
@@ -194,7 +195,10 @@ fn reason(card: &ItemCard<'_>) -> String {
             _ => "Worth more as parts".to_owned(),
         },
         Verdict::Sell => match (advice.sell_value, advice.recycle_value) {
-            (Some(s), Some(r)) if s > r => format!("+{} more than recycling", thousands(s - r)),
+            (Some(s), Some(r)) if s > r => match advice.place {
+                Place::Workshop => format!("+{} more than recycling", thousands(s - r)),
+                Place::Raid => format!("Carry out: +{} more than salvaging", thousands(s - r)),
+            },
             (Some(_), Some(_)) => "Same value either way".to_owned(),
             _ => "Doesn't recycle into anything useful".to_owned(),
         },
@@ -204,13 +208,24 @@ fn reason(card: &ItemCard<'_>) -> String {
 
 fn values<'a, Message: 'a>(advice: &Advice) -> Element<'a, Message> {
     let best_is_recycle = advice.verdict == Verdict::Recycle;
+    let in_raid = advice.place == Place::Raid;
+    // In raid the tooltip shows no value, so ours is the undamaged base.
+    let sell_label = if in_raid && !advice.value_from_game {
+        "SELL (BASE VALUE)"
+    } else {
+        "SELL"
+    };
     row![
         stat(
-            "SELL",
+            sell_label,
             advice.sell_value,
             !best_is_recycle && advice.verdict != Verdict::Keep
         ),
-        stat("RECYCLE", advice.recycle_value, best_is_recycle),
+        stat(
+            if in_raid { "SALVAGE" } else { "RECYCLE" },
+            advice.recycle_value,
+            best_is_recycle
+        ),
     ]
     .spacing(8)
     .into()
@@ -253,12 +268,11 @@ fn stat<'a, Message: 'a>(
 }
 
 fn recycles_section<'a, Message: 'a>(card: &ItemCard<'a>) -> Option<Element<'a, Message>> {
-    if card.item.recycles_into.is_empty() {
+    let outputs = breakdown(card.item, card.advice.place);
+    if outputs.is_empty() {
         return None;
     }
-    let parts: Vec<String> = card
-        .item
-        .recycles_into
+    let parts: Vec<String> = outputs
         .iter()
         .enumerate()
         .map(|(i, q)| {
@@ -269,7 +283,11 @@ fn recycles_section<'a, Message: 'a>(card: &ItemCard<'a>) -> Option<Element<'a, 
             format!("{name} ×{}", q.quantity)
         })
         .collect();
-    Some(section("RECYCLES INTO", vec![parts.join("  ·  ")]))
+    let title = match card.advice.place {
+        Place::Workshop => "RECYCLES INTO",
+        Place::Raid => "SALVAGES INTO",
+    };
+    Some(section(title, vec![parts.join("  ·  ")]))
 }
 
 fn needed_for_section<'a, Message: 'a>(card: &ItemCard<'a>) -> Option<Element<'a, Message>> {

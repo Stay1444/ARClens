@@ -41,6 +41,14 @@ pub fn verdict(verdict: Verdict) -> Color {
     }
 }
 
+/// Like [`verdict_label`], but says SALVAGE instead of RECYCLE in raid.
+pub fn verdict_label_in(verdict: Verdict, place: arclens_core::Place) -> &'static str {
+    match (verdict, place) {
+        (Verdict::Recycle, arclens_core::Place::Raid) => "SALVAGE",
+        _ => verdict_label(verdict),
+    }
+}
+
 pub fn verdict_label(verdict: Verdict) -> &'static str {
     match verdict {
         Verdict::Keep => "KEEP",

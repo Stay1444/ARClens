@@ -59,6 +59,7 @@ mod tests {
             weight: None,
             stack_size: None,
             recycles_into: Vec::new(),
+            salvages_into: Vec::new(),
             required_for: Vec::new(),
             image_url: None,
         }

@@ -1,6 +1,9 @@
 //! Per-frame analysis with caching: the piece a capture loop calls.
 
-use crate::{NameReader, PanelParams, Rect, find_panels, name_lines};
+use crate::{
+    FooterInfo, NameReader, PanelParams, Rect, find_panels, footer, name_lines, parse_value,
+    value_cells,
+};
 use image::RgbImage;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -15,6 +18,8 @@ pub struct Hover {
     /// Frame size, so consumers can normalise `panel`.
     pub frame_width: u32,
     pub frame_height: u32,
+    /// What the tooltip footer says (value, raid or not), if it was found.
+    pub footer: Option<FooterInfo>,
 }
 
 impl Hover {
@@ -30,13 +35,16 @@ impl Hover {
     }
 }
 
+/// What OCR made of one tooltip: its name and footer.
+type Reading = (String, Option<FooterInfo>);
+
 /// Runs detection on every frame and OCR only when the name changed.
 #[derive(Debug)]
 pub struct Analyzer {
     reader: NameReader,
     params: PanelParams,
-    /// Fingerprint of the last name crop and what it read as.
-    last: Option<(u64, Option<String>)>,
+    /// Fingerprint of the last name + value crops and what they read as.
+    last: Option<(u64, Option<Reading>)>,
 }
 
 impl Analyzer {
@@ -64,21 +72,61 @@ impl Analyzer {
             return Ok(None);
         };
 
-        let key = fingerprint(frame, &lines);
-        let name = match &self.last {
-            Some((last_key, name)) if *last_key == key => name.clone(),
+        let cells = footer(frame, panel).map(|f| value_cells(frame, f));
+        // Two copies of an item can differ in value (durability), so the
+        // value cell is part of the cache key, not just the name.
+        let mut regions = lines.clone();
+        if let Some(cells) = &cells {
+            regions.extend(cells.iter().copied());
+        }
+        let key = fingerprint(frame, &regions);
+        let read = match &self.last {
+            Some((last_key, read)) if *last_key == key => read.clone(),
             _ => {
-                let name = self.reader.read(frame, &lines)?;
-                self.last = Some((key, name.clone()));
-                name
+                let read = self
+                    .reader
+                    .read(frame, &lines)?
+                    .map(|name| -> anyhow::Result<_> {
+                        Ok((name, self.read_footer(frame, cells.as_deref())?))
+                    })
+                    .transpose()?;
+                self.last = Some((key, read.clone()));
+                read
             }
         };
-        Ok(name.map(|name| Hover {
+        Ok(read.map(|(name, footer)| Hover {
             name,
             panel,
             frame_width: frame.width(),
             frame_height: frame.height(),
+            footer,
         }))
+    }
+
+    /// Reads the value cell: `[weight]` → in raid, `[weight, value]` → menu.
+    fn read_footer(
+        &self,
+        frame: &RgbImage,
+        cells: Option<&[Rect]>,
+    ) -> anyhow::Result<Option<FooterInfo>> {
+        let Some(cells) = cells else {
+            return Ok(None);
+        };
+        Ok(match cells {
+            [] => None,
+            [_weight] => Some(FooterInfo {
+                sell_value: None,
+                in_raid: true,
+            }),
+            [.., value] => Some(FooterInfo {
+                sell_value: self
+                    .reader
+                    .read_text(frame, *value)?
+                    .as_deref()
+                    .and_then(parse_value),
+                in_raid: false,
+            }),
+        })
     }
 }
 

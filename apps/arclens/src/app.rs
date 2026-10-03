@@ -4,7 +4,7 @@ use crate::icons::{Icon, Icons};
 use crate::overlay_link::OverlayHandle;
 use crate::paths::Paths;
 use crate::{data, hotkeys, overlay_link, overlay_process, vision};
-use arclens_core::{Item, ItemId, advise};
+use arclens_core::{Item, ItemId, Place, Situation, advise, advise_in, breakdown};
 use arclens_data::{Catalog, ItemSearch};
 use arclens_hotkeys::Action;
 use arclens_ipc::ToOverlay;
@@ -39,7 +39,7 @@ pub struct App {
     /// the desktop's screen-share dialog the first time).
     vision_enabled: bool,
     /// Item currently detected under the cursor in game, and where.
-    hover: Option<(ItemId, arclens_ipc::NormRect)>,
+    hover: Option<(ItemId, arclens_ipc::NormRect, Situation)>,
     status: Vec<String>,
 }
 
@@ -143,7 +143,7 @@ impl App {
             }
             Message::IconLoaded(id, icon) => {
                 let is_selected = self.selected.as_ref() == Some(&id);
-                let is_hovered = self.hover.as_ref().is_some_and(|(h, _)| *h == id);
+                let is_hovered = self.hover.as_ref().is_some_and(|(h, _, _)| *h == id);
                 self.icons.insert(id, icon);
                 // Resend so the overlay picks up the icon path.
                 if is_selected {
@@ -239,7 +239,15 @@ impl App {
                     height,
                 };
                 let load = self.icons.request(item);
-                self.hover = Some((item.id.clone(), anchor));
+                let situation = hover.footer.map_or_else(Situation::default, |f| Situation {
+                    place: if f.in_raid {
+                        Place::Raid
+                    } else {
+                        Place::Workshop
+                    },
+                    sell_value: f.sell_value,
+                });
+                self.hover = Some((item.id.clone(), anchor, situation));
                 self.push_hover_to_overlay();
                 // The icon arrives later; `IconLoaded` resends the card.
                 if let Some(load) = load {
@@ -302,15 +310,16 @@ impl App {
     }
 
     fn push_hover_to_overlay(&self) {
-        let (Load::Ready(catalog), Some((id, anchor))) = (&self.catalog, &self.hover) else {
+        let (Load::Ready(catalog), Some((id, anchor, situation))) = (&self.catalog, &self.hover)
+        else {
             return;
         };
         if let Some(item) = catalog.item(id) {
             self.send(ToOverlay::ShowHover {
                 item: Box::new(item.clone()),
-                advice: advise(item, |id| catalog.item(id)),
+                advice: advise_in(item, *situation, |id| catalog.item(id)),
                 icon: self.icons.get(id).map(|icon| icon.path.clone()),
-                recycle_names: recycle_names(item, catalog),
+                recycle_names: recycle_names(item, catalog, situation.place),
                 anchor: *anchor,
             });
         }
@@ -325,7 +334,7 @@ impl App {
                 item: Box::new(item.clone()),
                 advice: advise(item, |id| catalog.item(id)),
                 icon: self.icons.get(id).map(|icon| icon.path.clone()),
-                recycle_names: recycle_names(item, catalog),
+                recycle_names: recycle_names(item, catalog, Place::Workshop),
             });
         }
     }
@@ -460,7 +469,7 @@ impl App {
                         item,
                         advice: advise(item, |id| catalog.item(id)),
                         icon: self.icons.get(&item.id).map(|icon| &icon.large),
-                        recycle_names: recycle_names(item, catalog),
+                        recycle_names: recycle_names(item, catalog, Place::Workshop),
                         size: CardSize::Full,
                     });
                     scrollable(
@@ -580,8 +589,8 @@ impl App {
     }
 }
 
-fn recycle_names(item: &Item, catalog: &Catalog) -> Vec<String> {
-    item.recycles_into
+fn recycle_names(item: &Item, catalog: &Catalog, place: Place) -> Vec<String> {
+    breakdown(item, place)
         .iter()
         .map(|q| {
             catalog

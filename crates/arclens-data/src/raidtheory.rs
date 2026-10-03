@@ -179,6 +179,8 @@ struct RawItem {
     #[serde(default)]
     recycles_into: BTreeMap<String, u32>,
     #[serde(default)]
+    salvages_into: BTreeMap<String, u32>,
+    #[serde(default)]
     image_filename: Option<String>,
 }
 
@@ -196,18 +198,21 @@ impl RawItem {
             value: self.value,
             weight: self.weight_kg,
             stack_size: self.stack_size,
-            recycles_into: self
-                .recycles_into
-                .into_iter()
-                .map(|(item, quantity)| ItemQuantity {
-                    item: ItemId::new(item),
-                    quantity,
-                })
-                .collect(),
+            recycles_into: quantities(self.recycles_into),
+            salvages_into: quantities(self.salvages_into),
             required_for: Vec::new(),
             image_url: self.image_filename.filter(|u| u.starts_with("https://")),
         }
     }
+}
+
+fn quantities(map: BTreeMap<String, u32>) -> Vec<ItemQuantity> {
+    map.into_iter()
+        .map(|(item, quantity)| ItemQuantity {
+            item: ItemId::new(item),
+            quantity,
+        })
+        .collect()
 }
 
 fn parse_rarity(raw: &str) -> Option<Rarity> {

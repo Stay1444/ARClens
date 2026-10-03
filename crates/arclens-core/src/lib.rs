@@ -7,6 +7,6 @@ pub mod advice;
 pub mod item;
 pub mod map;
 
-pub use advice::{Advice, Verdict, advise};
+pub use advice::{Advice, Place, Situation, Verdict, advise, advise_in, breakdown};
 pub use item::{Item, ItemId, ItemQuantity, Rarity, Requirement, RequirementKind};
 pub use map::{MapId, MapPoint, Marker, MarkerKind, Transform};
