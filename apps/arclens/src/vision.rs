@@ -140,6 +140,41 @@ fn footprint(size: (f32, f32), px_per_logical: f32) -> arclens_vision::Footprint
     footprint
 }
 
+/// Whether the main menu is up, with hysteresis: two frames in a row to
+/// appear, [`MAP_CLOSE_GRACE`] gone to disappear.
+#[derive(Debug, Default)]
+struct MenuWatch {
+    shown: bool,
+    seen: u8,
+    missing_since: Option<Instant>,
+}
+
+impl MenuWatch {
+    fn check(&mut self, frame: &RgbImage, out: &mut Outbox) {
+        if arclens_vision::is_main_menu(frame) {
+            self.missing_since = None;
+            self.seen = self.seen.saturating_add(1);
+            if !self.shown && self.seen >= 2 {
+                self.shown = true;
+                out.send_lossy(Event::MainMenu(true));
+            }
+            return;
+        }
+        self.seen = 0;
+        if self.shown
+            && self
+                .missing_since
+                .get_or_insert_with(Instant::now)
+                .elapsed()
+                >= MAP_CLOSE_GRACE
+        {
+            self.shown = false;
+            self.missing_since = None;
+            out.send_lossy(Event::MainMenu(false));
+        }
+    }
+}
+
 /// Reads a workshop station's level now and then, reporting changes.
 #[derive(Debug, Default)]
 struct StationWatch {
@@ -249,6 +284,8 @@ pub enum Event {
     MapMotion(Option<Motion>),
     /// A workshop station's page shows its level (sent when it changes).
     StationLevel(arclens_vision::StationLevel),
+    /// The game's main menu appeared (`true`) or went away.
+    MainMenu(bool),
     /// Vision isn't running; why.
     Unavailable(String),
 }
@@ -347,6 +384,7 @@ fn run(output: mpsc::Sender<Event>) {
     let mut map_watch = MapWatch::default();
     let mut map_view = MapView::default();
     let mut station = StationWatch::default();
+    let mut menu = MenuWatch::default();
     let labels = model.ok().and_then(|model| LabelWorker::spawn(&model));
     while let Some(frame) = source.next_frame() {
         // Capture turned off (the UI dropped the subscription): stop, which
@@ -378,6 +416,7 @@ fn run(output: mpsc::Sender<Event>) {
         }
         map_view.reset();
         station.check(&analyzer, &frame, &mut out);
+        menu.check(&frame, &mut out);
         let hover = match analyzer.analyze(&frame) {
             Ok(hover) => hover,
             Err(error) => {

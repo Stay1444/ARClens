@@ -12,6 +12,7 @@
 
 mod ipc;
 mod map_panel;
+mod menu_card;
 mod view;
 
 #[cfg(target_os = "linux")]
@@ -80,6 +81,10 @@ pub struct Overlay {
     marker_cache: iced::widget::canvas::Cache,
     /// Map-screen panel (conditions + marker filter), the clickable part.
     panel: map_panel::PanelState,
+    /// The main-menu card, while the game shows its main menu.
+    menu_card: Option<arclens_ipc::MenuCard>,
+    /// Wall clock (Unix ms) for the card's countdowns.
+    now_ms: i64,
     /// Sends to the companion app while connected.
     outbox: Option<ipc::Outbox>,
     /// Surface size in logical pixels, once known.
@@ -99,6 +104,7 @@ impl Overlay {
         self.visible
             || self.hover.is_some()
             || self.panel.panel.is_some()
+            || self.menu_card.is_some()
             || ((!self.markers.is_empty() || !self.areas.is_empty()) && self.transform.is_some())
     }
 
@@ -122,6 +128,8 @@ pub enum Message {
     Resized(iced::Size),
     /// For the platform's shell.
     Shell(shell::ShellMessage),
+    /// Once a second while the menu card counts down.
+    Tick,
 }
 
 fn subscription(state: &Overlay) -> Subscription<Message> {
@@ -136,6 +144,11 @@ fn subscription(state: &Overlay) -> Subscription<Message> {
             _ => None,
         }),
         shell::subscription(state),
+        if state.menu_card.is_some() {
+            iced::time::every(std::time::Duration::from_secs(1)).map(|_| Message::Tick)
+        } else {
+            Subscription::none()
+        },
     ])
 }
 
@@ -167,6 +180,10 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
             return shell::input_task(state);
         }
         Message::Shell(msg) => return shell::update(state, msg),
+        Message::Tick => {
+            state.now_ms = now_ms();
+            return Task::none();
+        }
         // Layer-shell requests, which only exist on Linux.
         #[allow(unreachable_patterns, reason = "the layer-shell variants")]
         _ => return Task::none(),
@@ -275,6 +292,11 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
                 return shell::input_task(state);
             }
         }
+        ToOverlay::ShowMenuCard { card } => {
+            state.now_ms = now_ms();
+            state.menu_card = Some(card);
+        }
+        ToOverlay::HideMenuCard => state.menu_card = None,
         ToOverlay::HideMapPanel => {
             state.panel.panel = None;
             state.panel.expanded = false;
@@ -283,6 +305,13 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
         }
     }
     Task::none()
+}
+
+/// Wall-clock time in Unix milliseconds.
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
 }
 
 fn style(_: &Overlay, theme: &iced::Theme) -> iced::theme::Style {

@@ -69,6 +69,13 @@ green CI.
       `GUNSMITH — LEVEL 02` in the top bar, which is read and matched to the
       catalogue station (`arclens_vision::read_station_header`; region
       measured on one screenshot, **unverified** elsewhere).
+- [x] **Main-menu card** (2026-10-03): on the game's main menu (its
+      yellow PLAY button plus the outlined PLAY tab, no OCR;
+      `arclens_vision::is_main_menu`), the overlay shows a card under the
+      game's Quests box: conditions running now and next with countdowns,
+      and workshop progress (`docs/assets/overlay-menu-card.png`, protocol
+      v10). Regions measured on one screenshot, **unverified** elsewhere;
+      verified headlessly on a synthetic frame and against all fixtures.
 - [ ] Workshop overview tiles (roman numerals under each station) for
       autofill without opening each station; needs fixture frames.
 - [ ] More progress sections: projects, expeditions, quests (they still

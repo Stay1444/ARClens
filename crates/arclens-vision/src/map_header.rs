@@ -74,7 +74,7 @@ fn dark_share(frame: &RgbImage, fraction: [f32; 4]) -> f32 {
     }
 }
 
-fn region(frame: &RgbImage, fraction: [f32; 4]) -> Rect {
+pub(crate) fn region(frame: &RgbImage, fraction: [f32; 4]) -> Rect {
     let (width, height) = (frame.width() as f32, frame.height() as f32);
     Rect::new(
         (fraction[0] * width) as u32,
@@ -89,7 +89,7 @@ fn is_bright(frame: &RgbImage, col: u32, row: u32) -> bool {
 }
 
 /// Share of bright pixels in the fractional region.
-fn bright_share(frame: &RgbImage, fraction: [f32; 4]) -> f32 {
+pub(crate) fn bright_share(frame: &RgbImage, fraction: [f32; 4]) -> f32 {
     let area = region(frame, fraction);
     let (mut bright, mut total) = (0u32, 0u32);
     for row in area.y..area.bottom().min(frame.height()) {

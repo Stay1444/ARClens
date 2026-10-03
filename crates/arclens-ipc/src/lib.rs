@@ -18,7 +18,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 mod transport;
 pub use transport::{Endpoint, Listener};
 
-pub const PROTOCOL_VERSION: u32 = 9;
+pub const PROTOCOL_VERSION: u32 = 10;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hello {
@@ -100,6 +100,11 @@ pub enum ToOverlay {
     },
     /// The in-game map closed.
     HideMapPanel,
+    /// The game's main menu is on screen: show the general card there.
+    ShowMenuCard {
+        card: MenuCard,
+    },
+    HideMenuCard,
 }
 
 /// What the overlay's map panel shows: the map's marker kinds. The app
@@ -123,6 +128,29 @@ pub struct MapPanel {
     pub active_preset: Option<String>,
     #[serde(default)]
     pub edited: bool,
+}
+
+/// General information for the main menu.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct MenuCard {
+    /// Map conditions running now, ending soonest first.
+    #[serde(default)]
+    pub active: Vec<CardEvent>,
+    /// Starting next, soonest first.
+    #[serde(default)]
+    pub upcoming: Vec<CardEvent>,
+    /// Workshop levels built and in total, when the player set them.
+    #[serde(default)]
+    pub workshop: Option<(u32, u32)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CardEvent {
+    pub name: String,
+    pub map: String,
+    /// Unix ms: when it ends (running) or starts (upcoming). The overlay
+    /// counts down on its own clock.
+    pub at_ms: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -45,6 +45,8 @@ pub struct App {
     progress_path: std::path::PathBuf,
     /// Which page the window shows.
     tab: Tab,
+    /// Since when the game shows its main menu (our card is up).
+    main_menu: Option<std::time::Instant>,
     /// Progress tab: the section shown.
     progress_section: crate::views::progress::Section,
     /// Map-condition schedule (MetaForge).
@@ -232,6 +234,8 @@ pub enum Message {
     HideAllMarkers,
     SetStationLevel(String, u32),
     SetProgressSection(crate::views::progress::Section),
+    /// Every 30 s while the main-menu card is up.
+    RefreshMenuCard,
     ClearProgress,
     Overlay(overlay_link::Event),
     Hotkey(hotkeys::Event),
@@ -266,6 +270,7 @@ impl App {
             progress_path: paths.progress(),
             tab: Tab::Home,
             progress_section: crate::views::progress::Section::default(),
+            main_menu: None,
             events: Load::Loading,
             events_region: None,
             settings: settings.clone(),
@@ -317,6 +322,12 @@ impl App {
         }
         if overlay_process::enabled() {
             subscriptions.push(overlay_process::subscription().map(Message::OverlayProcess));
+        }
+        if self.main_menu.is_some() {
+            subscriptions.push(
+                iced::time::every(std::time::Duration::from_secs(30))
+                    .map(|_| Message::RefreshMenuCard),
+            );
         }
         if matches!(self.tab, Tab::Events | Tab::Home) {
             subscriptions
@@ -425,6 +436,7 @@ impl App {
                 self.progress_changed();
             }
             Message::SetProgressSection(section) => self.progress_section = section,
+            Message::RefreshMenuCard => self.push_menu_card(),
             Message::ClearProgress => {
                 self.progress = None;
                 self.progress_changed();
@@ -453,6 +465,7 @@ impl App {
                 self.push_selected_to_overlay();
                 self.push_map_panel();
                 self.push_map_markers();
+                self.push_menu_card();
             }
             overlay_link::Event::Disconnected => self.overlay = None,
             overlay_link::Event::Message(arclens_ipc::ToApp::Search { query }) => {
@@ -593,12 +606,66 @@ impl App {
                 self.push_map_view();
             }
             vision::Event::StationLevel(read) => self.on_station_level(&read),
+            vision::Event::MainMenu(shown) => self.on_main_menu(shown),
             vision::Event::Unavailable(reason) => {
                 tracing::info!(%reason, "item detection off");
                 self.status.push(format!("Item detection off: {reason}"));
             }
         }
         Task::none()
+    }
+
+    fn on_main_menu(&mut self, shown: bool) {
+        tracing::info!(shown, "main menu");
+        self.main_menu = shown.then(std::time::Instant::now);
+        if shown {
+            self.push_menu_card();
+        } else {
+            self.send(ToOverlay::HideMenuCard);
+        }
+    }
+
+    /// Sends the main-menu card: conditions now and next, workshop progress.
+    fn push_menu_card(&self) {
+        if self.main_menu.is_none() {
+            return;
+        }
+        let now = now_ms();
+        let (active, upcoming) = match &self.events {
+            Load::Ready(events) => {
+                let agenda = arclens_core::agenda(events, now);
+                let card = |e: &&arclens_core::ScheduledEvent, at_ms| arclens_ipc::CardEvent {
+                    name: e.name.clone(),
+                    map: e.map.clone(),
+                    at_ms,
+                };
+                (
+                    agenda.active.iter().map(|e| card(e, e.end_ms)).collect(),
+                    agenda
+                        .upcoming
+                        .iter()
+                        .take(6)
+                        .map(|e| card(e, e.start_ms))
+                        .collect(),
+                )
+            }
+            _ => (Vec::new(), Vec::new()),
+        };
+        let workshop = match (&self.catalog, &self.progress) {
+            (Load::Ready(catalog), Some(progress)) => {
+                Some(catalog.stations.iter().fold((0, 0), |(b, t), s| {
+                    (b + progress.level(&s.id).min(s.max_level), t + s.max_level)
+                }))
+            }
+            _ => None,
+        };
+        self.send(ToOverlay::ShowMenuCard {
+            card: arclens_ipc::MenuCard {
+                active,
+                upcoming,
+                workshop,
+            },
+        });
     }
 
     /// A workshop station's page was on screen: take its level.
@@ -736,6 +803,8 @@ impl App {
             self.hover = None;
             self.map_screen = None;
             self.game_view = GameMapView::default();
+            self.main_menu = None;
+            self.send(ToOverlay::HideMenuCard);
             self.send(ToOverlay::ClearHover);
             self.send(ToOverlay::HideMapPanel);
             self.send(ToOverlay::ClearMarkers);
