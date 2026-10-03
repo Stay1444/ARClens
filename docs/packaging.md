@@ -4,7 +4,7 @@ Two formats are built by `.github/workflows/release.yml`:
 
 | Format | Built on | Notes |
 |---|---|---|
-| AppImage (`ARClens-<version>-x86_64.AppImage`) | Ubuntu 22.04 | linuxdeploy bundles the libraries; glibc ≥ 2.35. Needs the host's Vulkan driver and PipeWire. |
+| AppImage (`ARClens-<version>-x86_64.AppImage`) | Ubuntu 22.04 | glibc ≥ 2.35. Wayland, xkbcommon and Vulkan are loaded from the host at runtime; `libpipewire-0.3` is linked but deliberately not bundled (it must match the host's PipeWire). Smoke-tested headlessly 2026-10-03: app and overlay start from the AppImage and connect. |
 | Flatpak bundle (`ARClens-x86_64.flatpak`) | Freedesktop 25.08 SDK + rust-stable extension | App id `io.github.Stay1444.ARClens`. Install with `flatpak install --user ARClens-x86_64.flatpak`. |
 
 Both ship the app and the overlay side by side in one `bin/`; the app
