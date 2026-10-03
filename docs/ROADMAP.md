@@ -251,8 +251,11 @@ green CI.
       moves, markers sit 2.3 px (median) from where they belong, versus
       331 px before. Label OCR moved to its own thread; overlay gets
       `MoveMarkers` (protocol v9). See `docs/research/map-tracking.md`.
-- [ ] Fix the label fit at the widest zoom (~10 % scale error on Dam with
-      only region labels).
+- [x] Widest zoom: a fit from fewer than 5 labels keeps the tracked
+      scale and only re-centres the view (Dam f0070: 10 % → 4 % scale
+      error; region labels disagree by ~30 px, see map-tracking.md).
+- [ ] Opening the map at the widest zoom still starts from the weak fit;
+      re-measure region-label positions in game to fix that.
 - [x] Map screen state is sticky: an unreadable title keeps the last
       recognised map, and the map must be gone for 1 s before it counts as
       closed (field report 2026-10-03: it flipped to "Unknown map" while

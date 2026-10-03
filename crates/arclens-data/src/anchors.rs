@@ -78,6 +78,46 @@ pub fn locate_view(
     })
 }
 
+/// Below this many agreeing labels a fit's scale is not trusted over a
+/// tracked view's. Fully zoomed out only the big region names show (4-5 on
+/// Dam), and they disagree with each other by ~30 px: the fit's scale came
+/// out 10 % off where tracking was 4 % off (`docs/research/map-tracking.md`).
+pub const STRONG_FIT: usize = 5;
+
+/// `prior` (a tracked view, normalised like [`locate_view`]'s) moved so the
+/// labels read sit where they belong, keeping its scale: the median offset
+/// of the matched labels. `None` when no label matches.
+pub fn recenter(
+    prior: Transform,
+    labels: &[ScreenLabel],
+    frame: (f32, f32),
+    known: &[MapLabel],
+) -> Option<Transform> {
+    let pairs = match_labels(labels, known);
+    if pairs.is_empty() {
+        return None;
+    }
+    let median = |mut v: Vec<f32>| {
+        v.sort_by(f32::total_cmp);
+        let mid = v.len() / 2;
+        if v.len().is_multiple_of(2) {
+            f32::midpoint(v[mid - 1], v[mid])
+        } else {
+            v[mid]
+        }
+    };
+    // In pixels: screen = scale · map + offset.
+    let (sx, sy) = (prior.a * frame.0, prior.d * frame.1);
+    let dx = median(pairs.iter().map(|(m, p)| p.0 - sx * m.0).collect());
+    let dy = median(pairs.iter().map(|(m, p)| p.1 - sy * m.1).collect());
+    Some(Transform::scale_translate(
+        prior.a,
+        prior.d,
+        dx / frame.0,
+        dy / frame.1,
+    ))
+}
+
 /// `(source position, screen point)` for each label read that names a
 /// known label. A name known twice is ambiguous and skipped.
 pub fn match_labels(labels: &[ScreenLabel], known: &[MapLabel]) -> Vec<PointPair> {
@@ -165,6 +205,27 @@ mod tests {
     }
 
     const FRAME: (f32, f32) = (2560.0, 1440.0);
+
+    #[test]
+    fn recenter_keeps_the_scale_and_takes_the_median_offset() {
+        // Truth: pixels = 0.5 · map + (100, -900).
+        let at = |x: f32, y: f32| (0.5 * x + 100.0, 0.5 * y - 900.0);
+        let mut labels = vec![
+            label("Pattern House", at(1000.0, 3000.0)),
+            label("Generator Hall", at(1100.0, 2800.0)),
+            label("Pipeline Tower", at(1300.0, 2400.0)),
+        ];
+        // One misplaced label doesn't move the median.
+        labels[2].rect.0 += 80.0;
+        // The prior has the right scale and a stale offset.
+        let prior = Transform::scale_translate(0.5 / FRAME.0, 0.5 / FRAME.1, 0.3, -0.1);
+        let view = recenter(prior, &labels, FRAME, &places()).unwrap();
+        let (x, y) = view.apply((1000.0, 3000.0));
+        assert!((x * FRAME.0 - 600.0).abs() < 0.5, "{x}");
+        assert!((y * FRAME.1 - 600.0).abs() < 0.5, "{y}");
+        assert!((view.a - prior.a).abs() < f32::EPSILON);
+        assert!(recenter(prior, &[], FRAME, &places()).is_none());
+    }
 
     #[test]
     fn locates_the_view_from_read_labels() {

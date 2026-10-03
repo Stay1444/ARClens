@@ -17,6 +17,9 @@ use std::sync::Arc;
 
 /// Rows shown in the result list (the whole catalogue is ~600 items).
 const MAX_RESULTS: usize = 100;
+/// A weak label fit within this share of the tracked scale is taken as
+/// noise around it; further off, tracking is taken to have lost the zoom.
+const WEAK_FIT_SCALE_SPAN: f32 = 0.3;
 /// Results sent to the overlay's quick search.
 const SEARCH_HITS: usize = 8;
 const SEARCH_ID: &str = "search";
@@ -1079,26 +1082,35 @@ impl App {
     /// names don't match carries the previous view forward by the motion
     /// tracked between the two reads.
     fn on_map_labels(&mut self, read: &vision::MapLabels) {
-        let fit = self
+        use arclens_data::anchors;
+        let known = self
             .map_screen
             .and_then(|screen| screen.map)
-            .and_then(|map| {
-                arclens_data::anchors::locate_view(
-                    &read.labels,
-                    read.frame,
-                    &arclens_data::labels::labels_for(map),
-                )
-            });
+            .map(arclens_data::labels::labels_for)
+            .unwrap_or_default();
+        let fit = anchors::locate_view(&read.labels, read.frame, &known);
         let view = &mut self.game_view;
-        view.base = match fit {
-            Some((transform, agree)) => {
+        // The previous view carried to this read's frame by tracking.
+        let tracked = view
+            .base
+            .zip(read.moved)
+            .map(|(base, motion)| moved(base, motion, read.frame));
+        view.base = match (fit, tracked) {
+            // Few labels (fully zoomed out: only region names): their scale
+            // is less reliable than the tracked one, unless tracking lost
+            // the zoom altogether. Keep its scale; place it by the labels.
+            (Some((transform, agree)), Some(tracked))
+                if agree < anchors::STRONG_FIT
+                    && (transform.a / tracked.a - 1.0).abs() < WEAK_FIT_SCALE_SPAN =>
+            {
+                tracing::debug!(agree, "weak map fit: tracked scale kept");
+                anchors::recenter(tracked, &read.labels, read.frame, &known).or(Some(tracked))
+            }
+            (Some((transform, agree)), _) => {
                 tracing::debug!(labels = read.labels.len(), agree, "map view located");
                 Some(transform)
             }
-            None => view
-                .base
-                .zip(read.moved)
-                .map(|(base, motion)| moved(base, motion, read.frame)),
+            (None, tracked) => tracked,
         };
         view.frame = read.frame;
         view.quest_panel_open = read.quests_open;

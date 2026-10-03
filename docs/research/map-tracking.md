@@ -108,5 +108,34 @@ tracking lands within 4 px.
   apart at f0070 and 174.4 px at f0076, ×2.10; the tracker said ×2.13, the
   fits ×1.90. Markers at the widest zoom may sit off until this is fixed
   (the region-label anchors need checking).
+
+## Widest zoom: region labels can't set the scale (2026-10-03)
+
+Checked with `examples/map_label_probe.rs`: Dam's 10-label fit at f0081
+carried back to f0070 by the tracker, then the region labels read there
+compared with where their anchors land. Measured at f0070 (5 region
+labels, top-left anchors):
+
+| Scale | Residuals, RMS | Source |
+|---|---|---|
+| 0.186 | 29.6 px | tracker, carried 11 frames |
+| 0.194 | 27.4 px | hand check (icon spacing ×2.10 to f0076) |
+| 0.197 | 27.1 px | least squares over all 5 |
+| 0.214 | 32.5 px | robust fit (4 agreeing): what the app used |
+
+No scale fits them well. Swamp and Victory Ridge sit ~40 px from where
+any view puts them, so their positions in the extracted data don't match
+the game at this zoom (the game may lay region names out per zoom
+level). The robust fit drops a different label depending on the frame,
+so its scale jumps around.
+
+Change: a fit backed by fewer than 5 labels (`anchors::STRONG_FIT`) no
+longer replaces a tracked view's scale. The app keeps the tracked scale
+and only moves the view to the labels' median offset (`anchors::recenter`),
+unless the two scales differ by more than 30 %, which means tracking has
+lost the zoom. At f0070 that puts the scale 4 % off instead of 10 %. A
+map opened directly at the widest zoom has no tracked view yet and still
+uses the label fit. **Partly verified:** one recording, and the hand
+check is itself ±2 %.
 - The capture is cursor-free (`CursorMode::Hidden`), and the game's own
   map UI is the only input; nothing touches the game process.
