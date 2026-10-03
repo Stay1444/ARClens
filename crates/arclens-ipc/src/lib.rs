@@ -245,6 +245,17 @@ pub struct MenuCard {
     /// Workshop levels built and in total, when the player set them.
     #[serde(default)]
     pub workshop: Option<(u32, u32)>,
+    /// The player's progress, one line per part of the game.
+    #[serde(default)]
+    pub progress: Vec<ProgressLine>,
+}
+
+/// "Quests: 12 of 100", for the menu card.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProgressLine {
+    pub label: String,
+    pub done: u32,
+    pub total: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -254,6 +265,9 @@ pub struct CardEvent {
     /// Unix ms: when it ends (running) or starts (upcoming). The overlay
     /// counts down on its own clock.
     pub at_ms: i64,
+    /// Local path of the condition's icon, if cached.
+    #[serde(default)]
+    pub icon: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

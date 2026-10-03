@@ -80,6 +80,12 @@ green CI.
       `GUNSMITH — LEVEL 02` in the top bar, which is read and matched to the
       catalogue station (`arclens_vision::read_station_header`; region
       measured on one screenshot, **unverified** elsewhere).
+- [x] Main-menu card redesign (user feedback: too much text): styled
+      after the game's Quests box (cream header, page dots), with pages
+      that take turns every 8 s with a slide and fade. Conditions now, next
+      (icon, name, map, a big countdown), and progress bars for the
+      workshop, quests, projects and blueprints. Ticks at 30 fps only
+      around a page change.
 - [x] **Main-menu card** (2026-10-03): on the game's main menu (its
       yellow PLAY button plus the outlined PLAY tab, no OCR;
       `arclens_vision::is_main_menu`), the overlay shows a card under the

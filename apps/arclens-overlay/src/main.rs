@@ -112,6 +112,8 @@ pub struct Overlay {
     search: search::SearchState,
     /// The main-menu card, while the game shows its main menu.
     menu_card: Option<arclens_ipc::MenuCard>,
+    /// Its condition icons, decoded once.
+    menu_icons: menu_card::Icons,
     /// Wall clock (Unix ms) for the card's countdowns.
     now_ms: i64,
     /// Sends to the companion app while connected.
@@ -197,7 +199,7 @@ fn subscription(state: &Overlay) -> Subscription<Message> {
         }),
         shell::subscription(state),
         if state.menu_card.is_some() {
-            iced::time::every(std::time::Duration::from_secs(1)).map(|_| Message::Tick)
+            iced::time::every(menu_card::tick_interval(state.now_ms)).map(|_| Message::Tick)
         } else {
             Subscription::none()
         },
@@ -364,6 +366,7 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
         }
         ToOverlay::ShowMenuCard { card } => {
             state.now_ms = now_ms();
+            menu_card::load_icons(&card, &mut state.menu_icons);
             state.menu_card = Some(card);
         }
         ToOverlay::HideMenuCard => state.menu_card = None,

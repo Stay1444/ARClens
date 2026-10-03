@@ -13,6 +13,7 @@ use arclens_ui::palette::{self, with_alpha};
 use arclens_ui::{CardSize, ItemCard, item_card};
 use iced::widget::{Space, button, column, container, image, row, scrollable, text, text_input};
 use iced::{Alignment, Border, Color, Element, Font, Length, Subscription, Task, Theme, font};
+use std::path::Path;
 use std::sync::Arc;
 
 /// Rows shown in the result list (the whole catalogue is ~600 items).
@@ -223,7 +224,10 @@ pub enum Message {
     SetRegion(String),
     SetOverlayScale(f32),
     SetOverlayCorner(arclens_ipc::Corner),
-    EventIconLoaded(String, Option<iced::widget::image::Handle>),
+    EventIconLoaded(
+        String,
+        Option<(iced::widget::image::Handle, std::path::PathBuf)>,
+    ),
     /// Once a second while the Events tab is open (countdowns).
     Tick,
     FilterEventsMap(Option<String>),
@@ -424,7 +428,11 @@ impl App {
             Message::HomeSearch(query) => return self.home_search(query),
             Message::OpenMap(map) => return self.open_map(map),
             Message::EventsLoaded(result) => return self.on_events_loaded(result),
-            Message::EventIconLoaded(url, icon) => self.event_icons.insert(url, icon),
+            Message::EventIconLoaded(url, icon) => {
+                self.event_icons.insert(url, icon);
+                // The menu card shows the icons too.
+                self.push_menu_card();
+            }
             Message::Tick => {
                 self.now_ms = now_ms();
                 return self.refresh_events_if_stale();
@@ -685,6 +693,7 @@ impl App {
                     name: e.name.clone(),
                     map: e.map.clone(),
                     at_ms,
+                    icon: self.event_icons.path(&e.name).map(Path::to_path_buf),
                 };
                 (
                     agenda.active.iter().map(|e| card(e, e.end_ms)).collect(),
@@ -711,8 +720,55 @@ impl App {
                 active,
                 upcoming,
                 workshop,
+                progress: self.progress_lines(),
             },
         });
+    }
+
+    /// The Progress page's summary, for the menu card.
+    fn progress_lines(&self) -> Vec<arclens_ipc::ProgressLine> {
+        let (Load::Ready(catalog), Some(progress)) = (&self.catalog, &self.progress) else {
+            return Vec::new();
+        };
+        let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+        let line = |label: &str, done: u32, total: u32| arclens_ipc::ProgressLine {
+            label: label.to_owned(),
+            done: done.min(total),
+            total,
+        };
+        let (built, levels) = catalog.stations.iter().fold((0, 0), |(b, t), s| {
+            (b + progress.level(&s.id).min(s.max_level), t + s.max_level)
+        });
+        let (phases_done, phases) = catalog.projects.iter().fold((0, 0), |(d, t), p| {
+            let n = count(p.phases.len());
+            (d + progress.phases_done(&p.id).min(n), t + n)
+        });
+        let blueprints: Vec<_> = catalog.items.iter().filter(|i| i.is_blueprint()).collect();
+        vec![
+            line("Workshop", built, levels),
+            line(
+                "Quests",
+                count(
+                    catalog
+                        .quests
+                        .iter()
+                        .filter(|q| progress.quest_done(&q.id))
+                        .count(),
+                ),
+                count(catalog.quests.len()),
+            ),
+            line("Projects", phases_done, phases),
+            line(
+                "Blueprints",
+                count(
+                    blueprints
+                        .iter()
+                        .filter(|b| progress.blueprint_learned(&b.id))
+                        .count(),
+                ),
+                count(blueprints.len()),
+            ),
+        ]
     }
 
     /// A workshop station's page was on screen: take its level.

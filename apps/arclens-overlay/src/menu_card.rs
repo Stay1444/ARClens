@@ -1,12 +1,17 @@
-//! The card on the game's main menu: map conditions now and next, and the
-//! workshop progress. It sits in the free space under the game's Quests
-//! box (left column), and counts down on the overlay's own clock.
+//! The card on the game's main menu, under the game's Quests box (left
+//! column), styled after it: a cream header with the page's title and
+//! dots, a dark body. Its pages (conditions now, next, the player's
+//! progress) take turns every few seconds with a short slide and fade.
+//! Countdowns run on the overlay's own clock.
 
 use crate::Message;
-use arclens_ipc::{CardEvent, MenuCard};
+use arclens_ipc::{CardEvent, MenuCard, ProgressLine};
 use arclens_ui::palette::{self, with_alpha};
-use iced::widget::{column, container, row, text};
-use iced::{Border, Element, Font, Length, Size, font};
+use iced::widget::{Space, column, container, image, progress_bar, row, text};
+use iced::{Alignment, Border, Color, Element, Font, Length, Size, font};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::time::Duration;
 
 const BOLD: Font = Font {
     weight: font::Weight::Bold,
@@ -14,10 +19,97 @@ const BOLD: Font = Font {
 };
 
 /// Where the card goes, as fractions of the screen: left column, under
-/// the Quests box (measured at 2560×1440; **unverified** elsewhere).
+/// the Quests box (measured at 2560×1440 and 2000×1125).
 const AREA: [f32; 3] = [0.025, 0.655, 0.208];
-/// Conditions listed per group.
+/// Conditions per page.
 const SHOWN: usize = 3;
+/// How long each page shows, and how long it takes to come in.
+const PAGE_MS: i64 = 8_000;
+const FADE_MS: i64 = 350;
+
+/// The game's header cream and the dark ink on it.
+const CREAM: Color = Color::from_rgb(0.94, 0.91, 0.85);
+const INK: Color = Color::from_rgb(0.08, 0.08, 0.10);
+const NOW: Color = Color::from_rgb(0.30, 0.82, 0.50);
+const NEXT: Color = Color::from_rgb(0.36, 0.62, 0.98);
+
+/// Decoded condition icons by file, so `view` never decodes.
+pub type Icons = HashMap<PathBuf, image::Handle>;
+
+/// Decodes the icons of `card` not decoded yet.
+pub fn load_icons(card: &MenuCard, icons: &mut Icons) {
+    for path in card
+        .active
+        .iter()
+        .chain(&card.upcoming)
+        .filter_map(|e| e.icon.as_ref())
+    {
+        if !icons.contains_key(path)
+            && let Some(handle) = arclens_ui::decode_icon(path, 64)
+        {
+            icons.insert(path.clone(), handle);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Page {
+    Now,
+    Next,
+    Progress,
+}
+
+impl Page {
+    const fn title(self) -> &'static str {
+        match self {
+            Self::Now => "CONDITIONS NOW",
+            Self::Next => "COMING UP",
+            Self::Progress => "YOUR PROGRESS",
+        }
+    }
+}
+
+fn live(events: &[CardEvent], now_ms: i64) -> impl Iterator<Item = &CardEvent> {
+    events.iter().filter(move |e| e.at_ms > now_ms).take(SHOWN)
+}
+
+/// The pages with something to show (at least one).
+fn pages(card: &MenuCard, now_ms: i64) -> Vec<Page> {
+    let mut pages = Vec::new();
+    if live(&card.active, now_ms).next().is_some() {
+        pages.push(Page::Now);
+    }
+    if live(&card.upcoming, now_ms).next().is_some() {
+        pages.push(Page::Next);
+    }
+    if !card.progress.is_empty() {
+        pages.push(Page::Progress);
+    }
+    if pages.is_empty() {
+        pages.push(Page::Now);
+    }
+    pages
+}
+
+/// Which page shows at `now_ms`, and how far it has come in (0 → 1).
+fn current(count: usize, now_ms: i64) -> (usize, f32) {
+    let count = i64::try_from(count.max(1)).unwrap_or(1);
+    let index = usize::try_from((now_ms / PAGE_MS).rem_euclid(count)).unwrap_or(0);
+    #[allow(clippy::cast_precision_loss, reason = "milliseconds within a page")]
+    let shown = (now_ms.rem_euclid(PAGE_MS) as f32 / FADE_MS as f32).min(1.0);
+    (index, shown)
+}
+
+/// How often the card needs a redraw: smoothly around a page change,
+/// once a second otherwise (the countdowns).
+pub fn tick_interval(now_ms: i64) -> Duration {
+    let into_page = now_ms.rem_euclid(PAGE_MS);
+    if into_page < FADE_MS || PAGE_MS - into_page < 1_100 {
+        Duration::from_millis(33)
+    } else {
+        Duration::from_secs(1)
+    }
+}
 
 /// `1h 05m` / `12m` / `45s`.
 fn countdown(ms: i64) -> String {
@@ -32,83 +124,210 @@ fn countdown(ms: i64) -> String {
     }
 }
 
-fn rows<'a>(
-    events: &[CardEvent],
-    now_ms: i64,
-    label: &'a str,
-    accent: iced::Color,
-) -> Element<'a, Message> {
-    let live: Vec<&CardEvent> = events
-        .iter()
-        .filter(|e| e.at_ms > now_ms)
-        .take(SHOWN)
-        .collect();
-    let mut col = column![text(label).size(10).color(palette::TEXT_MUTED)].spacing(4);
-    if live.is_empty() {
-        col = col.push(text("—").size(12).color(palette::TEXT_MUTED));
-    }
-    for event in live {
-        col = col.push(
-            row![
-                column![
-                    text(event.name.clone()).size(13).font(BOLD),
-                    text(event.map.clone()).size(11).color(palette::TEXT_MUTED),
-                ]
-                .width(Length::Fill),
-                text(countdown(event.at_ms - now_ms)).size(12).color(accent),
-            ]
-            .align_y(iced::Alignment::Center),
-        );
-    }
-    col.into()
+/// Smooth start and stop.
+fn ease(t: f32) -> f32 {
+    t * t * (3.0 - 2.0 * t)
 }
 
-pub fn view(card: &MenuCard, now_ms: i64, screen: Size) -> Element<'_, Message> {
+pub fn view<'a>(
+    card: &'a MenuCard,
+    icons: &'a Icons,
+    now_ms: i64,
+    screen: Size,
+) -> Element<'a, Message> {
     let [x, y, w] = AREA;
-    let mut body = column![
+    let pages = pages(card, now_ms);
+    let (index, shown) = current(pages.len(), now_ms);
+    let page = pages[index];
+    let alpha = ease(shown);
+
+    let dots = pages
+        .iter()
+        .enumerate()
+        .fold(row![].spacing(5), |r, (i, _)| {
+            let on = i == index;
+            r.push(
+                container(Space::new().width(7).height(7)).style(move |_| container::Style {
+                    background: Some(with_alpha(INK, if on { 0.9 } else { 0.25 }).into()),
+                    border: Border {
+                        radius: 3.5.into(),
+                        ..Border::default()
+                    },
+                    ..container::Style::default()
+                }),
+            )
+        });
+    let header = container(
         row![
-            text("ARClens").size(12).font(BOLD).width(Length::Fill),
-            text("Map conditions").size(10).color(palette::TEXT_MUTED),
-        ],
-        rows(
-            &card.active,
-            now_ms,
-            "NOW · ENDS IN",
-            iced::Color::from_rgb(0.30, 0.82, 0.50)
-        ),
-        rows(
-            &card.upcoming,
-            now_ms,
-            "NEXT · STARTS IN",
-            iced::Color::from_rgb(0.36, 0.62, 0.98)
-        ),
-    ]
-    .spacing(10);
-    if let Some((built, total)) = card.workshop {
-        body = body.push(
-            text(format!("Workshop: {built} of {total} levels built"))
+            text("ARCLENS")
                 .size(11)
-                .color(palette::TEXT_MUTED),
-        );
-    }
-    let card = container(body)
-        .padding(12)
-        .width(w * screen.width)
+                .font(BOLD)
+                .color(with_alpha(INK, 0.55)),
+            text(page.title()).size(15).font(BOLD).color(INK),
+            Space::new().width(Length::Fill),
+            dots,
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center),
+    )
+    .padding([7, 12])
+    .width(Length::Fill)
+    .style(|_| container::Style {
+        background: Some(CREAM.into()),
+        border: Border {
+            radius: iced::border::Radius::default().top(6.0),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    });
+
+    let body: Element<'a, Message> = match page {
+        Page::Now => conditions(&card.active, icons, now_ms, "ends in", NOW, alpha),
+        Page::Next => conditions(&card.upcoming, icons, now_ms, "starts in", NEXT, alpha),
+        Page::Progress => progress(&card.progress, alpha),
+    };
+    // Slides in from the right as it fades in.
+    let body = container(body)
+        .padding(iced::Padding {
+            top: 10.0,
+            bottom: 12.0,
+            left: 12.0 + (1.0 - alpha) * 28.0,
+            right: 12.0,
+        })
+        .width(Length::Fill)
         .style(|_| container::Style {
-            background: Some(with_alpha(palette::SURFACE, 0.92).into()),
+            background: Some(with_alpha(palette::SURFACE, 0.94).into()),
             border: Border {
-                color: palette::BORDER,
-                width: 1.0,
-                radius: 8.0.into(),
+                radius: iced::border::Radius::default().bottom(6.0),
+                ..Border::default()
             },
-            text_color: Some(palette::TEXT),
             ..container::Style::default()
         });
-    container(card)
+
+    container(column![header, body].width(w * screen.width))
         .padding(iced::Padding {
             top: y * screen.height,
             left: x * screen.width,
             ..iced::Padding::ZERO
+        })
+        .into()
+}
+
+fn conditions<'a>(
+    events: &'a [CardEvent],
+    icons: &'a Icons,
+    now_ms: i64,
+    when: &'a str,
+    accent: Color,
+    alpha: f32,
+) -> Element<'a, Message> {
+    let mut list = column![].spacing(10);
+    let mut any = false;
+    for event in live(events, now_ms) {
+        any = true;
+        let icon: Element<'a, Message> = match event.icon.as_ref().and_then(|p| icons.get(p)) {
+            Some(handle) => image(handle.clone())
+                .width(36)
+                .height(36)
+                .opacity(alpha)
+                .into(),
+            None => initials(&event.name, accent, alpha),
+        };
+        list = list.push(
+            row![
+                icon,
+                column![
+                    text(&event.name)
+                        .size(16)
+                        .font(BOLD)
+                        .color(with_alpha(palette::TEXT, alpha)),
+                    text(&event.map)
+                        .size(12)
+                        .color(with_alpha(palette::TEXT_MUTED, alpha)),
+                ]
+                .spacing(1)
+                .width(Length::Fill),
+                column![
+                    text(countdown(event.at_ms - now_ms))
+                        .size(18)
+                        .font(BOLD)
+                        .color(with_alpha(accent, alpha)),
+                    text(when)
+                        .size(10)
+                        .color(with_alpha(palette::TEXT_MUTED, alpha)),
+                ]
+                .align_x(Alignment::End),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
+        );
+    }
+    if !any {
+        list = list.push(
+            text("No schedule yet")
+                .size(13)
+                .color(with_alpha(palette::TEXT_MUTED, alpha)),
+        );
+    }
+    list.into()
+}
+
+/// A round badge with the condition's first letter, while its icon loads.
+fn initials<'a>(name: &str, accent: Color, alpha: f32) -> Element<'a, Message> {
+    let letter: String = name.chars().take(1).collect();
+    container(
+        text(letter)
+            .size(16)
+            .font(BOLD)
+            .color(with_alpha(palette::TEXT, alpha)),
+    )
+    .center(36)
+    .style(move |_| container::Style {
+        background: Some(with_alpha(accent, 0.35 * alpha).into()),
+        border: Border {
+            radius: 18.0.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    })
+    .into()
+}
+
+fn progress(lines: &[ProgressLine], alpha: f32) -> Element<'_, Message> {
+    lines
+        .iter()
+        .fold(column![].spacing(10), |col, line| {
+            #[allow(clippy::cast_precision_loss, reason = "small counts")]
+            let share = if line.total == 0 {
+                0.0
+            } else {
+                line.done as f32 / line.total as f32
+            };
+            col.push(
+                column![
+                    row![
+                        text(&line.label)
+                            .size(14)
+                            .font(BOLD)
+                            .color(with_alpha(palette::TEXT, alpha))
+                            .width(Length::Fill),
+                        text(format!("{} / {}", line.done, line.total))
+                            .size(13)
+                            .color(with_alpha(palette::TEXT_MUTED, alpha)),
+                    ],
+                    progress_bar(0.0..=1.0, share).girth(5).style(move |_| {
+                        progress_bar::Style {
+                            background: with_alpha(palette::TEXT, 0.08 * alpha).into(),
+                            bar: with_alpha(NOW, alpha).into(),
+                            border: Border {
+                                radius: 2.5.into(),
+                                ..Border::default()
+                            },
+                        }
+                    }),
+                ]
+                .spacing(4),
+            )
         })
         .into()
 }
@@ -123,5 +342,43 @@ mod tests {
         assert_eq!(countdown(12 * 60_000 + 5_000), "12m");
         assert_eq!(countdown(45_000), "45s");
         assert_eq!(countdown(-5), "0s");
+    }
+
+    fn event(at_ms: i64) -> CardEvent {
+        CardEvent {
+            name: "Matriarch".into(),
+            map: "Blue Gate".into(),
+            at_ms,
+            icon: None,
+        }
+    }
+
+    #[test]
+    fn pages_take_turns_and_skip_empty_ones() {
+        let mut card = MenuCard {
+            active: vec![event(100_000)],
+            ..MenuCard::default()
+        };
+        assert_eq!(pages(&card, 0), [Page::Now]);
+        card.upcoming = vec![event(200_000)];
+        card.progress = vec![ProgressLine {
+            label: "Workshop".into(),
+            done: 3,
+            total: 33,
+        }];
+        assert_eq!(pages(&card, 0), [Page::Now, Page::Next, Page::Progress]);
+        // Once the running condition ended, its page goes.
+        assert_eq!(pages(&card, 150_000), [Page::Next, Page::Progress]);
+
+        assert_eq!(current(3, 0), (0, 0.0));
+        assert_eq!(current(3, PAGE_MS + FADE_MS), (1, 1.0));
+        assert_eq!(current(3, 3 * PAGE_MS + 10).0, 0);
+    }
+
+    #[test]
+    fn ticks_fast_only_around_page_changes() {
+        assert_eq!(tick_interval(PAGE_MS * 5 + 100), Duration::from_millis(33));
+        assert_eq!(tick_interval(PAGE_MS * 5 + 4_000), Duration::from_secs(1));
+        assert_eq!(tick_interval(PAGE_MS * 6 - 500), Duration::from_millis(33));
     }
 }

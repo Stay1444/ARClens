@@ -8,6 +8,7 @@ use arclens_core::ScheduledEvent;
 use arclens_data::{Catalog, ImageCache};
 use iced::widget::image::Handle;
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
 const ICON_PX: u32 = 64;
 
@@ -16,7 +17,8 @@ pub struct EventIcons {
     cache: ImageCache,
     /// Icon URL by event key.
     urls: HashMap<String, String>,
-    loaded: HashMap<String, Handle>,
+    /// Decoded icon and its file, by URL.
+    loaded: HashMap<String, (Handle, PathBuf)>,
     /// URLs requested, or known to be unavailable: never re-requested.
     requested: HashSet<String>,
 }
@@ -33,6 +35,15 @@ impl EventIcons {
 
     /// The decoded icon for an event name, once loaded.
     pub fn get(&self, name: &str) -> Option<&Handle> {
+        self.entry(name).map(|(handle, _)| handle)
+    }
+
+    /// The icon's file, for the overlay (which decodes it itself).
+    pub fn path(&self, name: &str) -> Option<&Path> {
+        self.entry(name).map(|(_, path)| path.as_path())
+    }
+
+    fn entry(&self, name: &str) -> Option<&(Handle, PathBuf)> {
         self.loaded
             .get(self.urls.get(&arclens_data::event_key(name))?)
     }
@@ -42,7 +53,7 @@ impl EventIcons {
         &mut self,
         events: &[ScheduledEvent],
         catalog: Option<&Catalog>,
-    ) -> Vec<impl Future<Output = (String, Option<Handle>)> + use<>> {
+    ) -> Vec<impl Future<Output = (String, Option<(Handle, PathBuf)>)> + use<>> {
         for event in events {
             let url = event
                 .icon
@@ -67,7 +78,7 @@ impl EventIcons {
                 async move {
                     let icon = match cache.fetch(&url).await {
                         Ok(Some(path)) => tokio::task::spawn_blocking(move || {
-                            arclens_ui::decode_icon(&path, ICON_PX)
+                            arclens_ui::decode_icon(&path, ICON_PX).map(|icon| (icon, path))
                         })
                         .await
                         .ok()
@@ -84,7 +95,7 @@ impl EventIcons {
             .collect()
     }
 
-    pub fn insert(&mut self, url: String, icon: Option<Handle>) {
+    pub fn insert(&mut self, url: String, icon: Option<(Handle, PathBuf)>) {
         if let Some(icon) = icon {
             self.loaded.insert(url, icon);
         }

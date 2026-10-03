@@ -28,7 +28,12 @@ pub fn view(state: &Overlay) -> Element<'_, Message> {
         layers = layers.push(tooltip);
     }
     if let (Some(card), Some(screen)) = (&state.menu_card, state.screen) {
-        layers = layers.push(crate::menu_card::view(card, state.now_ms, screen));
+        layers = layers.push(crate::menu_card::view(
+            card,
+            &state.menu_icons,
+            state.now_ms,
+            screen,
+        ));
     }
     if let (true, Some(screen)) = (state.interactive, state.screen) {
         layers = layers.push(crate::search::view(&state.search, screen));
