@@ -18,7 +18,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 mod transport;
 pub use transport::{Endpoint, Listener};
 
-pub const PROTOCOL_VERSION: u32 = 12;
+pub const PROTOCOL_VERSION: u32 = 13;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hello {
@@ -111,12 +111,91 @@ pub enum ToOverlay {
         card: MenuCard,
     },
     HideMenuCard,
+    /// The user's overlay settings; sent on connect and on every change.
+    Configure {
+        settings: OverlaySettings,
+    },
     /// Items matching the overlay's quick search for `query`, best first.
     /// The overlay drops results for a query it no longer shows.
     SearchResults {
         query: String,
         hits: Vec<SearchHit>,
     },
+}
+
+/// How the overlay looks, as the user set it in the app.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct OverlaySettings {
+    /// Size of everything the overlay draws (1.0: as designed).
+    #[serde(default = "OverlaySettings::default_scale")]
+    pub scale: f32,
+    /// Where the pinned item card sits.
+    #[serde(default)]
+    pub corner: Corner,
+}
+
+impl OverlaySettings {
+    /// Scales the app offers.
+    pub const SCALES: [f32; 5] = [0.8, 0.9, 1.0, 1.25, 1.5];
+
+    const fn default_scale() -> f32 {
+        1.0
+    }
+
+    /// `scale` limited to what the overlay supports.
+    pub fn clamped_scale(&self) -> f32 {
+        if self.scale.is_finite() {
+            self.scale.clamp(0.5, 2.0)
+        } else {
+            1.0
+        }
+    }
+}
+
+impl Default for OverlaySettings {
+    fn default() -> Self {
+        Self {
+            scale: Self::default_scale(),
+            corner: Corner::default(),
+        }
+    }
+}
+
+/// A screen corner.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Corner {
+    TopLeft,
+    #[default]
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+impl Corner {
+    pub const ALL: [Self; 4] = [
+        Self::TopLeft,
+        Self::TopRight,
+        Self::BottomLeft,
+        Self::BottomRight,
+    ];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::TopLeft => "Top left",
+            Self::TopRight => "Top right",
+            Self::BottomLeft => "Bottom left",
+            Self::BottomRight => "Bottom right",
+        }
+    }
+
+    pub const fn is_left(self) -> bool {
+        matches!(self, Self::TopLeft | Self::BottomLeft)
+    }
+
+    pub const fn is_top(self) -> bool {
+        matches!(self, Self::TopLeft | Self::TopRight)
+    }
 }
 
 /// One quick-search result.
@@ -364,6 +443,16 @@ pub fn check_version(hello: &Hello) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn overlay_settings_default_missing_fields_and_clamp_scale() {
+        let settings: OverlaySettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(settings, OverlaySettings::default());
+        let settings: OverlaySettings =
+            serde_json::from_str(r#"{"scale":9.0,"corner":"bottom_left"}"#).unwrap();
+        assert!((settings.clamped_scale() - 2.0).abs() < f32::EPSILON);
+        assert_eq!(settings.corner, Corner::BottomLeft);
+    }
 
     /// `scripts/overlay-demo.jsonl` must keep matching the protocol.
     #[test]

@@ -47,6 +47,7 @@ pub fn run() -> anyhow::Result<()> {
         crate::view_window,
     )
     .style(crate::style)
+    .scale_factor(crate::scale_factor)
     .subscription(crate::subscription)
     .settings(Settings {
         layer_settings: LayerShellSettings {
@@ -98,6 +99,12 @@ pub fn sync_surface(state: &mut Overlay) -> Task<Message> {
         }
         _ => Task::none(),
     }
+}
+
+/// The surface's size in the compositor's logical pixels, from a resize
+/// event: `iced_layershell` reports it before the app's scale.
+pub fn surface_size(reported: iced::Size, _scale: f32) -> iced::Size {
+    reported
 }
 
 /// Applies [`Overlay::input_rect`] as the surface's input region, and the

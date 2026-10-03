@@ -38,6 +38,11 @@ fn main() -> anyhow::Result<()> {
     shell::run()
 }
 
+/// The user's scale, applied on top of the output's.
+fn scale_factor(state: &Overlay, _window: iced::window::Id) -> f32 {
+    state.scale()
+}
+
 /// One surface, one view.
 fn view_window(state: &Overlay, _window: iced::window::Id) -> iced::Element<'_, Message> {
     view::view(state)
@@ -58,6 +63,24 @@ pub struct ShownItem {
     advice: Advice,
     icon: Option<iced::widget::image::Handle>,
     recycle_names: Vec<String>,
+}
+
+impl ShownItem {
+    fn new(
+        item: Box<Item>,
+        advice: Advice,
+        icon: Option<&std::path::Path>,
+        recycle_names: Vec<String>,
+    ) -> Self {
+        Self {
+            item,
+            advice,
+            // Icons are ~256² PNGs; decoding once here is cheap and keeps
+            // `view` free of I/O.
+            icon: icon.and_then(|p| arclens_ui::decode_icon(p, 128)),
+            recycle_names,
+        }
+    }
 }
 
 /// Everything the overlay currently displays.
@@ -93,8 +116,13 @@ pub struct Overlay {
     now_ms: i64,
     /// Sends to the companion app while connected.
     outbox: Option<ipc::Outbox>,
-    /// Surface size in logical pixels, once known.
+    /// Surface size in the compositor's logical pixels, once known.
+    surface_size: Option<iced::Size>,
+    /// The surface in layout pixels (`surface_size / settings.scale`):
+    /// what views lay out in.
     screen: Option<iced::Size>,
+    /// The user's settings from the app.
+    settings: arclens_ipc::OverlaySettings,
 }
 
 impl Overlay {
@@ -115,14 +143,30 @@ impl Overlay {
             || ((!self.markers.is_empty() || !self.areas.is_empty()) && self.transform.is_some())
     }
 
-    /// Where the overlay takes pointer input: everywhere while interactive,
-    /// the map panel while it is shown, nowhere otherwise (click-through).
+    /// Where the overlay takes pointer input, in the compositor's logical
+    /// pixels: everywhere while interactive, the map panel while it is
+    /// shown, nowhere otherwise (click-through).
     fn input_rect(&self) -> Option<iced::Rectangle> {
-        let screen = self.screen?;
         if self.interactive {
-            return Some(iced::Rectangle::with_size(screen));
+            return Some(iced::Rectangle::with_size(self.surface_size?));
         }
-        self.panel.bounds(screen)
+        self.panel
+            .bounds(self.screen?)
+            .map(|rect| rect * iced::Transformation::scale(self.scale()))
+    }
+
+    /// The user's overlay scale.
+    fn scale(&self) -> f32 {
+        self.settings.clamped_scale()
+    }
+
+    /// Recomputes the layout size after the surface or the scale changed.
+    fn update_screen(&mut self) {
+        let scale = self.scale();
+        self.screen = self
+            .surface_size
+            .map(|size| iced::Size::new(size.width / scale, size.height / scale));
+        self.marker_cache.clear();
     }
 }
 
@@ -188,11 +232,12 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
             return Task::none();
         }
         Message::Resized(size) => {
-            if state.screen == Some(size) {
+            let size = shell::surface_size(size, state.scale());
+            if state.surface_size == Some(size) {
                 return Task::none();
             }
-            state.screen = Some(size);
-            state.marker_cache.clear();
+            state.surface_size = Some(size);
+            state.update_screen();
             let input = shell::input_task(state);
             // The surface may have just opened for interactive mode.
             return if state.interactive {
@@ -228,7 +273,8 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
             *state = Overlay {
                 shell: std::mem::take(&mut state.shell),
                 surface: state.surface.take(),
-                screen: state.screen,
+                surface_size: state.surface_size,
+                screen: state.surface_size,
                 ..Overlay::default()
             };
             Task::none()
@@ -246,6 +292,12 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
 fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
     match msg {
         ToOverlay::Hello(_) => {}
+        ToOverlay::Configure { settings } => {
+            tracing::info!(?settings, "overlay settings");
+            state.settings = settings;
+            state.update_screen();
+            return shell::input_task(state);
+        }
         ToOverlay::SetVisible { visible } => {
             tracing::info!(visible, "overlay visibility changed");
             state.visible = visible;
@@ -262,16 +314,7 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
             recycle_names,
         } => {
             tracing::info!(item = %item.name, "showing item");
-            state.item = Some(ShownItem {
-                item,
-                advice,
-                // Icons are ~256² PNGs; decoding once here is cheap and keeps
-                // `view` free of I/O.
-                icon: icon
-                    .as_deref()
-                    .and_then(|p| arclens_ui::decode_icon(p, 128)),
-                recycle_names,
-            });
+            state.item = Some(ShownItem::new(item, advice, icon.as_deref(), recycle_names));
         }
         ToOverlay::ShowMarkers {
             markers,
@@ -301,14 +344,7 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
             item_side,
         } => {
             tracing::debug!(item = %item.name, "hover");
-            let shown = ShownItem {
-                item,
-                advice,
-                icon: icon
-                    .as_deref()
-                    .and_then(|p| arclens_ui::decode_icon(p, 128)),
-                recycle_names,
-            };
+            let shown = ShownItem::new(item, advice, icon.as_deref(), recycle_names);
             state.hover = Some((shown, anchor, item_side));
         }
         ToOverlay::ClearHover => state.hover = None,

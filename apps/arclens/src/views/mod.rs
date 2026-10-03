@@ -4,3 +4,4 @@ pub mod events;
 pub mod home;
 pub mod map;
 pub mod progress;
+pub mod settings;

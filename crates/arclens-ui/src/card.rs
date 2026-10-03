@@ -190,11 +190,10 @@ fn reason(card: &ItemCard<'_>) -> String {
     match advice.verdict {
         Verdict::Keep => {
             let n = advice.needs.len();
-            let first = advice.needs.first().map_or("", |r| r.name.as_str());
-            if n == 1 {
-                format!("Needed for {first}")
-            } else {
-                format!("Needed for {first} +{} more", n - 1)
+            match advice.needs.first() {
+                None => "Worth keeping".to_owned(),
+                Some(first) if n == 1 => format!("Needed for {}", first.name),
+                Some(first) => format!("Needed for {} +{} more", first.name, n - 1),
             }
         }
         Verdict::Recycle => match (&advice.parts_for, advice.recycle_value, advice.sell_value) {

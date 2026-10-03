@@ -105,6 +105,7 @@ pub enum Tab {
     Events,
     /// Where the player is in the game (workshop levels, …).
     Progress,
+    Settings,
 }
 
 /// Settings saved in the config directory.
@@ -113,6 +114,9 @@ struct Settings {
     /// Server region for the event schedule (`None`: not chosen yet).
     #[serde(default)]
     region: Option<String>,
+    /// How the overlay looks.
+    #[serde(default)]
+    overlay: arclens_ipc::OverlaySettings,
 }
 
 /// The open in-game map's view: where the last label read put it, and how
@@ -214,6 +218,8 @@ pub enum Message {
     EventsLoaded(Result<arclens_data::metaforge::Schedule, String>),
     /// The player picked their server region.
     SetRegion(String),
+    SetOverlayScale(f32),
+    SetOverlayCorner(arclens_ipc::Corner),
     EventIconLoaded(String, Option<iced::widget::image::Handle>),
     /// Once a second while the Events tab is open (countdowns).
     Tick,
@@ -375,23 +381,7 @@ impl App {
                     return self.update(Message::Select(first));
                 }
             }
-            Message::IconLoaded(id, icon) => {
-                let is_selected = self.selected.as_ref() == Some(&id);
-                let is_hovered = self.hover.as_ref().is_some_and(|(h, ..)| *h == id);
-                let in_search = self.overlay_interactive
-                    && self.results.iter().take(SEARCH_HITS).any(|r| *r == id);
-                self.icons.insert(id, icon);
-                // Resend so the overlay picks up the icon path.
-                if is_selected {
-                    self.push_selected_to_overlay();
-                }
-                if is_hovered {
-                    self.push_hover_to_overlay();
-                }
-                if in_search {
-                    self.push_search_results();
-                }
-            }
+            Message::IconLoaded(id, icon) => self.on_icon_loaded(id, icon),
             Message::ToggleOverlay
             | Message::Hotkey(hotkeys::Event::Pressed(Action::ToggleOverlay)) => {
                 self.overlay_visible = !self.overlay_visible;
@@ -435,6 +425,9 @@ impl App {
             }
             Message::FilterEventsMap(map) => self.event_map_filter = map,
             Message::SetRegion(region) => return self.set_region(region),
+            Message::SetOverlayScale(_) | Message::SetOverlayCorner(_) => {
+                self.set_overlay_setting(&message);
+            }
             Message::SetStationLevel(station, level) => {
                 self.progress
                     .get_or_insert_with(Progress::default)
@@ -458,6 +451,24 @@ impl App {
         Task::none()
     }
 
+    fn on_icon_loaded(&mut self, id: ItemId, icon: Option<Icon>) {
+        let is_selected = self.selected.as_ref() == Some(&id);
+        let is_hovered = self.hover.as_ref().is_some_and(|(h, ..)| *h == id);
+        let in_search =
+            self.overlay_interactive && self.results.iter().take(SEARCH_HITS).any(|r| *r == id);
+        self.icons.insert(id, icon);
+        // Resend so the overlay picks up the icon path.
+        if is_selected {
+            self.push_selected_to_overlay();
+        }
+        if is_hovered {
+            self.push_hover_to_overlay();
+        }
+        if in_search {
+            self.push_search_results();
+        }
+    }
+
     fn on_overlay_event(&mut self, event: overlay_link::Event) -> Task<Message> {
         match event {
             overlay_link::Event::Connected(handle) => {
@@ -468,6 +479,9 @@ impl App {
                 });
                 self.send(ToOverlay::SetInteractive {
                     interactive: self.overlay_interactive,
+                });
+                self.send(ToOverlay::Configure {
+                    settings: self.settings.overlay,
                 });
                 self.push_selected_to_overlay();
                 self.push_map_panel();
@@ -871,7 +885,7 @@ impl App {
                 iced::widget::operation::focus(crate::views::map::SEARCH_ID),
             ]),
             Tab::Events => self.refresh_events_if_stale(),
-            Tab::Progress => Task::none(),
+            Tab::Progress | Tab::Settings => Task::none(),
         }
     }
 
@@ -1285,6 +1299,19 @@ impl App {
         self.request_event_icons()
     }
 
+    /// Saves an overlay setting and applies it.
+    fn set_overlay_setting(&mut self, message: &Message) {
+        match *message {
+            Message::SetOverlayScale(scale) => self.settings.overlay.scale = scale,
+            Message::SetOverlayCorner(corner) => self.settings.overlay.corner = corner,
+            _ => return,
+        }
+        crate::store::save(&self.paths.settings(), &self.settings);
+        self.send(ToOverlay::Configure {
+            settings: self.settings.overlay,
+        });
+    }
+
     /// Saves the player's server region and reloads the schedule for it.
     fn set_region(&mut self, region: String) -> Task<Message> {
         self.settings.region = Some(region);
@@ -1335,6 +1362,9 @@ impl App {
             Tab::Events => self.view_events(),
             Tab::Map => self.view_map(),
             Tab::Progress => self.view_progress(),
+            Tab::Settings => {
+                crate::views::settings::view(self.settings.overlay, self.settings.region.as_deref())
+            }
             Tab::Items => self.view_catalog_or_status(),
         };
         column![self.view_top_bar(), body, self.view_footer()].into()
@@ -1534,24 +1564,24 @@ impl App {
             ("Map", Tab::Map),
             ("Events", Tab::Events),
             ("Progress", Tab::Progress),
+            ("Settings", Tab::Settings),
         ]
         .into_iter()
         .fold(row![].spacing(4), |r, (label, tab)| {
             r.push(tab_button(label, self.tab == tab, Message::SetTab(tab)))
         });
-        let middle: Element<'_, Message> =
-            if matches!(self.tab, Tab::Home | Tab::Events | Tab::Map | Tab::Progress) {
-                Space::new().width(Length::Fill).into()
-            } else {
-                text_input("Search items…", &self.query)
-                    .id(SEARCH_ID)
-                    .on_input(Message::QueryChanged)
-                    .on_submit(Message::SelectFirst)
-                    .padding([8, 12])
-                    .size(15)
-                    .width(Length::Fill)
-                    .into()
-            };
+        let middle: Element<'_, Message> = if self.tab == Tab::Items {
+            text_input("Search items…", &self.query)
+                .id(SEARCH_ID)
+                .on_input(Message::QueryChanged)
+                .on_submit(Message::SelectFirst)
+                .padding([8, 12])
+                .size(15)
+                .width(Length::Fill)
+                .into()
+        } else {
+            Space::new().width(Length::Fill).into()
+        };
         let bar = row![
             text("ARClens").size(20).font(BOLD),
             tabs,

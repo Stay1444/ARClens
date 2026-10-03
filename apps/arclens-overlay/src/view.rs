@@ -40,27 +40,44 @@ pub fn view(state: &Overlay) -> Element<'_, Message> {
 
     // The badge is always drawn while visible, so "is the overlay on screen
     // at all?" can be answered at a glance, even with nothing selected.
-    let mut panel = column![status_badge(state)]
-        .spacing(8)
-        .align_x(iced::Alignment::End);
-    if let Some(shown) = &state.item {
-        panel = panel.push(item_card(&ItemCard {
+    let corner = state.settings.corner;
+    let card = state.item.as_ref().map(|shown| {
+        item_card(&ItemCard {
             item: &shown.item,
             advice: shown.advice.clone(),
             icon: shown.icon.as_ref(),
             recycle_names: shown.recycle_names.clone(),
             size: CardSize::Compact,
-        }));
+        })
+    });
+    // The badge stays on the screen's edge, the card towards the middle.
+    let panel = if corner.is_top() {
+        column![status_badge(state)].push(card)
+    } else {
+        column![].push(card).push(status_badge(state))
     }
+    .spacing(8)
+    .align_x(if corner.is_left() {
+        iced::Alignment::Start
+    } else {
+        iced::Alignment::End
+    });
+    let placed = container(panel)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .padding(24);
+    let placed = if corner.is_left() {
+        placed.align_left(Length::Fill)
+    } else {
+        placed.align_right(Length::Fill)
+    };
+    let placed = if corner.is_top() {
+        placed.align_top(Length::Fill)
+    } else {
+        placed.align_bottom(Length::Fill)
+    };
 
-    stack![
-        container(panel)
-            .width(Length::Fill)
-            .align_right(Length::Fill)
-            .padding(24),
-        hover,
-    ]
-    .into()
+    stack![placed, hover].into()
 }
 
 /// Gap between the game's tooltip and our card, in logical pixels.

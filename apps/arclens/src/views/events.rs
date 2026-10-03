@@ -121,7 +121,7 @@ pub fn view<'a>(page: &EventsView<'a>) -> Element<'a, Message> {
 }
 
 /// The player's server region; times differ per region.
-fn region_pills<'a>(chosen: Option<&str>) -> Element<'a, Message> {
+pub(crate) fn region_pills<'a>(chosen: Option<&str>) -> Element<'a, Message> {
     arclens_data::metaforge::REGIONS
         .iter()
         .fold(row![].spacing(6), |r, &(id, name)| {
@@ -205,7 +205,7 @@ fn map_pills<'a>(events: &'a [ScheduledEvent], selected: Option<&'a str>) -> Ele
         .into()
 }
 
-fn pill(label: &str, active: bool, on_press: Message) -> Element<'_, Message> {
+pub(crate) fn pill(label: &str, active: bool, on_press: Message) -> Element<'_, Message> {
     button(text(label).size(13))
         .padding([5, 12])
         .on_press(on_press)

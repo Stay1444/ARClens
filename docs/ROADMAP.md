@@ -35,10 +35,14 @@ green CI.
       card (`PickItem`), and the overlay is shown if it was hidden
       (`docs/assets/overlay-search.png`, headless with wtype). Unverified
       on KDE and Windows.
-- [ ] Overlay position and scale settings (anchor corner, per-monitor
-      `StartMode::TargetScreen`).
-- [ ] Settings file (`$XDG_CONFIG_HOME/arclens/config.toml`): data refresh
-      interval, overlay corner, opacity.
+- [x] **Overlay size and card corner** (2026-10-03): a Settings tab in the
+      app (`docs/assets/settings.png`) sets the overlay's scale (80–150 %,
+      applied as iced's scale factor, input regions scaled to match) and
+      the corner of the pinned item card. Saved in `settings.json` and sent
+      on connect and on change (`Configure`, protocol v13). The overlay
+      already opens on the captured monitor. Verified headlessly at 125 %;
+      **unverified** on Windows, where iced reports sizes after the scale.
+- [ ] More settings: data refresh interval, overlay opacity.
 - [x] Test on KDE Plasma 6 Wayland over ARC Raiders with
       `PROTON_ENABLE_WAYLAND=1` (works, 2026-10-03).
 - [ ] Same test with Proton via XWayland (the default). Record the results in

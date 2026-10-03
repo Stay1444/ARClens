@@ -42,6 +42,7 @@ pub fn run() -> anyhow::Result<()> {
     )
     .title(|_: &Overlay, _| String::from("ARClens overlay"))
     .style(crate::style)
+    .scale_factor(crate::scale_factor)
     .subscription(crate::subscription)
     .run()?;
     Ok(())
@@ -69,6 +70,12 @@ pub fn sync_surface(state: &mut Overlay) -> Task<Message> {
     state.surface = Some(id);
     tracing::debug!("opening overlay window");
     opened.map(|id| Message::Shell(ShellMessage::Opened(id)))
+}
+
+/// The window's size in system logical pixels, from a resize event:
+/// iced reports it in layout pixels, after the app's scale.
+pub fn surface_size(reported: Size, scale: f32) -> Size {
+    reported * scale
 }
 
 /// Click-through everywhere, except over the panel (see `Cursor`) or
