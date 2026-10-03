@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 /// Everything fetched from a [`crate::Provider`], plus where and when it came from.
 /// Bump when the catalogue's content or meaning changes (new fields filled by
 /// the loader), so caches written by older versions are rebuilt.
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Catalog {
@@ -24,6 +24,11 @@ pub struct Catalog {
     /// Workshop stations, for the progress editor.
     #[serde(default)]
     pub stations: Vec<arclens_core::Station>,
+    /// Quests and projects, for the progress editor.
+    #[serde(default)]
+    pub quests: Vec<arclens_core::Quest>,
+    #[serde(default)]
+    pub projects: Vec<arclens_core::Project>,
     /// Map-condition icon URLs by [`crate::event_key`].
     #[serde(default)]
     pub event_icons: BTreeMap<String, String>,
@@ -40,6 +45,8 @@ impl Catalog {
             items,
             markers,
             stations: Vec::new(),
+            quests: Vec::new(),
+            projects: Vec::new(),
             event_icons: BTreeMap::new(),
             index: HashMap::new(),
         };
@@ -50,6 +57,17 @@ impl Catalog {
     #[must_use]
     pub fn with_stations(mut self, stations: Vec<arclens_core::Station>) -> Self {
         self.stations = stations;
+        self
+    }
+
+    #[must_use]
+    pub fn with_quests_and_projects(
+        mut self,
+        quests: Vec<arclens_core::Quest>,
+        projects: Vec<arclens_core::Project>,
+    ) -> Self {
+        self.quests = quests;
+        self.projects = projects;
         self
     }
 

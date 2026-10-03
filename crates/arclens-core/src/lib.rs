@@ -21,4 +21,4 @@ pub use map::{
     MapId, MapPoint, Marker, MarkerFilter, PointPair, Transform, humanize, marker_counts,
 };
 pub use presets::{Preset, PresetBook};
-pub use progress::{Progress, Station};
+pub use progress::{Progress, Project, Quest, Station};

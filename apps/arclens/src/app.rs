@@ -241,6 +241,8 @@ pub enum Message {
     ShowAllMarkers,
     HideAllMarkers,
     SetStationLevel(String, u32),
+    SetQuestDone(String, bool),
+    SetProjectPhases(String, u32),
     SetProgressSection(crate::views::progress::Section),
     /// Every 30 s while the main-menu card is up.
     RefreshMenuCard,
@@ -434,6 +436,9 @@ impl App {
                     .stations
                     .insert(station, level);
                 self.progress_changed();
+            }
+            Message::SetQuestDone(..) | Message::SetProjectPhases(..) => {
+                self.set_quest_or_project(message);
             }
             Message::SetProgressSection(section) => self.progress_section = section,
             Message::RefreshMenuCard => self.push_menu_card(),
@@ -777,6 +782,23 @@ impl App {
             .map(|load| Task::perform(load, |(id, icon)| Message::IconLoaded(id, icon)))
             .collect();
         Task::batch(loads)
+    }
+
+    fn set_quest_or_project(&mut self, message: Message) {
+        let Load::Ready(catalog) = &self.catalog else {
+            return;
+        };
+        let progress = self.progress.get_or_insert_with(Progress::default);
+        match message {
+            Message::SetQuestDone(quest, done) => {
+                progress.set_quest_done(&quest, done, &catalog.quests);
+            }
+            Message::SetProjectPhases(project, phases) => {
+                progress.projects.insert(project, phases);
+            }
+            _ => return,
+        }
+        self.progress_changed();
     }
 
     fn progress_changed(&self) {
@@ -1709,6 +1731,8 @@ impl App {
         crate::views::progress::view(&crate::views::progress::ProgressView {
             section: self.progress_section,
             stations: &catalog.stations,
+            quests: &catalog.quests,
+            projects: &catalog.projects,
             progress: self.progress.as_ref(),
         })
     }

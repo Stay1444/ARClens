@@ -16,7 +16,9 @@
 //! [RaidTheory/arcraiders-data]: https://github.com/RaidTheory/arcraiders-data
 
 use crate::{Catalog, Error};
-use arclens_core::{Item, ItemId, ItemQuantity, Rarity, Requirement, RequirementKind, Station};
+use arclens_core::{
+    Item, ItemId, ItemQuantity, Project, Quest, Rarity, Requirement, RequirementKind, Station,
+};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -48,7 +50,7 @@ impl RaidTheoryDir {
         items.sort_by(|a, b| a.id.cmp(&b.id));
 
         let (mut stations, mut requirements) = self.stations()?;
-        self.quests_and_projects(&mut requirements)?;
+        let (quests, projects) = self.quests_and_projects(&mut requirements)?;
         let mut ingredient_of = ingredient_map(&items, &recipes);
 
         for item in &mut items {
@@ -65,6 +67,7 @@ impl RaidTheoryDir {
         stations.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(Catalog::new(SOURCE, items, Vec::new())
             .with_stations(stations)
+            .with_quests_and_projects(quests, projects)
             .with_event_icons(self.event_icons()?))
     }
 
@@ -136,9 +139,13 @@ impl RaidTheoryDir {
         Ok((stations, requirements))
     }
 
-    /// Adds quest and project requirements to `requirements`.
-    fn quests_and_projects(&self, requirements: &mut Requirements) -> Result<(), Error> {
-        let mut push = |item: &str, kind, name: String, quantity| {
+    /// Adds quest and project requirements to `requirements`, and lists
+    /// the quests and (enabled) projects for the progress editor.
+    fn quests_and_projects(
+        &self,
+        requirements: &mut Requirements,
+    ) -> Result<(Vec<Quest>, Vec<Project>), Error> {
+        let mut push = |item: &str, kind, name: String, quantity, id: &str, level| {
             requirements
                 .entry(ItemId::new(item))
                 .or_default()
@@ -146,42 +153,104 @@ impl RaidTheoryDir {
                     kind,
                     name,
                     quantity,
-                    station: None,
-                    level: None,
+                    station: Some(id.to_owned()),
+                    level,
                 });
         };
 
+        let mut quests = Vec::new();
         for quest in read_dir_json::<RawQuest>(&self.root.join("quests"))? {
             let name = quest.name.resolve();
-            for req in quest.required_item_ids {
+            for req in &quest.required_item_ids {
                 push(
                     &req.item_id,
                     RequirementKind::Quest,
                     name.clone(),
                     req.quantity,
+                    &quest.id,
+                    None,
                 );
             }
+            quests.push(Quest {
+                needs_items: !quest.required_item_ids.is_empty(),
+                id: quest.id,
+                name,
+                trader: quest.trader,
+                previous: quest.previous_quest_ids,
+            });
         }
+        // Per trader, in the order the game hands them out.
+        let depth = quest_depths(&quests);
+        quests.sort_by(|a, b| {
+            (&a.trader, depth.get(&a.id), &a.name).cmp(&(&b.trader, depth.get(&b.id), &b.name))
+        });
 
+        let mut projects = Vec::new();
         let projects_path = self.root.join("projects.json");
         if projects_path.exists() {
-            let projects: Vec<RawProject> = read_json(&projects_path)?;
-            for project in projects.into_iter().filter(|p| !p.disabled) {
+            let raw: Vec<RawProject> = read_json(&projects_path)?;
+            for project in raw.into_iter().filter(|p| !p.disabled) {
                 let project_name = project.name.resolve();
-                for phase in project.phases {
+                let mut phases = Vec::new();
+                // Phases are listed in order; their number is their place.
+                for (phase, number) in project.phases.into_iter().zip(1u32..) {
+                    let phase_name = phase.name.resolve();
                     for req in phase.requirement_item_ids {
                         push(
                             &req.item_id,
                             RequirementKind::Project,
-                            format!("{project_name}: {}", phase.name.resolve()),
+                            format!("{project_name}: {phase_name}"),
                             req.quantity,
+                            &project.id,
+                            Some(number),
                         );
                     }
+                    phases.push(phase_name);
                 }
+                projects.push(Project {
+                    id: project.id,
+                    name: project_name,
+                    phases,
+                });
             }
         }
-        Ok(())
+        Ok((quests, projects))
     }
+}
+
+/// How many quests come before each one (its longest chain of
+/// prerequisites). Cycles, which the data shouldn't have, are cut.
+fn quest_depths(quests: &[Quest]) -> HashMap<String, u32> {
+    fn depth<'a>(
+        id: &'a str,
+        by_id: &HashMap<&'a str, &'a Quest>,
+        memo: &mut HashMap<String, u32>,
+        visiting: &mut Vec<&'a str>,
+    ) -> u32 {
+        if let Some(&d) = memo.get(id) {
+            return d;
+        }
+        if visiting.contains(&id) {
+            return 0;
+        }
+        visiting.push(id);
+        let d = by_id.get(id).map_or(0, |q| {
+            q.previous
+                .iter()
+                .map(|p| depth(p, by_id, memo, visiting) + 1)
+                .max()
+                .unwrap_or(0)
+        });
+        visiting.pop();
+        memo.insert(id.to_owned(), d);
+        d
+    }
+    let by_id: HashMap<&str, &Quest> = quests.iter().map(|q| (q.id.as_str(), q)).collect();
+    let mut memo = HashMap::new();
+    for quest in quests {
+        depth(&quest.id, &by_id, &mut memo, &mut Vec::new());
+    }
+    memo
 }
 
 type Requirements = HashMap<ItemId, Vec<Requirement>>;
@@ -377,7 +446,12 @@ struct RawStationLevel {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RawQuest {
+    id: String,
     name: Localized,
+    #[serde(default)]
+    trader: String,
+    #[serde(default)]
+    previous_quest_ids: Vec<String>,
     #[serde(default)]
     required_item_ids: Vec<RawItemQuantity>,
 }
@@ -385,6 +459,7 @@ struct RawQuest {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RawProject {
+    id: String,
     name: Localized,
     #[serde(default)]
     disabled: bool,
@@ -419,6 +494,62 @@ mod tests {
         );
         assert!(catalog.event_icon("cold snap").is_some());
         assert_eq!(catalog.event_icon("No Icon"), None);
+    }
+
+    #[test]
+    fn quest_depth_follows_the_longest_chain() {
+        let quest = |id: &str, previous: &[&str]| Quest {
+            id: id.into(),
+            name: id.into(),
+            trader: String::new(),
+            previous: previous.iter().map(|&p| p.into()).collect(),
+            needs_items: false,
+        };
+        let quests = [
+            quest("a", &[]),
+            quest("b", &["a"]),
+            quest("c", &["a", "b"]),
+            quest("loop1", &["loop2"]),
+            quest("loop2", &["loop1"]),
+        ];
+        let depths = quest_depths(&quests);
+        assert_eq!((depths["a"], depths["b"], depths["c"]), (0, 1, 2));
+        assert!(depths["loop1"] <= 2 && depths["loop2"] <= 2);
+    }
+
+    #[test]
+    fn lists_quests_and_enabled_projects_with_ids_on_requirements() {
+        let catalog = fixture();
+        assert_eq!(catalog.quests.len(), 1);
+        assert_eq!(catalog.quests[0].id, "wired_up");
+        assert_eq!(catalog.quests[0].trader, "Shani");
+        assert!(catalog.quests[0].needs_items);
+        assert_eq!(catalog.projects.len(), 1);
+        assert_eq!(catalog.projects[0].phases, ["Foundation"]);
+
+        let wires = catalog.item(&ItemId::new("wires")).unwrap();
+        let quest = wires
+            .required_for
+            .iter()
+            .find(|r| r.kind == RequirementKind::Quest)
+            .unwrap();
+        assert_eq!(quest.station.as_deref(), Some("wired_up"));
+        let project = wires
+            .required_for
+            .iter()
+            .find(|r| r.kind == RequirementKind::Project)
+            .unwrap();
+        assert_eq!(
+            (project.station.as_deref(), project.level),
+            (Some("expedition"), Some(1))
+        );
+
+        // Once both are done, wires are no longer needed for them.
+        let mut progress = arclens_core::Progress::default();
+        progress.quests_done.insert("wired_up".into());
+        progress.projects.insert("expedition".into(), 1);
+        assert!(!progress.needs(quest));
+        assert!(!progress.needs(project));
     }
 
     #[test]

@@ -89,8 +89,15 @@ green CI.
       verified headlessly on a synthetic frame and against all fixtures.
 - [ ] Workshop overview tiles (roman numerals under each station) for
       autofill without opening each station; needs fixture frames.
-- [ ] More progress sections: projects, expeditions, quests (they still
-      always count as needed).
+- [x] **Quests and projects on the Progress page** (2026-10-03): tick
+      finished quests, grouped per trader in chain order (ticking one ticks
+      the quests before it, unticking clears the ones after), and step
+      through delivered project phases, expeditions included
+      (`docs/assets/progress-quests.png`). Items asked for by finished
+      quests or phases stop counting as reasons to keep. Requirements now
+      carry the quest or project id (catalogue schema 4).
+- [ ] Autofill quests and project phases from the game's screens (needs
+      fixture frames of the quest log and project pages).
 
 ## M2: Maps and timers
 

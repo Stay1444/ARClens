@@ -88,9 +88,11 @@ pub struct Requirement {
     /// Human-readable name of the quest / upgrade / project.
     pub name: String,
     pub quantity: u32,
-    /// For workshop upgrades: which station (id) and the level it unlocks.
+    /// What it is for, by id: the station of a workshop upgrade, the
+    /// quest, or the project.
     #[serde(default)]
     pub station: Option<String>,
+    /// The level a workshop upgrade unlocks, or a project's phase (from 1).
     #[serde(default)]
     pub level: Option<u32>,
 }

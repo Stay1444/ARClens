@@ -1,11 +1,11 @@
 //! The Progress tab: where the player is in the game, so advice knows
-//! what still matters. Organised in sections; the workshop is the first,
-//! and others (projects, expeditions, quests) slot in as more sections.
+//! what still matters. One section per part of the game's progression:
+//! workshop levels, quests, and projects (expeditions among them).
 
 use crate::app::Message;
-use arclens_core::{Progress, Station};
+use arclens_core::{Progress, Project, Quest, Station};
 use arclens_ui::palette::{self, with_alpha};
-use iced::widget::{Space, button, column, container, row, scrollable, text};
+use iced::widget::{Space, button, checkbox, column, container, row, scrollable, text};
 use iced::{Alignment, Border, Element, Font, Length, font};
 
 const BOLD: Font = Font {
@@ -18,14 +18,18 @@ const BOLD: Font = Font {
 pub enum Section {
     #[default]
     Workshop,
+    Quests,
+    Projects,
 }
 
 impl Section {
-    pub const ALL: [Self; 1] = [Self::Workshop];
+    pub const ALL: [Self; 3] = [Self::Workshop, Self::Quests, Self::Projects];
 
     fn title(self) -> &'static str {
         match self {
             Self::Workshop => "Workshop",
+            Self::Quests => "Quests",
+            Self::Projects => "Projects",
         }
     }
 
@@ -38,6 +42,22 @@ impl Section {
                 });
                 format!("{built} of {total} levels")
             }
+            Self::Quests => {
+                let done = page
+                    .quests
+                    .iter()
+                    .filter(|q| page.progress.is_some_and(|p| p.quest_done(&q.id)))
+                    .count();
+                format!("{done} of {} done", page.quests.len())
+            }
+            Self::Projects => {
+                let (done, total) = page.projects.iter().fold((0, 0), |(d, t), project| {
+                    let phases = u32::try_from(project.phases.len()).unwrap_or(u32::MAX);
+                    let done = page.progress.map_or(0, |p| p.phases_done(&project.id));
+                    (d + done.min(phases), t + phases)
+                });
+                format!("{done} of {total} phases")
+            }
         }
     }
 }
@@ -45,6 +65,8 @@ impl Section {
 pub struct ProgressView<'a> {
     pub section: Section,
     pub stations: &'a [Station],
+    pub quests: &'a [Quest],
+    pub projects: &'a [Project],
     /// `None`: never set.
     pub progress: Option<&'a Progress>,
 }
@@ -59,6 +81,8 @@ pub fn view<'a>(page: &ProgressView<'a>) -> Element<'a, Message> {
         .width(220);
     let body = match page.section {
         Section::Workshop => workshop(page),
+        Section::Quests => quests(page),
+        Section::Projects => projects(page),
     };
     row![
         container(sections).padding(24),
@@ -165,6 +189,113 @@ fn workshop<'a>(page: &ProgressView<'a>) -> Element<'a, Message> {
         ]);
     }
     col.into()
+}
+
+/// Quests per trader, in the order the game gives them. Ticking one also
+/// ticks the quests before it; unticking unticks the ones after.
+fn quests<'a>(page: &ProgressView<'a>) -> Element<'a, Message> {
+    let explainer = text(
+        "Tick the quests you've finished: items they asked for stop counting as reasons \
+         to keep. Ticking a quest also ticks the ones before it.",
+    )
+    .size(13)
+    .color(palette::TEXT_MUTED);
+    let mut groups = column![].spacing(20);
+    let mut traders: Vec<&str> = page.quests.iter().map(|q| q.trader.as_str()).collect();
+    traders.dedup();
+    for trader in traders {
+        let list = page.quests.iter().filter(|q| q.trader == trader).fold(
+            column![].spacing(6),
+            |col, quest| {
+                let done = page.progress.is_some_and(|p| p.quest_done(&quest.id));
+                let id = quest.id.clone();
+                let mut line = row![
+                    checkbox(done)
+                        .label(quest.name.as_str())
+                        .on_toggle(move |done| Message::SetQuestDone(id.clone(), done))
+                        .size(16)
+                        .text_size(14),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center);
+                if quest.needs_items {
+                    line = line.push(tag("needs items"));
+                }
+                col.push(line)
+            },
+        );
+        let title = if trader.is_empty() { "Other" } else { trader };
+        groups = groups.push(column![text(title).size(16).font(BOLD), list].spacing(8));
+    }
+    column![text("Quests").size(24).font(BOLD), explainer, groups,]
+        .spacing(16)
+        .max_width(640)
+        .into()
+}
+
+/// Projects and expeditions, one phase stepper each.
+fn projects<'a>(page: &ProgressView<'a>) -> Element<'a, Message> {
+    let explainer = text(
+        "Set how many phases of each project you've delivered: items for finished \
+         phases stop counting as reasons to keep.",
+    )
+    .size(13)
+    .color(palette::TEXT_MUTED);
+    let rows = page
+        .projects
+        .iter()
+        .fold(column![].spacing(14), |col, project| {
+            let total = u32::try_from(project.phases.len()).unwrap_or(u32::MAX);
+            let done = page
+                .progress
+                .map_or(0, |p| p.phases_done(&project.id))
+                .min(total);
+            let step = |to: u32| Message::SetProjectPhases(project.id.clone(), to);
+            let next = usize::try_from(done)
+                .ok()
+                .and_then(|i| project.phases.get(i))
+                .map_or_else(|| "All phases done".to_owned(), |p| format!("Next: {p}"));
+            col.push(
+                row![
+                    column![
+                        text(&project.name).size(15),
+                        text(next).size(12).color(palette::TEXT_MUTED),
+                    ]
+                    .spacing(2)
+                    .width(Length::Fill),
+                    button(text("−").size(15))
+                        .on_press_maybe((done > 0).then(|| step(done - 1)))
+                        .padding([2, 12]),
+                    text(format!("{done} / {total}"))
+                        .size(15)
+                        .width(70)
+                        .align_x(Alignment::Center),
+                    button(text("+").size(15))
+                        .on_press_maybe((done < total).then(|| step(done + 1)))
+                        .padding([2, 12]),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
+            )
+        });
+    column![text("Projects").size(24).font(BOLD), explainer, rows]
+        .spacing(16)
+        .max_width(640)
+        .into()
+}
+
+fn tag(label: &str) -> Element<'_, Message> {
+    container(text(label).size(10).color(palette::TEXT_MUTED))
+        .padding([1, 6])
+        .style(|_| container::Style {
+            border: Border {
+                color: palette::BORDER,
+                width: 1.0,
+                radius: 4.0.into(),
+            },
+            ..container::Style::default()
+        })
+        .into()
 }
 
 fn section_button<'a>(section: Section, active: bool, summary: String) -> Element<'a, Message> {
