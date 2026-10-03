@@ -16,7 +16,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 
-pub const PROTOCOL_VERSION: u32 = 8;
+pub const PROTOCOL_VERSION: u32 = 9;
 
 /// Default socket path: `$XDG_RUNTIME_DIR/arclens.sock`, falling back to the
 /// temp dir when the variable is unset (non-systemd systems).
@@ -87,6 +87,16 @@ pub enum ToOverlay {
         /// not in `markers`).
         #[serde(default)]
         areas: Vec<arclens_core::MarkerArea>,
+        /// Draw only inside this part of the screen (the map's viewport).
+        #[serde(default)]
+        clip: Option<NormRect>,
+    },
+    /// The map panned or zoomed: same markers, new transform (sent at
+    /// capture rate while the map moves).
+    MoveMarkers {
+        transform: Transform,
+        #[serde(default)]
+        clip: Option<NormRect>,
     },
     ClearMarkers,
     /// The in-game map is open: show the marker filter panel (clickable;

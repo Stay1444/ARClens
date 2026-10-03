@@ -104,15 +104,46 @@ struct Settings {
     region: Option<String>,
 }
 
-/// The open in-game map's view, as last read from the screen.
+/// The open in-game map's view: where the last label read put it, and how
+/// the map moved since.
 #[derive(Debug, Clone, Default)]
 struct GameMapView {
-    /// Place names read on screen.
-    labels: Vec<arclens_data::anchors::ScreenLabel>,
-    /// Size (pixels) of the frame they were read from.
+    /// Map → normalised screen on the frame of the last label read: the
+    /// fit of its place names, else the previous view moved along.
+    base: Option<arclens_core::Transform>,
+    /// Motion since that frame (frame pixels); `None` when lost.
+    motion: Option<arclens_vision::Motion>,
+    /// Frame size, pixels.
     frame: (f32, f32),
     /// The quest panel covers the map's left.
     quest_panel_open: bool,
+    /// The overlay has the current marker set (only the view changes).
+    markers_sent: bool,
+}
+
+impl GameMapView {
+    /// The view now: the base moved by the motion since.
+    fn current(&self) -> Option<arclens_core::Transform> {
+        Some(moved(self.base?, self.motion?, self.frame))
+    }
+}
+
+/// `view` (map → normalised screen) after the map moved by `motion`
+/// (frame pixels, on a `frame`-sized screen).
+fn moved(
+    view: arclens_core::Transform,
+    motion: arclens_vision::Motion,
+    frame: (f32, f32),
+) -> arclens_core::Transform {
+    let s = motion.scale;
+    arclens_core::Transform {
+        a: s * view.a,
+        b: s * view.b,
+        c: s * view.c,
+        d: s * view.d,
+        tx: s * view.tx + motion.dx / frame.0.max(1.0),
+        ty: s * view.ty + motion.dy / frame.1.max(1.0),
+    }
 }
 
 /// When to capture the screen for item and map detection.
@@ -401,6 +432,7 @@ impl App {
                 });
                 self.push_selected_to_overlay();
                 self.push_map_panel();
+                self.push_map_markers();
             }
             overlay_link::Event::Disconnected => self.overlay = None,
             overlay_link::Event::Message(arclens_ipc::ToApp::Search { query }) => {
@@ -534,13 +566,10 @@ impl App {
                 self.send(ToOverlay::HideMapPanel);
                 self.send(ToOverlay::ClearMarkers);
             }
-            vision::Event::MapLabels(labels, frame, quests_open) => {
-                self.game_view = GameMapView {
-                    labels,
-                    frame,
-                    quest_panel_open: quests_open,
-                };
-                self.push_map_markers();
+            vision::Event::MapLabels(read) => self.on_map_labels(&read),
+            vision::Event::MapMotion(motion) => {
+                self.game_view.motion = motion;
+                self.push_map_view();
             }
             vision::Event::Unavailable(reason) => {
                 tracing::info!(%reason, "item detection off");
@@ -831,38 +860,71 @@ impl App {
         arclens_data::metaforge::condition_on_map(map, condition).map(|(_, bit)| bit)
     }
 
-    /// Places the selected markers on the open in-game map, located from
-    /// the labels read on screen. Clears them when the view can't be
-    /// located, rather than drawing them in the wrong place.
-    fn push_map_markers(&self) {
+    /// Place names read on the open map: re-anchor the view. A read whose
+    /// names don't match carries the previous view forward by the motion
+    /// tracked between the two reads.
+    fn on_map_labels(&mut self, read: &vision::MapLabels) {
+        let fit = self
+            .map_screen
+            .and_then(|screen| screen.map)
+            .and_then(|map| {
+                arclens_data::anchors::locate_view(
+                    &read.labels,
+                    read.frame,
+                    &arclens_data::labels::labels_for(map),
+                )
+            });
+        let view = &mut self.game_view;
+        view.base = match fit {
+            Some((transform, agree)) => {
+                tracing::debug!(labels = read.labels.len(), agree, "map view located");
+                Some(transform)
+            }
+            None => view
+                .base
+                .zip(read.moved)
+                .map(|(base, motion)| moved(base, motion, read.frame)),
+        };
+        view.frame = read.frame;
+        view.quest_panel_open = read.quests_open;
+        view.motion = Some(arclens_vision::Motion::NONE);
+        self.push_map_view();
+    }
+
+    /// Moves the overlay's markers to where the map is now, sending the
+    /// marker set first if the overlay lacks it. Clears them while the view
+    /// is unknown, rather than drawing them in the wrong place.
+    fn push_map_view(&mut self) {
+        match self.game_view.current() {
+            None => {
+                if std::mem::take(&mut self.game_view.markers_sent) {
+                    self.send(ToOverlay::ClearMarkers);
+                }
+            }
+            Some(transform) if self.game_view.markers_sent => {
+                self.send(ToOverlay::MoveMarkers {
+                    transform,
+                    clip: Some(self.map_clip()),
+                });
+            }
+            Some(_) => self.push_map_markers(),
+        }
+    }
+
+    /// Sends the open map's selected markers to the overlay, placed at the
+    /// current view. All of them: the overlay draws those in the viewport,
+    /// so a pan only needs a new transform.
+    fn push_map_markers(&mut self) {
+        self.game_view.markers_sent = false;
         let Some(MapScreen { map: Some(map) }) = self.map_screen else {
             return;
         };
         let Some(Load::Ready(markers)) = self.markers.get(map) else {
             return;
         };
-        let Some((transform, agree)) = arclens_data::anchors::locate_view(
-            &self.game_view.labels,
-            self.game_view.frame,
-            &arclens_data::labels::labels_for(map),
-        ) else {
+        let Some(transform) = self.game_view.current() else {
             self.send(ToOverlay::ClearMarkers);
             return;
-        };
-        tracing::debug!(
-            labels = self.game_view.labels.len(),
-            agree,
-            "map view located"
-        );
-        let in_view = |p: arclens_core::MapPoint| {
-            let (x, y) = transform.apply((p.x, p.y));
-            let left = if self.game_view.quest_panel_open {
-                MAP_VIEWPORT_LEFT_WITH_QUESTS
-            } else {
-                MAP_VIEWPORT[0]
-            };
-            (left..=MAP_VIEWPORT[2]).contains(&x)
-                && (MAP_VIEWPORT[1]..=MAP_VIEWPORT[3]).contains(&y)
         };
         let bit = self.condition_bit(map);
         let enabled = markers.iter().enumerate().filter(|(_, m)| {
@@ -872,24 +934,32 @@ impl App {
                 && !(m.label.is_some() && m.category.to_lowercase().contains("label"))
         });
         let layout = arclens_core::layout(markers, enabled.map(|(i, _)| i));
-        let shown: Vec<arclens_core::Marker> = layout
-            .singles
-            .iter()
-            .map(|&i| &markers[i])
-            .filter(|m| in_view(m.position))
-            .cloned()
-            .collect();
-        let areas = layout
-            .areas
-            .into_iter()
-            .filter(|a| in_view(a.center))
-            .collect();
+        let shown: Vec<arclens_core::Marker> =
+            layout.singles.iter().map(|&i| markers[i].clone()).collect();
         self.send(ToOverlay::ShowMarkers {
             map: arclens_core::MapId::new(map),
             markers: shown,
             transform,
-            areas,
+            areas: layout.areas,
+            clip: Some(self.map_clip()),
         });
+        self.game_view.markers_sent = true;
+    }
+
+    /// The in-game map's viewport, normalised: markers outside it would sit
+    /// on the game's side panels.
+    fn map_clip(&self) -> arclens_ipc::NormRect {
+        let left = if self.game_view.quest_panel_open {
+            MAP_VIEWPORT_LEFT_WITH_QUESTS
+        } else {
+            MAP_VIEWPORT[0]
+        };
+        arclens_ipc::NormRect {
+            x: left,
+            y: MAP_VIEWPORT[1],
+            width: MAP_VIEWPORT[2] - left,
+            height: MAP_VIEWPORT[3] - MAP_VIEWPORT[1],
+        }
     }
 
     /// Rebuilds the Map tab's derived data after markers, map, query or

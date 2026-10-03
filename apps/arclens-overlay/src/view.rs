@@ -132,33 +132,56 @@ impl canvas::Program<Message> for MarkerLayer<'_> {
         let Some(transform) = self.state.transform else {
             return Vec::new();
         };
-        // Cached: redrawn only when the markers or the surface change.
+        // The map's viewport, else the whole surface.
+        let clip = self
+            .state
+            .clip
+            .map_or(Rectangle::new(Point::ORIGIN, bounds.size()), |c| {
+                Rectangle {
+                    x: c.x * bounds.width,
+                    y: c.y * bounds.height,
+                    width: c.width * bounds.width,
+                    height: c.height * bounds.height,
+                }
+            });
+        // Cached: redrawn only when the markers, the view or the surface
+        // change.
         let geometry = self
             .state
             .marker_cache
             .draw(renderer, bounds.size(), |frame| {
-                for area in &self.state.areas {
-                    arclens_ui::markers::draw_area(
-                        frame,
-                        area,
-                        |p| {
-                            let (nx, ny) = transform.apply((p.x, p.y));
-                            Point::new(nx * bounds.width, ny * bounds.height)
-                        },
-                        BADGE,
-                    );
-                }
-                for marker in &self.state.markers {
-                    // The transform targets the screen normalised to 0..=1.
-                    let (nx, ny) = transform.apply((marker.position.x, marker.position.y));
-                    let at = Point::new(nx * bounds.width, ny * bounds.height);
-                    if !(0.0..=bounds.width).contains(&at.x)
-                        || !(0.0..=bounds.height).contains(&at.y)
-                    {
-                        continue;
+                frame.with_clip(clip, |frame| {
+                    // Inside `with_clip` the origin is the clip's corner.
+                    let offset = clip.position();
+                    let to_frame = |nx: f32, ny: f32| {
+                        Point::new(nx * bounds.width - offset.x, ny * bounds.height - offset.y)
+                    };
+                    for area in &self.state.areas {
+                        let (cx, cy) = transform.apply((area.center.x, area.center.y));
+                        if !clip.contains(Point::new(cx * bounds.width, cy * bounds.height)) {
+                            continue;
+                        }
+                        arclens_ui::markers::draw_area(
+                            frame,
+                            area,
+                            |p| {
+                                let (nx, ny) = transform.apply((p.x, p.y));
+                                to_frame(nx, ny)
+                            },
+                            BADGE,
+                        );
                     }
-                    draw_badge(frame, marker, at);
-                }
+                    for marker in &self.state.markers {
+                        // The transform targets the screen normalised to 0..=1.
+                        let (nx, ny) = transform.apply((marker.position.x, marker.position.y));
+                        let at = Point::new(nx * bounds.width, ny * bounds.height);
+                        // Partly outside is fine (clipped); wholly outside is skipped.
+                        if !clip.expand(BADGE).contains(at) {
+                            continue;
+                        }
+                        draw_badge(frame, marker, to_frame(nx, ny));
+                    }
+                });
             });
         vec![geometry]
     }

@@ -106,6 +106,8 @@ pub struct Overlay {
     markers: Vec<Marker>,
     areas: Vec<arclens_core::MarkerArea>,
     transform: Option<Transform>,
+    /// Where markers may be drawn (the game's map viewport).
+    clip: Option<arclens_ipc::NormRect>,
     /// Drawn markers, rebuilt only when they or the surface change.
     marker_cache: iced::widget::canvas::Cache,
     /// Map-screen panel (conditions + marker filter), the clickable part.
@@ -314,11 +316,18 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
             markers,
             transform,
             areas,
+            clip,
             ..
         } => {
             state.markers = markers;
             state.areas = areas;
             state.transform = Some(transform);
+            state.clip = clip;
+            state.marker_cache.clear();
+        }
+        ToOverlay::MoveMarkers { transform, clip } => {
+            state.transform = Some(transform);
+            state.clip = clip;
             state.marker_cache.clear();
         }
         ToOverlay::ShowHover {
@@ -345,6 +354,7 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
             state.markers.clear();
             state.areas.clear();
             state.transform = None;
+            state.clip = None;
             state.marker_cache.clear();
         }
         ToOverlay::ShowMapPanel { panel } => {

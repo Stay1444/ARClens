@@ -21,6 +21,9 @@ tokio = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+arclens-vision = { workspace = true }
+anyhow = { workspace = true }
+image = { workspace = true, features = ["jpeg"] }
 
 [lints]
 workspace = true

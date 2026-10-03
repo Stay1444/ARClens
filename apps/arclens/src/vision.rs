@@ -8,7 +8,8 @@
 use crate::data;
 use crate::paths::Paths;
 use arclens_vision::{
-    Analyzer, Hover, MapHeader, NameReader, RECOGNITION_MODEL_URL, is_map_screen,
+    Analyzer, Hover, MapHeader, Motion, MotionTracker, NameReader, RECOGNITION_MODEL_URL,
+    is_map_screen,
 };
 use futures::channel::mpsc;
 use iced::Subscription;
@@ -44,14 +45,102 @@ impl MapWatch {
 
 /// Minimum time between map-label reads while the view keeps changing.
 const LABEL_INTERVAL: Duration = Duration::from_millis(250);
+/// Capture pace while the map is open: the tracker follows pans and zooms
+/// from frame to frame (20 fps).
+const MAP_INTERVAL: Duration = Duration::from_millis(50);
+/// Tracker confidence below which the motion counts as unknown.
+const MIN_CONFIDENCE: f32 = 0.06;
+/// Motion updates smaller than this (pixels anywhere on screen) aren't sent.
+const MOTION_EPSILON: f32 = 0.5;
 
-/// Tracks the open map's view so labels are only read when it changed.
+/// Follows the open map's view: motion from frame to frame (cheap, every
+/// frame) and place names (OCR, on a worker, a few times a second). The
+/// app places markers from the last names read, moved by the motion since.
 #[derive(Debug, Default)]
 struct MapView {
     fingerprint: Option<u64>,
     read_at: Option<Instant>,
-    /// The view changed since the last read.
+    /// The view changed since the last read started.
     dirty: bool,
+    tracker: MotionTracker,
+    /// Motion since the frame of the labels the app has; `None` when lost.
+    since_labels: Option<Motion>,
+    /// While a read runs: motion from the previous labels' frame to the
+    /// frame being read, and since the frame being read.
+    reading: Option<(Option<Motion>, Option<Motion>)>,
+    /// A read started before the map closed: drop its result.
+    stale_read: bool,
+    /// The motion last sent.
+    sent: Sent,
+}
+
+/// What the app was last told about the map's motion.
+#[derive(Debug, Clone, Copy, Default)]
+enum Sent {
+    /// Nothing since its labels.
+    #[default]
+    Nothing,
+    /// This motion (`None`: lost).
+    Motion(Option<Motion>),
+}
+
+/// Place names read on one map frame.
+#[derive(Debug, Clone)]
+pub struct MapLabels {
+    /// Boxes in frame pixels.
+    pub labels: Vec<arclens_data::anchors::ScreenLabel>,
+    /// Frame size, pixels.
+    pub frame: (f32, f32),
+    /// The quest panel covers the map's left.
+    pub quests_open: bool,
+    /// How the map moved from the previous `MapLabels`' frame to this one
+    /// (`None`: unknown), so a frame whose names can't be matched still
+    /// carries the view forward.
+    pub moved: Option<Motion>,
+}
+
+impl MapView {
+    /// The map closed: start over next time. A read still running belongs
+    /// to the old view.
+    fn reset(&mut self) {
+        if self.fingerprint.is_none() && self.reading.is_none() {
+            return;
+        }
+        let stale = self.reading.is_some() || self.stale_read;
+        self.tracker.reset();
+        *self = Self {
+            tracker: std::mem::take(&mut self.tracker),
+            stale_read: stale,
+            ..Self::default()
+        };
+    }
+}
+
+/// Reads map labels on its own thread so tracking never waits for OCR.
+struct LabelWorker {
+    frames: std::sync::mpsc::Sender<RgbImage>,
+    results: std::sync::mpsc::Receiver<MapLabels>,
+}
+
+impl LabelWorker {
+    fn spawn(model: &Path) -> Option<Self> {
+        let mut analyzer = NameReader::from_model_file(model).ok().map(Analyzer::new)?;
+        let (frames, frame_rx) = std::sync::mpsc::channel::<RgbImage>();
+        let (result_tx, results) = std::sync::mpsc::channel();
+        std::thread::Builder::new()
+            .name("arclens-labels".into())
+            // Ends when the vision thread drops `frames`.
+            .spawn(move || {
+                while let Ok(frame) = frame_rx.recv() {
+                    let read = read_labels(&mut analyzer, &frame);
+                    if result_tx.send(read).is_err() {
+                        return;
+                    }
+                }
+            })
+            .ok()?;
+        Some(Self { frames, results })
+    }
 }
 
 /// Directory of captured frames (PNG/JPEG) to replay instead of capturing.
@@ -72,10 +161,11 @@ pub enum Event {
     MapOpen(MapHeader),
     /// The map screen closed.
     MapClosed,
-    /// Place names read on the open map (boxes in frame pixels), the frame
-    /// size, and whether the quest panel covers the map's left. Sent when
-    /// the view changed.
-    MapLabels(Vec<arclens_data::anchors::ScreenLabel>, (f32, f32), bool),
+    /// Place names read on the open map. Sent when the view changed.
+    MapLabels(MapLabels),
+    /// How the map moved (frame pixels) since the frame of the last
+    /// `MapLabels`; `None` when tracking lost it. Sent while it moves.
+    MapMotion(Option<Motion>),
     /// Vision isn't running; why.
     Unavailable(String),
 }
@@ -114,6 +204,15 @@ impl Outbox {
         self.0.try_send(event).is_ok()
     }
 
+    /// For updates the next one supersedes: a full queue drops it.
+    fn send_lossy(&mut self, event: Event) {
+        if let Err(error) = self.0.try_send(event)
+            && error.is_disconnected()
+        {
+            tracing::debug!("UI gone");
+        }
+    }
+
     fn closed(&self) -> bool {
         self.0.is_closed()
     }
@@ -129,9 +228,11 @@ fn run(output: mpsc::Sender<Event>) {
             return;
         }
     };
-    let analyzer = ensure_model(&paths)
-        .map_err(|e| format!("{e:#}"))
-        .and_then(|model| NameReader::from_model_file(&model).map_err(|e| format!("{e:#}")));
+    let model = ensure_model(&paths).map_err(|e| format!("{e:#}"));
+    let analyzer = model
+        .as_ref()
+        .map_err(Clone::clone)
+        .and_then(|model| NameReader::from_model_file(model).map_err(|e| format!("{e:#}")));
     let mut analyzer = match analyzer {
         Ok(reader) => Analyzer::new(reader),
         Err(error) => {
@@ -161,6 +262,7 @@ fn run(output: mpsc::Sender<Event>) {
     // When the map header was last read, while the map is open.
     let mut map_watch = MapWatch::default();
     let mut map_view = MapView::default();
+    let labels = model.ok().and_then(|model| LabelWorker::spawn(&model));
     while let Some(frame) = source.next_frame() {
         // Capture turned off (the UI dropped the subscription): stop, which
         // drops the source and ends the screencast session.
@@ -172,17 +274,18 @@ fn run(output: mpsc::Sender<Event>) {
             return;
         }
         if map_watch.is_open() {
-            // Labels only from frames that do show the map.
+            // Only frames that do show the map.
             if map_watch.missing_since.is_none()
-                && !watch_labels(&mut analyzer, &frame, &mut map_view, &mut |e| out.send(e))
+                && let Some(labels) = &labels
+                && !follow_map(labels, &frame, &mut map_view, &mut out)
             {
                 return;
             }
-            // Keep sampling quickly while the map is open: panning.
-            source.set_interval(FAST_INTERVAL);
+            // Sample quickly while the map is open: panning and zooming.
+            source.set_interval(MAP_INTERVAL);
             continue;
         }
-        map_view = MapView::default();
+        map_view.reset();
         let hover = match analyzer.analyze(&frame) {
             Ok(hover) => hover,
             Err(error) => {
@@ -258,33 +361,89 @@ fn watch_map(
     }
 }
 
-/// Reads the map's labels when the view changed. `false` when the UI is
-/// gone.
-fn watch_labels(
-    analyzer: &mut Analyzer,
+/// Tracks the map's motion and keeps a label read going while the view
+/// changes. `false` when the UI is gone.
+fn follow_map(
+    worker: &LabelWorker,
     frame: &RgbImage,
     view: &mut MapView,
-    send: &mut impl FnMut(Event) -> bool,
+    out: &mut Outbox,
 ) -> bool {
+    #[allow(clippy::cast_precision_loss, reason = "pixel sizes")]
+    let size = (frame.width() as f32, frame.height() as f32);
+    // Motion since the previous frame (`None`: unknown).
+    let step = match view.tracker.track(frame) {
+        Some(e) if e.confidence >= MIN_CONFIDENCE => Some(e.motion),
+        Some(e) => {
+            tracing::debug!(confidence = e.confidence, "map motion lost");
+            None
+        }
+        // First frame: nothing to compare with yet.
+        None => None,
+    };
+    let compose = |since: Option<Motion>| since.zip(step).map(|(since, step)| step.after(&since));
+    view.since_labels = compose(view.since_labels);
+    if let Some((_, since)) = &mut view.reading {
+        *since = compose(*since);
+    }
     let fingerprint = view_fingerprint(frame);
-    if view.fingerprint != Some(fingerprint) {
+    if view.fingerprint != Some(fingerprint) || step.is_none_or(|m| !m.is_still(size, 1.0)) {
         view.fingerprint = Some(fingerprint);
         view.dirty = true;
     }
-    if !view.dirty || view.read_at.is_some_and(|at| at.elapsed() < LABEL_INTERVAL) {
-        return true;
-    }
-    view.dirty = false;
-    view.read_at = Some(Instant::now());
-    let labels = match analyzer.read_map_labels(frame) {
-        Ok(labels) => labels,
-        Err(error) => {
-            tracing::warn!(error = format!("{error:#}"), "map labels unreadable");
-            return true;
+
+    // A read finished: the app gets its labels, and the motion since.
+    if let Ok(mut read) = worker.results.try_recv() {
+        if std::mem::take(&mut view.stale_read) {
+            // Started before the map closed; the view is unrelated.
+        } else if let Some((moved, since)) = view.reading.take() {
+            read.moved = moved;
+            view.since_labels = since;
+            view.sent = Sent::Nothing;
+            if !out.send(Event::MapLabels(read)) {
+                return false;
+            }
         }
+    }
+    // Start the next read when the view changed and the worker is free.
+    if view.dirty
+        && view.reading.is_none()
+        && !view.stale_read
+        && view.read_at.is_none_or(|at| at.elapsed() >= LABEL_INTERVAL)
+        && worker.frames.send(frame.clone()).is_ok()
+    {
+        view.dirty = false;
+        view.read_at = Some(Instant::now());
+        view.reading = Some((view.since_labels, Some(Motion::NONE)));
+    }
+
+    // Tell the app how far the map moved since its labels.
+    let changed = match (view.sent, view.since_labels) {
+        (Sent::Nothing, _) => true,
+        (Sent::Motion(Some(a)), Some(b)) => !Motion {
+            scale: b.scale / a.scale,
+            dx: b.dx - b.scale / a.scale * a.dx,
+            dy: b.dy - b.scale / a.scale * a.dy,
+        }
+        .is_still(size, MOTION_EPSILON),
+        (Sent::Motion(a), b) => a.is_some() != b.is_some(),
     };
+    if changed {
+        view.sent = Sent::Motion(view.since_labels);
+        // Superseded by the next one: dropped, not fatal, when the UI lags.
+        out.send_lossy(Event::MapMotion(view.since_labels));
+    }
+    true
+}
+
+/// Reads the place names on a map frame.
+fn read_labels(analyzer: &mut Analyzer, frame: &RgbImage) -> MapLabels {
     #[allow(clippy::cast_precision_loss, reason = "pixel coordinates")]
     let size = (frame.width() as f32, frame.height() as f32);
+    let labels = analyzer.read_map_labels(frame).unwrap_or_else(|error| {
+        tracing::warn!(error = format!("{error:#}"), "map labels unreadable");
+        Vec::new()
+    });
     #[allow(clippy::cast_precision_loss, reason = "pixel coordinates")]
     let labels = labels
         .into_iter()
@@ -298,11 +457,12 @@ fn watch_labels(
             ),
         })
         .collect();
-    send(Event::MapLabels(
+    MapLabels {
         labels,
-        size,
-        arclens_vision::quest_panel_open(frame),
-    ))
+        frame: size,
+        quests_open: arclens_vision::quest_panel_open(frame),
+        moved: None,
+    }
 }
 
 /// Coarse fingerprint of the map viewport: changes when the view pans or

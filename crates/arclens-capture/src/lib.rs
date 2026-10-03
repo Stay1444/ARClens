@@ -23,7 +23,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 /// Upper bound on frames requested from the compositor.
-pub const MAX_FPS: u32 = 10;
+pub const MAX_FPS: u32 = 30;
 /// Default pace while nothing interesting is on screen.
 pub const IDLE_INTERVAL: Duration = Duration::from_millis(250);
 

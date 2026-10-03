@@ -13,6 +13,7 @@ image = { workspace = true }
 ocrs = "0.13"
 rten = "0.26"
 rten-imageproc = "0.26"
+rustfft = { workspace = true }
 
 [dev-dependencies]
 image = { workspace = true, features = ["jpeg"] }

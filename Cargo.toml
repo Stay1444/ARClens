@@ -32,6 +32,7 @@ image = { version = "0.25", default-features = false, features = ["png", "webp"]
 iced_layershell = "0.19"
 nucleo-matcher = "0.3"
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2"] }
+rustfft = "6.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 strsim = "0.11"
@@ -72,6 +73,15 @@ opt-level = 3
 [profile.dev.package.zune-jpeg]
 opt-level = 3
 [profile.dev.package.image]
+opt-level = 3
+# The map tracker's FFTs.
+[profile.dev.package.rustfft]
+opt-level = 3
+[profile.dev.package.num-complex]
+opt-level = 3
+[profile.dev.package.transpose]
+opt-level = 3
+[profile.dev.package.strength_reduce]
 opt-level = 3
 
 # Full debug info for ~600 dependencies is tens of GB and slows linking;

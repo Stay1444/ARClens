@@ -192,6 +192,15 @@ green CI.
       drawn as cached icon badges. End-to-end on `dam_zoom_mid` with
       synthetic marker data: 8/8 labels agree and the badges land on the
       game's own icons (`docs/assets/overlay-map-markers.png`).
+- [x] **Pan/zoom tracking** (2026-10-03): markers follow the map at
+      capture rate (20 fps) between label reads: phase correlation with a
+      zoom search, outvoting the pointer-following place card, then
+      Gauss–Newton refinement. Measured on two recordings: while the map
+      moves, markers sit 2.3 px (median) from where they belong, versus
+      331 px before. Label OCR moved to its own thread; overlay gets
+      `MoveMarkers` (protocol v9). See `docs/research/map-tracking.md`.
+- [ ] Fix the label fit at the widest zoom (~10 % scale error on Dam with
+      only region labels).
 - [x] Map screen state is sticky: an unreadable title keeps the last
       recognised map, and the map must be gone for 1 s before it counts as
       closed (field report 2026-10-03: it flipped to "Unknown map" while
