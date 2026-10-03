@@ -23,6 +23,25 @@ const FAST_FOR: Duration = Duration::from_secs(3);
 /// How often the map header is re-read while the map is open (its clock
 /// ticks every second; the map name and condition rarely change).
 const MAP_REREAD: Duration = Duration::from_secs(5);
+/// How long the map screen must be gone before it counts as closed: a pan,
+/// a zoom animation or one odd frame must not close it.
+const MAP_CLOSE_GRACE: Duration = Duration::from_secs(1);
+
+/// Whether the map screen is open, with hysteresis.
+#[derive(Debug, Default)]
+struct MapWatch {
+    /// When the header was last read; `Some` while the map is open.
+    read_at: Option<Instant>,
+    /// When the map screen was last not seen while open.
+    missing_since: Option<Instant>,
+}
+
+impl MapWatch {
+    fn is_open(&self) -> bool {
+        self.read_at.is_some()
+    }
+}
+
 /// Minimum time between map-label reads while the view keeps changing.
 const LABEL_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -139,7 +158,7 @@ fn run(output: mpsc::Sender<Event>) {
     let mut last: Option<Hover> = None;
     let mut fast_until = Instant::now();
     // When the map header was last read, while the map is open.
-    let mut map_read: Option<Instant> = None;
+    let mut map_watch = MapWatch::default();
     let mut map_view = MapView::default();
     while let Some(frame) = source.next_frame() {
         // Capture turned off (the UI dropped the subscription): stop, which
@@ -148,11 +167,14 @@ fn run(output: mpsc::Sender<Event>) {
             tracing::info!("item detection stopped");
             return;
         }
-        if !watch_map(&analyzer, &frame, &mut map_read, &mut |e| out.send(e)) {
+        if !watch_map(&analyzer, &frame, &mut map_watch, &mut |e| out.send(e)) {
             return;
         }
-        if map_read.is_some() {
-            if !watch_labels(&mut analyzer, &frame, &mut map_view, &mut |e| out.send(e)) {
+        if map_watch.is_open() {
+            // Labels only from frames that do show the map.
+            if map_watch.missing_since.is_none()
+                && !watch_labels(&mut analyzer, &frame, &mut map_view, &mut |e| out.send(e))
+            {
                 return;
             }
             // Keep sampling quickly while the map is open: panning.
@@ -197,26 +219,41 @@ fn run(output: mpsc::Sender<Event>) {
 fn watch_map(
     analyzer: &Analyzer,
     frame: &RgbImage,
-    map_read: &mut Option<Instant>,
+    watch: &mut MapWatch,
     send: &mut impl FnMut(Event) -> bool,
 ) -> bool {
     if !is_map_screen(frame) {
-        return map_read.take().is_none() || send(Event::MapClosed);
+        if !watch.is_open() {
+            return true;
+        }
+        let since = *watch.missing_since.get_or_insert_with(Instant::now);
+        if since.elapsed() < MAP_CLOSE_GRACE {
+            return true;
+        }
+        *watch = MapWatch::default();
+        return send(Event::MapClosed);
     }
-    if map_read.is_some_and(|at| at.elapsed() < MAP_REREAD) {
+    watch.missing_since = None;
+    if watch.read_at.is_some_and(|at| at.elapsed() < MAP_REREAD) {
         return true;
     }
-    match analyzer.read_map_header(frame) {
-        Ok(Some(header)) => {
-            *map_read = Some(Instant::now());
-            send(Event::MapOpen(header))
-        }
-        Ok(None) => true,
+    let opening = !watch.is_open();
+    watch.read_at = Some(Instant::now());
+    let header = match analyzer.read_map_header(frame) {
+        Ok(header) => header,
         Err(error) => {
             tracing::warn!(error = format!("{error:#}"), "map header unreadable");
-            *map_read = Some(Instant::now());
-            true
+            None
         }
+    };
+    match header {
+        Some(header) => send(Event::MapOpen(header)),
+        // Open anyway: the app keeps the map it last recognised.
+        None if opening => send(Event::MapOpen(arclens_vision::MapHeader {
+            title: String::new(),
+            condition: None,
+        })),
+        None => true,
     }
 }
 

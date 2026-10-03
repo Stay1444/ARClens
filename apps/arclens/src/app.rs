@@ -63,12 +63,19 @@ pub struct App {
     /// the plot's cached marker layer. Rebuilt on change, not per frame.
     map_summary: crate::views::map::MapSummary,
     map_plot: iced::widget::canvas::Cache,
+    /// The in-game map last recognised; kept across map close and reopen.
+    last_map: Option<&'static str>,
     /// Labels last read on the open in-game map.
     map_labels: Vec<arclens_data::anchors::ScreenLabel>,
     /// Set while the in-game map is open.
     map_screen: Option<MapScreen>,
     /// Item currently detected under the cursor in game, and where.
-    hover: Option<(ItemId, arclens_ipc::NormRect, Situation)>,
+    hover: Option<(
+        ItemId,
+        arclens_ipc::NormRect,
+        Situation,
+        arclens_ipc::ItemSide,
+    )>,
     status: Vec<String>,
 }
 
@@ -184,6 +191,7 @@ impl App {
             expanded_categories: std::collections::BTreeSet::new(),
             map_screen: None,
             map_labels: Vec::new(),
+            last_map: None,
             map_summary: crate::views::map::MapSummary::default(),
             map_plot: iced::widget::canvas::Cache::new(),
             paths: paths.clone(),
@@ -262,7 +270,7 @@ impl App {
             }
             Message::IconLoaded(id, icon) => {
                 let is_selected = self.selected.as_ref() == Some(&id);
-                let is_hovered = self.hover.as_ref().is_some_and(|(h, _, _)| *h == id);
+                let is_hovered = self.hover.as_ref().is_some_and(|(h, ..)| *h == id);
                 self.icons.insert(id, icon);
                 // Resend so the overlay picks up the icon path.
                 if is_selected {
@@ -412,7 +420,11 @@ impl App {
                     },
                     sell_value: f.sell_value,
                 });
-                self.hover = Some((item.id.clone(), anchor, situation));
+                let side = match hover.item_side {
+                    arclens_vision::Side::Left => arclens_ipc::ItemSide::Left,
+                    arclens_vision::Side::Right => arclens_ipc::ItemSide::Right,
+                };
+                self.hover = Some((item.id.clone(), anchor, situation, side));
                 self.push_hover_to_overlay();
                 // The icon arrives later; `IconLoaded` resends the card.
                 if let Some(load) = load {
@@ -430,7 +442,14 @@ impl App {
                 self.send(ToOverlay::ClearHover);
             }
             vision::Event::MapOpen(header) => {
-                let map = arclens_data::metaforge::map_for_title(&header.title);
+                // Sticky: a title OCR can't place (mid-pan, partly covered)
+                // keeps the map last recognised; only another map's title
+                // changes it.
+                let read = arclens_data::metaforge::map_for_title(&header.title);
+                if read.is_some() {
+                    self.last_map = read;
+                }
+                let map = read.or(self.last_map);
                 if self.map_screen != Some(MapScreen { map }) {
                     tracing::info!(title = %header.title, ?map, condition = ?header.condition, "map open");
                 }
@@ -518,7 +537,8 @@ impl App {
     }
 
     fn push_hover_to_overlay(&self) {
-        let (Load::Ready(catalog), Some((id, anchor, situation))) = (&self.catalog, &self.hover)
+        let (Load::Ready(catalog), Some((id, anchor, situation, side))) =
+            (&self.catalog, &self.hover)
         else {
             return;
         };
@@ -529,6 +549,7 @@ impl App {
                 icon: self.icons.get(id).map(|icon| icon.path.clone()),
                 recycle_names: recycle_names(item, catalog, situation.place),
                 anchor: *anchor,
+                item_side: *side,
             });
         }
     }
@@ -683,22 +704,34 @@ impl App {
             return;
         };
         tracing::debug!(labels = self.map_labels.len(), agree, "map view located");
-        let shown: Vec<arclens_core::Marker> = markers
+        let in_view = |p: arclens_core::MapPoint| {
+            let (x, y) = transform.apply((p.x, p.y));
+            (MAP_VIEWPORT[0]..=MAP_VIEWPORT[2]).contains(&x)
+                && (MAP_VIEWPORT[1]..=MAP_VIEWPORT[3]).contains(&y)
+        };
+        let enabled = markers.iter().enumerate().filter(|(_, m)| {
+            self.marker_filter.shows(m)
+                // The game draws place names itself.
+                && !(m.label.is_some() && m.category.to_lowercase().contains("label"))
+        });
+        let layout = arclens_core::layout(markers, enabled.map(|(i, _)| i));
+        let shown: Vec<arclens_core::Marker> = layout
+            .singles
             .iter()
-            .filter(|m| self.marker_filter.shows(m))
-            // The game draws place names itself.
-            .filter(|m| !(m.label.is_some() && m.category.to_lowercase().contains("label")))
-            .filter(|m| {
-                let (x, y) = transform.apply((m.position.x, m.position.y));
-                (MAP_VIEWPORT[0]..=MAP_VIEWPORT[2]).contains(&x)
-                    && (MAP_VIEWPORT[1]..=MAP_VIEWPORT[3]).contains(&y)
-            })
+            .map(|&i| &markers[i])
+            .filter(|m| in_view(m.position))
             .cloned()
+            .collect();
+        let areas = layout
+            .areas
+            .into_iter()
+            .filter(|a| in_view(a.center))
             .collect();
         self.send(ToOverlay::ShowMarkers {
             map: arclens_core::MapId::new(map),
             markers: shown,
             transform,
+            areas,
         });
     }
 

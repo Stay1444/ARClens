@@ -25,6 +25,10 @@ pub struct PanelState {
     pub panel: Option<MapPanel>,
     pub expanded: bool,
     pub query: String,
+    /// The pointer is over the panel: only then may it take the keyboard
+    /// (for the search box). Taking it while the game is in front costs
+    /// the game its focus, and with it audio and input.
+    pub hovered: bool,
     /// Categories opened to show their subcategories.
     pub open: std::collections::BTreeSet<String>,
 }
@@ -33,6 +37,8 @@ pub struct PanelState {
 pub enum PanelMessage {
     ToggleExpanded,
     Query(String),
+    /// Pointer entered (`true`) or left the panel.
+    Hover(bool),
     Open(String),
     /// Forwarded to the app.
     Send(ToApp),
@@ -56,6 +62,7 @@ impl PanelState {
         match message {
             PanelMessage::ToggleExpanded => self.expanded = !self.expanded,
             PanelMessage::Query(query) => self.query = query,
+            PanelMessage::Hover(hovered) => self.hovered = hovered,
             PanelMessage::Open(category) => {
                 if !self.open.remove(&category) {
                     self.open.insert(category);
@@ -112,6 +119,9 @@ pub fn view(state: &PanelState, screen: Size) -> Option<Element<'_, Message>> {
             text_color: Some(palette::TEXT),
             ..container::Style::default()
         });
+    let card = iced::widget::mouse_area(card)
+        .on_enter(Message::Panel(PanelMessage::Hover(true)))
+        .on_exit(Message::Panel(PanelMessage::Hover(false)));
     Some(
         container(card)
             .padding(iced::Padding {

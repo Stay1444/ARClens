@@ -18,6 +18,8 @@ pub struct Hover {
     /// Frame size, so consumers can normalise `panel`.
     pub frame_width: u32,
     pub frame_height: u32,
+    /// Which side of the tooltip the hovered item is on.
+    pub item_side: crate::Side,
     /// What the tooltip footer says (value, raid or not), if it was found.
     pub footer: Option<FooterInfo>,
 }
@@ -161,6 +163,7 @@ impl Analyzer {
             panel,
             frame_width: frame.width(),
             frame_height: frame.height(),
+            item_side: crate::item_side(frame, panel),
             footer,
         }))
     }
@@ -236,6 +239,7 @@ mod tests {
             panel: Rect::new(x, 300, 508, 700),
             frame_width: 2560,
             frame_height: 1440,
+            item_side: crate::Side::Left,
             footer: Some(FooterInfo {
                 sell_value: value,
                 in_raid: false,

@@ -16,7 +16,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 
-pub const PROTOCOL_VERSION: u32 = 6;
+pub const PROTOCOL_VERSION: u32 = 7;
 
 /// Default socket path: `$XDG_RUNTIME_DIR/arclens.sock`, falling back to the
 /// temp dir when the variable is unset (non-systemd systems).
@@ -70,6 +70,10 @@ pub enum ToOverlay {
         recycle_names: Vec<String>,
         /// The game's tooltip, normalised to the screen (`0..=1`).
         anchor: NormRect,
+        /// Which side of the tooltip the hovered item is on: the card goes
+        /// on the other side so it doesn't cover it.
+        #[serde(default)]
+        item_side: ItemSide,
     },
     /// The in-game tooltip is gone.
     ClearHover,
@@ -79,6 +83,10 @@ pub enum ToOverlay {
         map: MapId,
         markers: Vec<Marker>,
         transform: Transform,
+        /// Dense groups drawn as one shaded area each (their members are
+        /// not in `markers`).
+        #[serde(default)]
+        areas: Vec<arclens_core::MarkerArea>,
     },
     ClearMarkers,
     /// The in-game map is open: show the marker filter panel (clickable;
@@ -110,6 +118,15 @@ pub struct PanelCategory {
     pub shown: bool,
     #[serde(default)]
     pub subcategories: Vec<PanelCategory>,
+}
+
+/// Left or right of the game's tooltip.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ItemSide {
+    #[default]
+    Left,
+    Right,
 }
 
 /// A rectangle normalised to the screen: `0..=1` on both axes, origin

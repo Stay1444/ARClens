@@ -14,7 +14,7 @@ pub fn view(state: &Overlay) -> Element<'_, Message> {
     // Markers on the in-game map, under the panel and cards; shown whenever
     // the app sent some, like the hover card.
     let mut layers = stack![];
-    if state.transform.is_some() && !state.markers.is_empty() {
+    if state.transform.is_some() && !(state.markers.is_empty() && state.areas.is_empty()) {
         layers = layers.push(
             Canvas::new(MarkerLayer { state })
                 .width(Length::Fill)
@@ -62,12 +62,12 @@ const CARD: iced::Size = iced::Size::new(360.0, 420.0);
 
 /// The detected-hover card, placed beside the game's tooltip.
 fn hover_layer(state: &Overlay) -> Element<'_, Message> {
-    let Some((shown, anchor)) = &state.hover else {
+    let Some((shown, anchor, item_side)) = &state.hover else {
         return Space::new().width(Length::Fill).height(Length::Fill).into();
     };
-    let anchor = *anchor;
+    let (anchor, item_side) = (*anchor, *item_side);
     iced::widget::responsive(move |screen| {
-        let at = place(anchor, screen, CARD);
+        let at = place(anchor, item_side, screen, CARD);
         container(item_card(&ItemCard {
             item: &shown.item,
             advice: shown.advice.clone(),
@@ -87,15 +87,28 @@ fn hover_layer(state: &Overlay) -> Element<'_, Message> {
 
 /// Top-left corner for a `card` next to the game tooltip `anchor`: to its
 /// right if it fits, otherwise to its left; top-aligned, clamped on screen.
-pub fn place(anchor: arclens_ipc::NormRect, screen: iced::Size, card: iced::Size) -> Point {
+pub fn place(
+    anchor: arclens_ipc::NormRect,
+    item_side: arclens_ipc::ItemSide,
+    screen: iced::Size,
+    card: iced::Size,
+) -> Point {
     let left = anchor.x * screen.width;
     let right = (anchor.x + anchor.width) * screen.width;
     let top = anchor.y * screen.height;
 
-    let x = if right + GAP + card.width <= screen.width {
-        right + GAP
+    // Beside the tooltip, away from the hovered item; the other side only
+    // if the card doesn't fit there.
+    let at_right = right + GAP;
+    let at_left = left - GAP - card.width;
+    let fits_right = at_right + card.width <= screen.width;
+    let fits_left = at_left >= 0.0;
+    let x = if item_side == arclens_ipc::ItemSide::Right && fits_left {
+        at_left
+    } else if fits_right {
+        at_right
     } else {
-        (left - GAP - card.width).max(0.0)
+        at_left.max(0.0)
     };
     let y = top.clamp(0.0, (screen.height - card.height).max(0.0));
     Point::new(x, y)
@@ -124,6 +137,17 @@ impl canvas::Program<Message> for MarkerLayer<'_> {
             .state
             .marker_cache
             .draw(renderer, bounds.size(), |frame| {
+                for area in &self.state.areas {
+                    arclens_ui::markers::draw_area(
+                        frame,
+                        area,
+                        |p| {
+                            let (nx, ny) = transform.apply((p.x, p.y));
+                            Point::new(nx * bounds.width, ny * bounds.height)
+                        },
+                        BADGE,
+                    );
+                }
                 for marker in &self.state.markers {
                     // The transform targets the screen normalised to 0..=1.
                     let (nx, ny) = transform.apply((marker.position.x, marker.position.y));
@@ -205,7 +229,10 @@ mod tests {
             width: 0.2,
             height: 0.4,
         };
-        assert_eq!(place(anchor, SCREEN, CARD), Point::new(800.0 + GAP, 300.0));
+        assert_eq!(
+            place(anchor, arclens_ipc::ItemSide::Left, SCREEN, CARD),
+            Point::new(800.0 + GAP, 300.0)
+        );
     }
 
     #[test]
@@ -217,9 +244,26 @@ mod tests {
             height: 0.4,
         };
         assert_eq!(
-            place(anchor, SCREEN, CARD),
+            place(anchor, arclens_ipc::ItemSide::Left, SCREEN, CARD),
             Point::new(1400.0 - GAP - 360.0, 100.0)
         );
+    }
+
+    #[test]
+    fn goes_left_when_the_item_is_on_the_right() {
+        // The user's Heavy Fuze Grenade case: room on both sides, item right.
+        let anchor = NormRect {
+            x: 0.58,
+            y: 0.2,
+            width: 0.21,
+            height: 0.37,
+        };
+        let at = place(anchor, arclens_ipc::ItemSide::Right, SCREEN, CARD);
+        assert!((at.x - (1160.0 - GAP - 360.0)).abs() < 1e-3);
+        // No room on the left: the right side after all.
+        let tight = NormRect { x: 0.1, ..anchor };
+        let at = place(tight, arclens_ipc::ItemSide::Right, SCREEN, CARD);
+        assert!((at.x - (0.31 * 2000.0 + GAP)).abs() < 1e-3);
     }
 
     #[test]
@@ -230,6 +274,9 @@ mod tests {
             width: 0.2,
             height: 0.1,
         };
-        assert!((place(anchor, SCREEN, CARD).y - (1000.0 - 420.0)).abs() < 1e-3);
+        assert!(
+            (place(anchor, arclens_ipc::ItemSide::Left, SCREEN, CARD).y - (1000.0 - 420.0)).abs()
+                < 1e-3
+        );
     }
 }

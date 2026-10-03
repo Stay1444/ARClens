@@ -70,7 +70,12 @@ green CI.
       plot layer are cached and rebuilt only when markers, map, search or
       filter change.
 - [x] Marker icons: our own SVG glyphs (`arclens-ui/assets/markers`),
-      picked by keyword from subcategory, then category. The filter is saved, and the overlay will use the
+      picked by keyword from subcategory, then category.
+- [x] **Areas**: dense same-kind groups (spawn candidates such as raider
+      caches, lockers in a building) drawn as one shaded outline with a
+      count instead of dozens of icons (`arclens_core::areas`, DBSCAN per
+      kind, radius 45 / min 5 tuned on real Dam data;
+      `docs/assets/map-areas.png`). Same rendering in the overlay. The filter is saved, and the overlay will use the
       same one.
 - [ ] Map image behind the plot, once its alignment with MetaForge
       coordinates is known; pan/zoom.
@@ -162,6 +167,17 @@ green CI.
       drawn as cached icon badges. End-to-end on `dam_zoom_mid` with
       synthetic marker data: 8/8 labels agree and the badges land on the
       game's own icons (`docs/assets/overlay-map-markers.png`).
+- [x] Map screen state is sticky: an unreadable title keeps the last
+      recognised map, and the map must be gone for 1 s before it counts as
+      closed (field report 2026-10-03: it flipped to "Unknown map" while
+      panning).
+- [x] The overlay takes keyboard focus only while the pointer is over its
+      map panel (or in interactive mode); before, opening the map handed
+      it focus and the game lost focus and audio (field report).
+- [x] Hover card goes on the side of the tooltip *away* from the hovered
+      item: slot outline detected beside the tooltip, else the game's
+      placement rule (`item_side`, golden test on 9 frames; field report:
+      the card covered the item).
 - [x] A spawned overlay exits when its app's stdin pipe closes (any app
       death, SIGKILL included), so an orphan can't attach to the next app.
 

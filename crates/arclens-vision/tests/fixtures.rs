@@ -162,3 +162,28 @@ fn finds_map_labels() {
     let quest_panel_right = frame.width() * 21 / 100;
     assert!(labels.iter().all(|r| r.x > quest_panel_right), "{labels:?}");
 }
+
+/// The hovered item's side, checked by eye on each frame: the card must go
+/// on the other side of the tooltip so it doesn't cover the item.
+#[test]
+fn finds_the_hovered_item_side() {
+    use arclens_vision::Side::{Left, Right};
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/frames");
+    for (name, want) in [
+        ("raid_jolt_mine", Right),
+        ("raid_light_shield", Left),
+        ("raid_medium_ammo", Right),
+        ("stash_combat_mk3_aggressive", Left),
+        ("stash_energy_clip", Left),
+        ("stash_medium_ammo", Right),
+        ("stash_osprey_ii", Left),
+        ("stash_shield_recharger", Right),
+        ("stash_torrente_ii", Left),
+    ] {
+        let frame = image::open(dir.join(format!("{name}.jpg")))
+            .unwrap()
+            .to_rgb8();
+        let panel = find_panels(&frame, &PanelParams::default())[0];
+        assert_eq!(arclens_vision::item_side(&frame, panel), want, "{name}");
+    }
+}

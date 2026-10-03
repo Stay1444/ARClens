@@ -3,8 +3,9 @@
 //! category colour.
 
 use crate::palette;
+use iced::widget::canvas::{self, Frame, Path, Stroke};
 use iced::widget::{container, svg};
-use iced::{Border, Element, Length};
+use iced::{Border, Element, Length, Point, Rectangle, Size};
 use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -192,6 +193,92 @@ pub fn badge<'a, M: 'a>(category: &str, subcategory: Option<&str>, size: f32) ->
         ..container::Style::default()
     })
     .into()
+}
+
+/// A marker kind's glyph on its category colour, `size` px across.
+pub fn draw_badge(
+    frame: &mut Frame,
+    category: &str,
+    subcategory: Option<&str>,
+    at: Point,
+    size: f32,
+) {
+    frame.fill(
+        &Path::circle(at, size / 2.0),
+        crate::palette::marker(category),
+    );
+    let inner = size * 0.62;
+    frame.draw_svg(
+        Rectangle::new(
+            Point::new(at.x - inner / 2.0, at.y - inner / 2.0),
+            Size::new(inner, inner),
+        ),
+        &handle(glyph(category, subcategory)),
+    );
+}
+
+/// A dense group: its outline (padded so edge markers sit inside), shaded
+/// in the kind's colour, with one badge and the count at the centre.
+pub fn draw_area(
+    frame: &mut Frame,
+    area: &arclens_core::MarkerArea,
+    to_screen: impl Fn(arclens_core::MapPoint) -> Point,
+    icon: f32,
+) {
+    const PAD: f32 = 9.0;
+    let color = crate::palette::marker(&area.category);
+    let center = to_screen(area.center);
+    let outline: Vec<Point> = area
+        .hull
+        .iter()
+        .map(|&p| {
+            let p = to_screen(p);
+            let (dx, dy) = (p.x - center.x, p.y - center.y);
+            let len = dx.hypot(dy).max(1.0);
+            Point::new(p.x + dx / len * PAD, p.y + dy / len * PAD)
+        })
+        .collect();
+    let shape = if outline.len() >= 3 {
+        Path::new(|b| {
+            b.move_to(outline[0]);
+            for p in &outline[1..] {
+                b.line_to(*p);
+            }
+            b.close();
+        })
+    } else {
+        let radius = outline
+            .iter()
+            .map(|p| p.distance(center))
+            .fold(PAD, f32::max);
+        Path::circle(center, radius)
+    };
+    frame.fill(&shape, crate::palette::with_alpha(color, 0.18));
+    frame.stroke(
+        &shape,
+        Stroke::default()
+            .with_color(crate::palette::with_alpha(color, 0.7))
+            .with_width(1.5),
+    );
+    draw_badge(
+        frame,
+        &area.category,
+        area.subcategory.as_deref(),
+        center,
+        icon,
+    );
+    frame.fill_text(canvas::Text {
+        content: format!("×{}", area.count),
+        position: Point::new(center.x + icon / 2.0 + 3.0, center.y),
+        color: crate::palette::TEXT,
+        size: 11.0.into(),
+        font: iced::Font {
+            weight: iced::font::Weight::Bold,
+            ..iced::Font::DEFAULT
+        },
+        align_y: iced::alignment::Vertical::Center,
+        ..canvas::Text::default()
+    });
 }
 
 #[cfg(test)]

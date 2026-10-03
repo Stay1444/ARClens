@@ -102,8 +102,9 @@ pub struct Overlay {
     item: Option<ShownItem>,
     /// Item detected under the cursor in game, with the game tooltip's
     /// position. Shown whether or not `visible` is set.
-    hover: Option<(ShownItem, arclens_ipc::NormRect)>,
+    hover: Option<(ShownItem, arclens_ipc::NormRect, arclens_ipc::ItemSide)>,
     markers: Vec<Marker>,
+    areas: Vec<arclens_core::MarkerArea>,
     transform: Option<Transform>,
     /// Drawn markers, rebuilt only when they or the surface change.
     marker_cache: iced::widget::canvas::Cache,
@@ -131,7 +132,7 @@ impl Overlay {
         self.visible
             || self.hover.is_some()
             || self.panel.panel.is_some()
-            || (!self.markers.is_empty() && self.transform.is_some())
+            || ((!self.markers.is_empty() || !self.areas.is_empty()) && self.transform.is_some())
     }
 
     /// Creates or removes the surface to match [`Self::has_content`].
@@ -176,9 +177,9 @@ impl Overlay {
                 r.height.ceil() as i32,
             )
         });
-        // Keyboard only on demand (after a click on the panel), so the game
-        // keeps focus otherwise.
-        let keyboard = if rect.is_some() {
+        // Keyboard only while interactive or the pointer is on the panel:
+        // otherwise the compositor may hand us focus and the game loses it.
+        let keyboard = if self.interactive || (rect.is_some() && self.panel.hovered) {
             KeyboardInteractivity::OnDemand
         } else {
             KeyboardInteractivity::None
@@ -230,7 +231,10 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
     let event = match message {
         Message::Ipc(event) => event,
         Message::Panel(msg) => {
-            let resize = matches!(msg, map_panel::PanelMessage::ToggleExpanded);
+            let resize = matches!(
+                msg,
+                map_panel::PanelMessage::ToggleExpanded | map_panel::PanelMessage::Hover(_)
+            );
             if let Some(to_app) = state.panel.update(msg)
                 && let Some(outbox) = &state.outbox
             {
@@ -307,9 +311,13 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
             });
         }
         ToOverlay::ShowMarkers {
-            markers, transform, ..
+            markers,
+            transform,
+            areas,
+            ..
         } => {
             state.markers = markers;
+            state.areas = areas;
             state.transform = Some(transform);
             state.marker_cache.clear();
         }
@@ -319,6 +327,7 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
             icon,
             recycle_names,
             anchor,
+            item_side,
         } => {
             tracing::debug!(item = %item.name, "hover");
             let shown = ShownItem {
@@ -329,11 +338,12 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
                     .and_then(|p| arclens_ui::decode_icon(p, 128)),
                 recycle_names,
             };
-            state.hover = Some((shown, anchor));
+            state.hover = Some((shown, anchor, item_side));
         }
         ToOverlay::ClearHover => state.hover = None,
         ToOverlay::ClearMarkers => {
             state.markers.clear();
+            state.areas.clear();
             state.transform = None;
             state.marker_cache.clear();
         }
@@ -347,6 +357,7 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
         ToOverlay::HideMapPanel => {
             state.panel.panel = None;
             state.panel.expanded = false;
+            state.panel.hovered = false;
             return state.input_task();
         }
     }

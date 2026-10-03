@@ -3,7 +3,7 @@
 
 use crate::app::Message;
 use arclens_core::{Marker, MarkerFilter, humanize, marker_counts};
-use arclens_ui::markers::{badge, glyph, handle};
+use arclens_ui::markers::{badge, draw_area, draw_badge};
 use arclens_ui::palette::{self, with_alpha};
 use iced::widget::canvas::{self, Frame, Geometry, Path, Stroke};
 use iced::widget::{
@@ -42,6 +42,8 @@ pub struct MapSummary {
     /// Matching markers with a proper name.
     pub named: Vec<usize>,
     pub categories: Vec<CategorySummary>,
+    /// `visible`, with dense same-kind groups merged into areas.
+    pub layout: arclens_core::MarkerLayout,
 }
 
 #[derive(Debug)]
@@ -59,7 +61,7 @@ impl MapSummary {
         let matching: Vec<usize> = (0..markers.len())
             .filter(|&i| markers[i].matches(query))
             .collect();
-        let visible = matching
+        let visible: Vec<usize> = matching
             .iter()
             .copied()
             .filter(|&i| filter.shows(&markers[i]))
@@ -91,11 +93,13 @@ impl MapSummary {
                     .collect(),
             })
             .collect();
+        let layout = arclens_core::layout(markers, visible.iter().copied());
         Self {
             matching,
             visible,
             named,
             categories,
+            layout,
         }
     }
 }
@@ -308,26 +312,25 @@ struct Plot<'a> {
 
 impl Plot<'_> {
     fn draw_markers(&self, frame: &mut Frame, fit: &Fit) {
-        // `visible` already holds only search matches the filter shows.
+        // Areas first, under the single markers.
+        for area in &self.summary.layout.areas {
+            draw_area(frame, area, |p| fit.map_point(p), ICON);
+        }
         let visible: Vec<&Marker> = self
             .summary
-            .visible
+            .layout
+            .singles
             .iter()
             .map(|&i| &self.markers[i])
             .collect();
         for marker in visible.iter().filter(|m| !is_named_place(m)) {
             let at = fit.point(marker);
-            frame.fill(
-                &Path::circle(at, ICON / 2.0),
-                palette::marker(&marker.category),
-            );
-            let inner = ICON * 0.62;
-            frame.draw_svg(
-                Rectangle::new(
-                    Point::new(at.x - inner / 2.0, at.y - inner / 2.0),
-                    Size::new(inner, inner),
-                ),
-                &handle(glyph(&marker.category, marker.subcategory.as_deref())),
+            draw_badge(
+                frame,
+                &marker.category,
+                marker.subcategory.as_deref(),
+                at,
+                ICON,
             );
             if self.searching {
                 // Ring the matches so they stand out.
@@ -482,9 +485,13 @@ impl Fit {
     }
 
     fn point(&self, marker: &Marker) -> Point {
+        self.map_point(marker.position)
+    }
+
+    fn map_point(&self, p: arclens_core::MapPoint) -> Point {
         Point::new(
-            self.offset.x + (marker.position.x - self.min.x) * self.scale,
-            self.offset.y + (marker.position.y - self.min.y) * self.scale,
+            self.offset.x + (p.x - self.min.x) * self.scale,
+            self.offset.y + (p.y - self.min.y) * self.scale,
         )
     }
 }
