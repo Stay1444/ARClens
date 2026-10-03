@@ -84,6 +84,21 @@ _Last researched: 2026-10-03. Re-verify before relying on anything marked
     table or endpoint (unknown yet), which label anchoring needs.
   - Some subcategories mark spawn **areas**, not spots: e.g. 884
     `raider_cache` records form dense blobs of candidate positions.
+- **What MetaForge's own map page loads (2026-10-03, maintainer's HAR of
+  `metaforge.app/arc-raiders/map/dam`):**
+  - `events-schedule?region=europe` (and `&includeAll=true`): the
+    **`region` query parameter is confirmed**.
+  - Marker data comes straight from their Supabase backend
+    (`sb.metaforge.app/rest/v1/arc_map_data`, `map_inspector_data`,
+    `custom_map_markers`), not through the public API. Undocumented
+    backend: **not to be used** (AGENTS.md rule 2).
+  - **Place-name labels** (the Labels/Zones layer) are hard-coded in a
+    front-end JavaScript chunk as `{lat, lng, text}` (118 entries across
+    maps, e.g. "Pattern House", "Pipeline Tower", region names in
+    capitals), in the same coordinate space as the markers. They are not in
+    any API. Using them would mean extracting data from MetaForge's site
+    bundle, i.e. scraping: **not done** without MetaForge's permission
+    (their terms ask to be contacted for anything beyond the public API).
 - `game-map-data?tableID=arc_map_data&mapID=dam` returns:
 
   ```json
