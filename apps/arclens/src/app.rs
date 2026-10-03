@@ -62,6 +62,8 @@ pub struct App {
     /// the plot's cached marker layer. Rebuilt on change, not per frame.
     map_summary: crate::views::map::MapSummary,
     map_plot: iced::widget::canvas::Cache,
+    /// Labels last read on the open in-game map.
+    map_labels: Vec<arclens_data::anchors::ScreenLabel>,
     /// Set while the in-game map is open.
     map_screen: Option<MapScreen>,
     /// Item currently detected under the cursor in game, and where.
@@ -153,6 +155,7 @@ impl App {
             marker_query: String::new(),
             expanded_categories: std::collections::BTreeSet::new(),
             map_screen: None,
+            map_labels: Vec::new(),
             map_summary: crate::views::map::MapSummary::default(),
             map_plot: iced::widget::canvas::Cache::new(),
             paths: paths.clone(),
@@ -414,7 +417,13 @@ impl App {
             vision::Event::MapClosed => {
                 tracing::info!("map closed");
                 self.map_screen = None;
+                self.map_labels.clear();
                 self.send(ToOverlay::HideMapPanel);
+                self.send(ToOverlay::ClearMarkers);
+            }
+            vision::Event::MapLabels(labels) => {
+                self.map_labels = labels;
+                self.push_map_markers();
             }
             vision::Event::Unavailable(reason) => {
                 tracing::info!(%reason, "item detection off");
@@ -544,6 +553,7 @@ impl App {
                 self.refresh_map_summary();
                 if on_screen {
                     self.push_map_panel();
+                    self.push_map_markers();
                 }
                 // The search box only exists once markers are in.
                 if current {
@@ -598,6 +608,43 @@ impl App {
         crate::store::save(&self.paths.marker_filter(), &self.marker_filter);
         self.refresh_map_summary();
         self.push_map_panel();
+        self.push_map_markers();
+    }
+
+    /// Places the selected markers on the open in-game map, located from
+    /// the labels read on screen. Clears them when the view can't be
+    /// located, rather than drawing them in the wrong place.
+    fn push_map_markers(&self) {
+        let Some(MapScreen { map: Some(map) }) = self.map_screen else {
+            return;
+        };
+        let Some(Load::Ready(markers)) = self.markers.get(map) else {
+            return;
+        };
+        let Some((transform, agree)) =
+            arclens_data::anchors::locate_view(&self.map_labels, markers)
+        else {
+            self.send(ToOverlay::ClearMarkers);
+            return;
+        };
+        tracing::debug!(labels = self.map_labels.len(), agree, "map view located");
+        let shown: Vec<arclens_core::Marker> = markers
+            .iter()
+            .filter(|m| self.marker_filter.shows(m))
+            // The game draws place names itself.
+            .filter(|m| !(m.label.is_some() && m.category.to_lowercase().contains("label")))
+            .filter(|m| {
+                let (x, y) = transform.apply((m.position.x, m.position.y));
+                (MAP_VIEWPORT[0]..=MAP_VIEWPORT[2]).contains(&x)
+                    && (MAP_VIEWPORT[1]..=MAP_VIEWPORT[3]).contains(&y)
+            })
+            .cloned()
+            .collect();
+        self.send(ToOverlay::ShowMarkers {
+            map: arclens_core::MapId::new(map),
+            markers: shown,
+            transform,
+        });
     }
 
     /// Rebuilds the Map tab's derived data after markers, map, query or
@@ -1126,6 +1173,10 @@ fn tab_button(label: &str, active: bool, on_press: Message) -> Element<'_, Messa
     })
     .into()
 }
+
+/// The in-game map viewport, `[left, top, right, bottom]` as screen
+/// fractions: markers outside it would sit on the game's side panels.
+const MAP_VIEWPORT: [f32; 4] = [0.02, 0.075, 0.77, 0.90];
 
 /// The marker filter as the overlay's map panel lists it.
 fn panel_categories(

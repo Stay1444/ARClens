@@ -23,6 +23,17 @@ const FAST_FOR: Duration = Duration::from_secs(3);
 /// How often the map header is re-read while the map is open (its clock
 /// ticks every second; the map name and condition rarely change).
 const MAP_REREAD: Duration = Duration::from_secs(5);
+/// Minimum time between map-label reads while the view keeps changing.
+const LABEL_INTERVAL: Duration = Duration::from_millis(250);
+
+/// Tracks the open map's view so labels are only read when it changed.
+#[derive(Debug, Default)]
+struct MapView {
+    fingerprint: Option<u64>,
+    read_at: Option<Instant>,
+    /// The view changed since the last read.
+    dirty: bool,
+}
 
 /// Directory of captured frames (PNG/JPEG) to replay instead of capturing.
 pub const REPLAY_DIR_ENV: &str = "ARCLENS_REPLAY_DIR";
@@ -42,6 +53,9 @@ pub enum Event {
     MapOpen(MapHeader),
     /// The map screen closed.
     MapClosed,
+    /// Place names read on the open map: text and centre, normalised to
+    /// the frame. Sent when the view changed.
+    MapLabels(Vec<arclens_data::anchors::ScreenLabel>),
     /// Vision isn't running; why.
     Unavailable(String),
 }
@@ -112,10 +126,20 @@ fn run(mut output: mpsc::Sender<Event>) {
     let mut fast_until = Instant::now();
     // When the map header was last read, while the map is open.
     let mut map_read: Option<Instant> = None;
+    let mut map_view = MapView::default();
     while let Some(frame) = source.next_frame() {
         if !watch_map(&analyzer, &frame, &mut map_read, &mut send) {
             return;
         }
+        if map_read.is_some() {
+            if !watch_labels(&mut analyzer, &frame, &mut map_view, &mut send) {
+                return;
+            }
+            // Keep sampling quickly while the map is open: panning.
+            source.set_interval(FAST_INTERVAL);
+            continue;
+        }
+        map_view = MapView::default();
         let hover = match analyzer.analyze(&frame) {
             Ok(hover) => hover,
             Err(error) => {
@@ -174,6 +198,65 @@ fn watch_map(
             true
         }
     }
+}
+
+/// Reads the map's labels when the view changed. `false` when the UI is
+/// gone.
+fn watch_labels(
+    analyzer: &mut Analyzer,
+    frame: &RgbImage,
+    view: &mut MapView,
+    send: &mut impl FnMut(Event) -> bool,
+) -> bool {
+    let fingerprint = view_fingerprint(frame);
+    if view.fingerprint != Some(fingerprint) {
+        view.fingerprint = Some(fingerprint);
+        view.dirty = true;
+    }
+    if !view.dirty || view.read_at.is_some_and(|at| at.elapsed() < LABEL_INTERVAL) {
+        return true;
+    }
+    view.dirty = false;
+    view.read_at = Some(Instant::now());
+    let labels = match analyzer.read_map_labels(frame) {
+        Ok(labels) => labels,
+        Err(error) => {
+            tracing::warn!(error = format!("{error:#}"), "map labels unreadable");
+            return true;
+        }
+    };
+    #[allow(clippy::cast_precision_loss, reason = "pixel coordinates")]
+    let (w, h) = (frame.width() as f32, frame.height() as f32);
+    #[allow(clippy::cast_precision_loss, reason = "pixel coordinates")]
+    let labels = labels
+        .into_iter()
+        .map(|l| arclens_data::anchors::ScreenLabel {
+            text: l.text,
+            center: (
+                (l.rect.x as f32 + l.rect.width as f32 / 2.0) / w,
+                (l.rect.y as f32 + l.rect.height as f32 / 2.0) / h,
+            ),
+        })
+        .collect();
+    send(Event::MapLabels(labels))
+}
+
+/// Coarse fingerprint of the map viewport: changes when the view pans or
+/// zooms, not with compression noise.
+fn view_fingerprint(frame: &RgbImage) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    let (width, height) = (frame.width(), frame.height());
+    for gy in 1..24 {
+        for gx in 1..32 {
+            // Viewport only (left of the legend, below the tab bar).
+            let col = width * 76 / 100 * gx / 32 + width * 2 / 100;
+            let row = height * 82 / 100 * gy / 24 + height * 8 / 100;
+            let [red, green, blue] = frame.get_pixel(col.min(width - 1), row.min(height - 1)).0;
+            ((u16::from(red) + u16::from(green) + u16::from(blue)) / 48).hash(&mut hasher);
+        }
+    }
+    hasher.finish()
 }
 
 fn frame_source(paths: &Paths) -> anyhow::Result<Box<dyn FrameSource>> {

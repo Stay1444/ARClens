@@ -59,6 +59,9 @@ fn run(mut output: mpsc::Sender<Event>) {
     // When the companion app spawned us, we must not outlive it: exit once the
     // connection drops, or if it never comes up.
     let exit_with_app = std::env::args().any(|a| a == EXIT_WITH_APP_FLAG);
+    if exit_with_app {
+        watch_parent();
+    }
 
     runtime.block_on(async move {
         let mut failed_attempts = 0u32;
@@ -78,6 +81,23 @@ fn run(mut output: mpsc::Sender<Event>) {
             tokio::time::sleep(RETRY_DELAY).await;
         }
     });
+}
+
+/// Exits once stdin closes: the app that spawned us holds the other end of
+/// that pipe, so this fires however it ends. Without it an orphaned overlay
+/// could attach to the next app instance instead of its own.
+fn watch_parent() {
+    let spawned = std::thread::Builder::new()
+        .name("arclens-parent".into())
+        .spawn(|| {
+            let mut sink = Vec::new();
+            let _ = std::io::Read::read_to_end(&mut std::io::stdin(), &mut sink);
+            tracing::info!("companion app gone (stdin closed); exiting");
+            std::process::exit(0);
+        });
+    if let Err(error) = spawned {
+        tracing::warn!(%error, "cannot watch the companion app");
+    }
 }
 
 /// Passed by the companion app when it spawns the overlay.

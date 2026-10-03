@@ -3,6 +3,7 @@
 //! Providers turn an upstream source into a [`Catalog`]. See
 //! `docs/research/data-sources.md` for which sources exist and their terms.
 
+pub mod anchors;
 mod cache;
 mod catalog;
 pub mod download;

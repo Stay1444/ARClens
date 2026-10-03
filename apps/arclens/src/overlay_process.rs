@@ -70,7 +70,12 @@ async fn supervise() -> Result<(), String> {
     loop {
         let monitor = *target_rx.borrow_and_update();
         let mut command = tokio::process::Command::new(&bin);
-        command.arg("--exit-with-app").kill_on_drop(true);
+        command
+            .arg("--exit-with-app")
+            // The overlay exits when this pipe closes, i.e. whenever we die,
+            // even by SIGKILL; `_parent_pipe` keeps the write end open.
+            .stdin(std::process::Stdio::piped())
+            .kill_on_drop(true);
         if let Some(monitor) = monitor {
             command.arg(MonitorRect::FLAG).arg(monitor.to_arg());
         }
@@ -79,6 +84,9 @@ async fn supervise() -> Result<(), String> {
             .spawn()
             .map_err(|e| format!("could not start {}: {e}", bin.display()))?;
         tracing::info!(bin = %bin.display(), pid = child.id(), ?monitor, "overlay started");
+        // Held until the child is replaced; `wait()` would otherwise close
+        // it at once, and the overlay takes a closed stdin as "app gone".
+        let _parent_pipe = child.stdin.take();
 
         tokio::select! {
             status = child.wait() => {

@@ -105,6 +105,8 @@ pub struct Overlay {
     hover: Option<(ShownItem, arclens_ipc::NormRect)>,
     markers: Vec<Marker>,
     transform: Option<Transform>,
+    /// Drawn markers, rebuilt only when they or the surface change.
+    marker_cache: iced::widget::canvas::Cache,
     /// Map-screen panel (conditions + marker filter), the clickable part.
     panel: map_panel::PanelState,
     /// Sends to the companion app while connected.
@@ -245,6 +247,7 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
                 return Task::none();
             }
             state.screen = Some(size);
+            state.marker_cache.clear();
             return state.input_task();
         }
         _ => return Task::none(),
@@ -308,6 +311,7 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
         } => {
             state.markers = markers;
             state.transform = Some(transform);
+            state.marker_cache.clear();
         }
         ToOverlay::ShowHover {
             item,
@@ -331,6 +335,7 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
         ToOverlay::ClearMarkers => {
             state.markers.clear();
             state.transform = None;
+            state.marker_cache.clear();
         }
         ToOverlay::ShowMapPanel { panel } => {
             let was_shown = state.panel.panel.is_some();

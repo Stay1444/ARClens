@@ -60,6 +60,18 @@ pub struct Analyzer {
     /// Readings by fingerprint of the name + value crops. Re-hovering an
     /// item seen this session skips OCR entirely.
     cache: std::collections::HashMap<u64, Option<Reading>>,
+    /// Map label text by crop content (not position): panning moves labels
+    /// without changing them, so only newly visible ones are read.
+    labels: std::collections::HashMap<u64, Option<String>>,
+    label_params: crate::LabelParams,
+}
+
+/// A place name read off the in-game map.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MapLabel {
+    pub text: String,
+    /// Where it is, in frame pixels.
+    pub rect: Rect,
 }
 
 impl Analyzer {
@@ -68,7 +80,34 @@ impl Analyzer {
             reader,
             params: PanelParams::default(),
             cache: std::collections::HashMap::new(),
+            labels: std::collections::HashMap::new(),
+            label_params: crate::LabelParams::default(),
         }
+    }
+
+    /// The map labels in `frame`, read (OCR) only when not seen before.
+    pub fn read_map_labels(&mut self, frame: &RgbImage) -> anyhow::Result<Vec<MapLabel>> {
+        let mut out = Vec::new();
+        for rect in crate::find_map_labels(frame, &self.label_params) {
+            let key = content_fingerprint(frame, rect);
+            let text = if let Some(text) = self.labels.get(&key) {
+                text.clone()
+            } else {
+                let text = self.reader.read_free_text(frame, rect)?;
+                if self.labels.len() >= CACHE_LIMIT {
+                    self.labels.clear();
+                }
+                self.labels.insert(key, text.clone());
+                text
+            };
+            if let Some(text) = text {
+                out.push(MapLabel {
+                    text: text.trim().to_owned(),
+                    rect,
+                });
+            }
+        }
+        Ok(out)
     }
 
     /// The map panel header, if `frame` shows the map screen (OCR; call it
@@ -151,6 +190,21 @@ impl Analyzer {
             }),
         })
     }
+}
+
+/// Fingerprint of a crop's content alone (size and a coarse pixel sample),
+/// independent of where it is on screen.
+fn content_fingerprint(frame: &RgbImage, rect: Rect) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    (rect.width / 3, rect.height / 3).hash(&mut hasher);
+    for gy in 0..4 {
+        for gx in 0..24 {
+            let px = frame.get_pixel(rect.x + rect.width * gx / 24, rect.y + rect.height * gy / 4);
+            // Coarse: text is white on dark, so this is mostly the glyph shape.
+            (px.0[0] / 128).hash(&mut hasher);
+        }
+    }
+    hasher.finish()
 }
 
 /// Cheap fingerprint of the name lines: geometry plus a coarse, quantised

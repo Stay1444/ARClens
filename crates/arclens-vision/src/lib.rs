@@ -28,7 +28,7 @@ mod panel;
 mod read;
 mod text;
 
-pub use analyzer::{Analyzer, Hover};
+pub use analyzer::{Analyzer, Hover, MapLabel};
 pub use footer::{FooterInfo, footer, footer_cells, parse_value, value_cells};
 pub use geometry::Rect;
 pub use map_header::{MapHeader, is_map_screen, read_map_header};

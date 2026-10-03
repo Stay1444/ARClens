@@ -16,7 +16,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 
-pub const PROTOCOL_VERSION: u32 = 5;
+pub const PROTOCOL_VERSION: u32 = 6;
 
 /// Default socket path: `$XDG_RUNTIME_DIR/arclens.sock`, falling back to the
 /// temp dir when the variable is unset (non-systemd systems).
@@ -73,7 +73,8 @@ pub enum ToOverlay {
     },
     /// The in-game tooltip is gone.
     ClearHover,
-    /// Draw these markers using `transform` (map space → screen pixels).
+    /// Draw these markers using `transform`: map space → screen normalised
+    /// to `0..=1` (the overlay scales it to its own size).
     ShowMarkers {
         map: MapId,
         markers: Vec<Marker>,

@@ -11,17 +11,23 @@ pub fn view(state: &Overlay) -> Element<'_, Message> {
     let panel = state
         .screen
         .and_then(|screen| crate::map_panel::view(&state.panel, screen));
-    let hover: Element<'_, Message> = match panel {
-        Some(panel) => stack![panel, hover].into(),
-        None => hover,
-    };
+    // Markers on the in-game map, under the panel and cards; shown whenever
+    // the app sent some, like the hover card.
+    let mut layers = stack![];
+    if state.transform.is_some() && !state.markers.is_empty() {
+        layers = layers.push(
+            Canvas::new(MarkerLayer { state })
+                .width(Length::Fill)
+                .height(Length::Fill),
+        );
+    }
+    if let Some(panel) = panel {
+        layers = layers.push(panel);
+    }
+    let hover: Element<'_, Message> = layers.push(hover).into();
     if !state.visible {
         return hover;
     }
-
-    let markers = Canvas::new(MarkerLayer { state })
-        .width(Length::Fill)
-        .height(Length::Fill);
 
     // The badge is always drawn while visible, so "is the overlay on screen
     // at all?" can be answered at a glance, even with nothing selected.
@@ -39,7 +45,6 @@ pub fn view(state: &Overlay) -> Element<'_, Message> {
     }
 
     stack![
-        markers,
         container(panel)
             .width(Length::Fill)
             .align_right(Length::Fill)
@@ -114,19 +119,50 @@ impl canvas::Program<Message> for MarkerLayer<'_> {
         let Some(transform) = self.state.transform else {
             return Vec::new();
         };
-        let mut frame = Frame::new(renderer, bounds.size());
-        for marker in &self.state.markers {
-            let (x, y) = transform.apply((marker.position.x, marker.position.y));
-            if !(0.0..=bounds.width).contains(&x) || !(0.0..=bounds.height).contains(&y) {
-                continue;
-            }
-            frame.fill(
-                &Path::circle(Point::new(x, y), 6.0),
-                arclens_ui::palette::marker(&marker.category),
-            );
-        }
-        vec![frame.into_geometry()]
+        // Cached: redrawn only when the markers or the surface change.
+        let geometry = self
+            .state
+            .marker_cache
+            .draw(renderer, bounds.size(), |frame| {
+                for marker in &self.state.markers {
+                    // The transform targets the screen normalised to 0..=1.
+                    let (nx, ny) = transform.apply((marker.position.x, marker.position.y));
+                    let at = Point::new(nx * bounds.width, ny * bounds.height);
+                    if !(0.0..=bounds.width).contains(&at.x)
+                        || !(0.0..=bounds.height).contains(&at.y)
+                    {
+                        continue;
+                    }
+                    draw_badge(frame, marker, at);
+                }
+            });
+        vec![geometry]
     }
+}
+
+/// Marker diameter on the in-game map, logical pixels.
+const BADGE: f32 = 22.0;
+
+/// The marker's glyph on its category colour, with a dark rim so it reads
+/// on the bright parts of the map.
+fn draw_badge(frame: &mut Frame, marker: &arclens_core::Marker, at: Point) {
+    use arclens_ui::markers::{glyph, handle};
+    frame.fill(
+        &Path::circle(at, BADGE / 2.0 + 1.5),
+        Color::from_rgba8(0, 0, 0, 0.6),
+    );
+    frame.fill(
+        &Path::circle(at, BADGE / 2.0),
+        arclens_ui::palette::marker(&marker.category),
+    );
+    let inner = BADGE * 0.62;
+    frame.draw_svg(
+        Rectangle::new(
+            Point::new(at.x - inner / 2.0, at.y - inner / 2.0),
+            iced::Size::new(inner, inner),
+        ),
+        &handle(glyph(&marker.category, marker.subcategory.as_deref())),
+    );
 }
 
 fn status_badge(state: &Overlay) -> Element<'_, Message> {

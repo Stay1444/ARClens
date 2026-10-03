@@ -133,10 +133,13 @@ green CI.
   - [x] robust pan/zoom fit from label matches
         (`Transform::fit_uniform_robust`: best pair by agreement, then
         least squares on the agreeing ones);
-  - [ ] map registration → `Transform` by **label anchoring** (OCR the POI
-        labels, fit scale + translation; see
-        `docs/vision/findings-2026-10-03-map-video.md`); calibration tool
-        to build per-map label tables;
+  - [x] map registration by **label anchoring**: labels read whenever the
+        view changes (≤ 4/s; OCR cached by crop content, so panning
+        re-reads nothing), matched to the source's named markers
+        (`arclens_data::anchors`), robust fit. No calibration tool needed
+        if MetaForge's label markers carry the in-game names;
+  - [ ] verify against real MetaForge data: do its label markers carry the
+        in-game names (`instanceName`), and do positions line up?
 - [x] Debounce repeated `Hover` events for the same item (≤ 8 px jitter).
 - [x] Session cache of name + value crops → reading, so re-hovers skip OCR.
       (A cross-session cache is possible but fingerprints are fragile; not
@@ -150,7 +153,13 @@ green CI.
       Wayland; maybe pause when no ARC Raiders UI has been seen for N
       seconds).
 - [x] Wire the hover detector to the overlay (`ShowHover`).
-- [ ] Map open → `ShowMarkers` with the live transform.
+- [x] Map open → `ShowMarkers` with the live transform (map →
+      normalised screen, protocol v6), markers inside the viewport only,
+      drawn as cached icon badges. End-to-end on `dam_zoom_mid` with
+      synthetic marker data: 8/8 labels agree and the badges land on the
+      game's own icons (`docs/assets/overlay-map-markers.png`).
+- [x] A spawned overlay exits when its app's stdin pipe closes (any app
+      death, SIGKILL included), so an orphan can't attach to the next app.
 
 ## Later
 
