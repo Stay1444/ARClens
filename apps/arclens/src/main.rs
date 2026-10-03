@@ -30,6 +30,10 @@ fn main() -> anyhow::Result<()> {
 
     let paths = paths::Paths::discover()?;
     desktop_entry::install();
+    // Before the event loop: Windows delivers hotkeys through this thread.
+    let _hotkeys = arclens_hotkeys::init()
+        .map_err(|error| tracing::warn!(%error, "global hotkeys unavailable"))
+        .ok();
     iced::application(
         move || app::App::boot(paths.clone()),
         app::App::update,

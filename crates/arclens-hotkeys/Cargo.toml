@@ -1,6 +1,6 @@
 [package]
 name = "arclens-hotkeys"
-description = "Global hotkeys for ARClens via the XDG GlobalShortcuts portal"
+description = "Global hotkeys for ARClens: XDG GlobalShortcuts portal on Linux, RegisterHotKey on Windows"
 version.workspace = true
 publish.workspace = true
 edition.workspace = true
@@ -8,10 +8,16 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-ashpd = { workspace = true }
-futures = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { workspace = true }
+futures = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+global-hotkey = "0.7"
+tokio = { workspace = true }
 
 [lints]
 workspace = true

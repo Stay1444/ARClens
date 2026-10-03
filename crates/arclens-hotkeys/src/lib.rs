@@ -1,18 +1,17 @@
-//! Global hotkeys on Wayland through the XDG `GlobalShortcuts` portal.
+//! Global hotkeys: react to a few key combinations while the game has
+//! focus. Key presses still reach the game; we are only notified.
 //!
-//! Wayland deliberately gives no client a global view of the keyboard, so
-//! the only sanctioned way to react to keys while the game is focused is to
-//! ask the desktop portal. On KDE Plasma the first bind shows a dialog where
-//! the user confirms or changes the keys; afterwards they live in
-//! System Settings → Shortcuts. Key presses still reach the game — the
-//! portal only notifies us.
-//!
-//! The portal identifies apps by their `.desktop` file, so ARClens must be
-//! installed with one (see `packaging/`) for bindings to persist.
+//! One API, one backend per platform:
+//! - Linux: the XDG `GlobalShortcuts` portal (`backend/portal.rs`);
+//! - Windows: `RegisterHotKey`, through the `global-hotkey` crate
+//!   (`backend/windows.rs`).
 
-use ashpd::desktop::CreateSessionOptions;
-use ashpd::desktop::global_shortcuts::{BindShortcutsOptions, GlobalShortcuts, NewShortcut};
-use futures::StreamExt;
+#[cfg(target_os = "linux")]
+#[path = "backend/portal.rs"]
+mod backend;
+#[cfg(windows)]
+#[path = "backend/windows.rs"]
+mod backend;
 
 /// Everything a hotkey can trigger.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -42,7 +41,8 @@ impl Action {
         }
     }
 
-    /// Suggested default, in XDG shortcuts syntax. The user can override it.
+    /// Suggested default, in XDG shortcuts syntax. The user can override it
+    /// where the platform lets them (KDE's shortcut settings).
     pub const fn preferred_trigger(self) -> &'static str {
         match self {
             Self::ToggleOverlay => "CTRL+SHIFT+O",
@@ -57,46 +57,27 @@ impl Action {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("GlobalShortcuts portal error: {0}")]
-    Portal(#[from] ashpd::Error),
+    /// The platform can't deliver global hotkeys (no portal, keys taken by
+    /// another app, …).
+    #[error("{0}")]
+    Unavailable(String),
 }
 
-/// Binds all [`Action`]s and calls `on_action` for each activation, forever.
-///
-/// The portal session lives as long as this future; drop it to unbind.
-/// Fails fast if the portal is missing (e.g. GNOME < 48 or no
-/// xdg-desktop-portal running) so callers can fall back / warn the user.
-pub async fn listen(mut on_action: impl FnMut(Action)) -> Result<(), Error> {
-    let portal = GlobalShortcuts::new().await?;
-    let session = portal
-        .create_session(CreateSessionOptions::default())
-        .await?;
+/// Keeps hotkeys registered; drop it to unregister.
+#[derive(Debug)]
+pub struct Guard(#[allow(dead_code, reason = "held for its Drop")] backend::Guard);
 
-    let shortcuts: Vec<NewShortcut> = Action::ALL
-        .iter()
-        .map(|a| NewShortcut::new(a.id(), a.description()).preferred_trigger(a.preferred_trigger()))
-        .collect();
-    let bound = portal
-        .bind_shortcuts(&session, &shortcuts, None, BindShortcutsOptions::default())
-        .await?
-        .response()?;
-    for shortcut in bound.shortcuts() {
-        tracing::info!(
-            id = shortcut.id(),
-            trigger = shortcut.trigger_description(),
-            "global shortcut bound"
-        );
-    }
+/// Prepares hotkeys. Call it on the main thread before the UI's event loop
+/// starts and keep the guard: on Windows the keys are delivered through
+/// that thread's message loop. Elsewhere it does nothing.
+pub fn init() -> Result<Guard, Error> {
+    backend::init().map(Guard)
+}
 
-    let mut activated = portal.receive_activated().await?;
-    while let Some(event) = activated.next().await {
-        if let Some(action) = Action::from_id(event.shortcut_id()) {
-            on_action(action);
-        } else {
-            tracing::warn!(id = event.shortcut_id(), "unknown shortcut activated");
-        }
-    }
-    Ok(())
+/// Calls `on_action` for each hotkey press, forever. Fails fast when the
+/// platform can't deliver hotkeys, so callers can tell the user.
+pub async fn listen(on_action: impl FnMut(Action)) -> Result<(), Error> {
+    backend::listen(on_action).await
 }
 
 #[cfg(test)]
