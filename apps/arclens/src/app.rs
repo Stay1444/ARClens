@@ -592,14 +592,7 @@ impl App {
                 self.push_map_panel();
                 return task;
             }
-            vision::Event::MapClosed => {
-                tracing::info!("map closed");
-                self.map_screen = None;
-                self.game_view = GameMapView::default();
-                self.send(ToOverlay::HideMapPanel);
-                self.send(ToOverlay::ClearMarkers);
-                vision::set_drawn(vision::Drawn::default());
-            }
+            vision::Event::MapClosed => self.on_map_closed(),
             vision::Event::MapLabels(read) => self.on_map_labels(&read),
             vision::Event::MapMotion(motion) => {
                 self.game_view.motion = motion;
@@ -607,12 +600,23 @@ impl App {
             }
             vision::Event::StationLevel(read) => self.on_station_level(&read),
             vision::Event::MainMenu(shown) => self.on_main_menu(shown),
+            vision::Event::MapPointer(at) => self.send(ToOverlay::Pointer { at }),
             vision::Event::Unavailable(reason) => {
                 tracing::info!(%reason, "item detection off");
                 self.status.push(format!("Item detection off: {reason}"));
             }
         }
         Task::none()
+    }
+
+    fn on_map_closed(&mut self) {
+        tracing::info!("map closed");
+        self.map_screen = None;
+        self.game_view = GameMapView::default();
+        self.send(ToOverlay::HideMapPanel);
+        self.send(ToOverlay::ClearMarkers);
+        self.send(ToOverlay::Pointer { at: None });
+        vision::set_drawn(vision::Drawn::default());
     }
 
     fn on_main_menu(&mut self, shown: bool) {

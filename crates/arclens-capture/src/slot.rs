@@ -15,6 +15,9 @@ pub struct Slot {
     ready: Condvar,
     /// Minimum time between converted frames, in ms (0 = default).
     interval_ms: AtomicU64,
+    /// Last known pointer position in frame pixels, where the backend
+    /// reports one.
+    cursor: Mutex<Option<(f32, f32)>>,
 }
 
 #[derive(Debug, Default)]
@@ -51,6 +54,14 @@ impl Slot {
         state.seq += 1;
         state.wanted = false;
         self.ready.notify_all();
+    }
+
+    pub fn set_cursor(&self, at: (f32, f32)) {
+        *self.cursor.lock().unwrap_or_else(PoisonError::into_inner) = Some(at);
+    }
+
+    pub fn cursor(&self) -> Option<(f32, f32)> {
+        *self.cursor.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// No more frames (backend ended, or the capture was dropped).

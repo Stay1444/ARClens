@@ -91,6 +91,13 @@ impl Capture {
         self.slot.set_interval(interval);
     }
 
+    /// Where the pointer is, in frame pixels, if known (Linux: cursor
+    /// metadata from the compositor, when it offers it; Windows: the system
+    /// cursor). The frames never show the pointer.
+    pub fn cursor(&self) -> Option<(f32, f32)> {
+        self.slot.cursor()
+    }
+
     /// Blocks until a frame newer than the previous call is available.
     /// `None` once the capture has ended (monitor unplugged, cast revoked).
     pub fn next_frame(&mut self) -> Option<RgbImage> {

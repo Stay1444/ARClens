@@ -19,6 +19,7 @@ tokio = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-capture = "2.0"
+mouse_position = "0.1"
 
 [lints]
 workspace = true

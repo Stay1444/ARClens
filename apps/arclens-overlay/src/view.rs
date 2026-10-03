@@ -24,6 +24,9 @@ pub fn view(state: &Overlay) -> Element<'_, Message> {
     if let Some(panel) = panel {
         layers = layers.push(panel);
     }
+    if let Some(tooltip) = crate::tooltip::view(state) {
+        layers = layers.push(tooltip);
+    }
     if let (Some(card), Some(screen)) = (&state.menu_card, state.screen) {
         layers = layers.push(crate::menu_card::view(card, state.now_ms, screen));
     }

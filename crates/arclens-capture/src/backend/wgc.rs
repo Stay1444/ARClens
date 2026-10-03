@@ -43,6 +43,14 @@ impl GraphicsCaptureApiHandler for Handler {
         frame: &mut Frame<'_>,
         _control: InternalCaptureControl,
     ) -> Result<(), Self::Error> {
+        // The pointer, in frame pixels: the primary monitor sits at the
+        // desktop origin, in physical pixels like the frames.
+        if let mouse_position::mouse_position::Mouse::Position { x, y } =
+            mouse_position::mouse_position::Mouse::get_mouse_position()
+        {
+            #[allow(clippy::cast_precision_loss, reason = "screen pixels")]
+            self.slot.set_cursor((x as f32, y as f32));
+        }
         // Skip work nobody asked for.
         if !self.slot.wants_frame(self.last_convert) {
             return Ok(());

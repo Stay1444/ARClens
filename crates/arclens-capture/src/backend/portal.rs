@@ -115,6 +115,12 @@ type Portal = (Screencast, ashpd::desktop::Session<Screencast>);
 
 async fn open_portal(restore_token: Option<&str>) -> anyhow::Result<(Portal, Remote)> {
     let proxy = Screencast::new().await?;
+    // The pointer's position as metadata, not drawn into the frames (the
+    // tooltip text must not be hidden under it): for marker tooltips.
+    let cursor_mode = match proxy.available_cursor_modes().await {
+        Ok(modes) if modes.contains(CursorMode::Metadata) => CursorMode::Metadata,
+        _ => CursorMode::Hidden,
+    };
     let session = proxy
         .create_session(ashpd::desktop::CreateSessionOptions::default())
         .await?;
@@ -122,8 +128,7 @@ async fn open_portal(restore_token: Option<&str>) -> anyhow::Result<(Portal, Rem
         .select_sources(
             &session,
             SelectSourcesOptions::default()
-                // The tooltip text must not be hidden under the pointer.
-                .set_cursor_mode(CursorMode::Hidden)
+                .set_cursor_mode(cursor_mode)
                 .set_sources(ashpd::enumflags2::BitFlags::from(SourceType::Monitor))
                 .set_multiple(false)
                 .set_persist_mode(PersistMode::ExplicitlyRevoked)
@@ -193,7 +198,7 @@ fn run_pipewire(
     let slot = Arc::clone(slot);
     let _listener = stream
         .add_local_listener_with_user_data(StreamState::default())
-        .param_changed(|_, state, id, param| {
+        .param_changed(|stream, state, id, param| {
             let Some(param) = param else { return };
             if id != spa::param::ParamType::Format.as_raw() {
                 return;
@@ -206,12 +211,26 @@ fn run_pipewire(
                     format = ?state.format.format(),
                     "capture format"
                 );
+                // Ask for the cursor metadata alongside the frames.
+                if let Some(meta) = cursor_meta_pod()
+                    && let Some(pod) = spa::pod::Pod::from_bytes(&meta)
+                    && let Err(error) = stream.update_params(&mut [pod])
+                {
+                    tracing::debug!(%error, "cursor metadata not available");
+                }
             }
         })
         .process(move |stream, state| {
             let Some(mut buffer) = stream.dequeue_buffer() else {
                 return;
             };
+            if let Some(cursor) = buffer.find_meta::<spa::buffer::meta::MetaCursor>()
+                && cursor.id() != 0
+            {
+                let at = cursor.position();
+                #[allow(clippy::cast_precision_loss, reason = "screen pixels")]
+                slot.set_cursor((at.x as f32, at.y as f32));
+            }
             // Skip work nobody asked for.
             if !slot.wants_frame(state.last_convert) {
                 return;
@@ -250,6 +269,35 @@ fn run_pipewire(
     )?;
     mainloop.run();
     Ok(())
+}
+
+/// The cursor metadata request: position plus room for a 64×64 bitmap
+/// (which we don't use, but compositors size the meta for it).
+fn cursor_meta_pod() -> Option<Vec<u8>> {
+    use spa::pod::{Object, Property, Value};
+    let size = std::mem::size_of::<spa::sys::spa_meta_cursor>()
+        + std::mem::size_of::<spa::sys::spa_meta_bitmap>()
+        + 64 * 64 * 4;
+    let object = Object {
+        type_: spa::utils::SpaTypes::ObjectParamMeta.as_raw(),
+        id: spa::param::ParamType::Meta.as_raw(),
+        properties: vec![
+            Property::new(
+                spa::sys::SPA_PARAM_META_type,
+                Value::Id(spa::utils::Id(spa::sys::SPA_META_Cursor)),
+            ),
+            Property::new(
+                spa::sys::SPA_PARAM_META_size,
+                Value::Int(i32::try_from(size).ok()?),
+            ),
+        ],
+    };
+    spa::pod::serialize::PodSerializer::serialize(
+        std::io::Cursor::new(Vec::new()),
+        &Value::Object(object),
+    )
+    .ok()
+    .map(|(cursor, _)| cursor.into_inner())
 }
 
 /// Raw video in a 4-byte RGB layout, any size, at most [`MAX_FPS`].

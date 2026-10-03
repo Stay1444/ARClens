@@ -18,7 +18,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 mod transport;
 pub use transport::{Endpoint, Listener};
 
-pub const PROTOCOL_VERSION: u32 = 10;
+pub const PROTOCOL_VERSION: u32 = 11;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hello {
@@ -93,6 +93,12 @@ pub enum ToOverlay {
         clip: Option<NormRect>,
     },
     ClearMarkers,
+    /// Where the pointer is over the map (normalised to the screen;
+    /// `None`: unknown), for marker tooltips. The overlay can't see the
+    /// pointer itself: it is click-through there.
+    Pointer {
+        at: Option<(f32, f32)>,
+    },
     /// The in-game map is open: show the marker filter panel (clickable;
     /// the rest of the overlay stays click-through).
     ShowMapPanel {

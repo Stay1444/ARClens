@@ -146,6 +146,7 @@ dependencies = [
  "anyhow",
  "ashpd",
  "image",
+ "mouse_position",
  "pipewire",
  "tokio",
  "tracing",

@@ -131,6 +131,13 @@ green CI.
       or on the Map tab, where presets can also be saved as new (scoped to
       the map or condition), updated from the toggles, deleted, or reset to
       the shipped default (`~/.config/arclens/presets.json`).
+- [x] **Marker tooltips in game** (2026-10-03): pointing at a marker or
+      area on the in-game map shows its icon, name and a line of info
+      (area count, "not all are there every raid"). The pointer comes from
+      the capture, never the game: PipeWire cursor metadata on Linux, the
+      OS cursor position on Windows (protocol v11, `Pointer`;
+      `docs/assets/overlay-tooltip.png`). Verified headlessly with a
+      replayed cursor; **unverified** on a live KDE session.
 - [ ] Confirm the region query parameter and ids (only `europe` seen so
       far).
 - [x] Condition icons on the Events tab: MetaForge's per-event icon, else

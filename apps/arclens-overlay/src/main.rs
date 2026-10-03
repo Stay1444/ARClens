@@ -13,6 +13,7 @@
 mod ipc;
 mod map_panel;
 mod menu_card;
+mod tooltip;
 mod view;
 
 #[cfg(target_os = "linux")]
@@ -77,6 +78,8 @@ pub struct Overlay {
     transform: Option<Transform>,
     /// Where markers may be drawn (the game's map viewport).
     clip: Option<arclens_ipc::NormRect>,
+    /// The pointer over the map, normalised, for marker tooltips.
+    pointer: Option<(f32, f32)>,
     /// Drawn markers, rebuilt only when they or the surface change.
     marker_cache: iced::widget::canvas::Cache,
     /// Map-screen panel (conditions + marker filter), the clickable part.
@@ -253,6 +256,7 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
             state.clip = clip;
             state.marker_cache.clear();
         }
+        ToOverlay::Pointer { at } => state.pointer = at,
         ToOverlay::MoveMarkers { transform, clip } => {
             state.transform = Some(transform);
             state.clip = clip;
@@ -298,6 +302,7 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
         }
         ToOverlay::HideMenuCard => state.menu_card = None,
         ToOverlay::HideMapPanel => {
+            state.pointer = None;
             state.panel.panel = None;
             state.panel.expanded = false;
             state.panel.hovered = false;

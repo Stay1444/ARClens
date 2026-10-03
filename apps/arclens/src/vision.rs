@@ -74,6 +74,8 @@ struct MapView {
     stale_read: bool,
     /// The motion last sent.
     sent: Sent,
+    /// The pointer last sent, normalised.
+    pointer: Option<(f32, f32)>,
 }
 
 /// What the app was last told about the map's motion.
@@ -286,6 +288,9 @@ pub enum Event {
     StationLevel(arclens_vision::StationLevel),
     /// The game's main menu appeared (`true`) or went away.
     MainMenu(bool),
+    /// Where the pointer is over the open map, normalised to the screen
+    /// (`None`: unknown). Sent when it moves.
+    MapPointer(Option<(f32, f32)>),
     /// Vision isn't running; why.
     Unavailable(String),
 }
@@ -299,6 +304,11 @@ trait FrameSource: Send {
 
     /// The monitor being captured, if known.
     fn monitor(&self) -> Option<arclens_ipc::MonitorRect> {
+        None
+    }
+
+    /// Where the pointer is, in frame pixels, if known.
+    fn cursor(&self) -> Option<(f32, f32)> {
         None
     }
 }
@@ -398,6 +408,9 @@ fn run(output: mpsc::Sender<Event>) {
         }
         if map_watch.is_open() {
             // Only frames that do show the map.
+            if map_watch.missing_since.is_none() {
+                report_pointer(source.cursor(), &frame, &mut map_view, &mut out);
+            }
             if map_watch.missing_since.is_none()
                 && let Some(labels) = &labels
                 && !follow_map(
@@ -573,6 +586,28 @@ fn follow_map(
     true
 }
 
+/// Sends the pointer's position when it moved by a pixel or more.
+fn report_pointer(
+    cursor: Option<(f32, f32)>,
+    frame: &RgbImage,
+    view: &mut MapView,
+    out: &mut Outbox,
+) {
+    #[allow(clippy::cast_precision_loss, reason = "pixel sizes")]
+    let size = (frame.width() as f32, frame.height() as f32);
+    let now = cursor.map(|(x, y)| (x / size.0, y / size.1));
+    let moved = match (view.pointer, now) {
+        (Some(a), Some(b)) => {
+            (a.0 - b.0).abs() * size.0 >= 1.0 || (a.1 - b.1).abs() * size.1 >= 1.0
+        }
+        (a, b) => a.is_some() != b.is_some(),
+    };
+    if moved {
+        view.pointer = now;
+        out.send_lossy(Event::MapPointer(now));
+    }
+}
+
 /// Reads the place names on a map frame.
 fn read_labels(analyzer: &mut Analyzer, frame: &RgbImage) -> MapLabels {
     #[allow(clippy::cast_precision_loss, reason = "pixel coordinates")]
@@ -649,6 +684,10 @@ impl FrameSource for Live {
 
     fn set_interval(&mut self, interval: Duration) {
         self.0.set_interval(interval);
+    }
+
+    fn cursor(&self) -> Option<(f32, f32)> {
+        self.0.cursor()
     }
 
     fn monitor(&self) -> Option<arclens_ipc::MonitorRect> {
@@ -739,5 +778,12 @@ impl FrameSource for Replay {
         self.next += 1;
         tracing::debug!(frame = %path.display(), "replay");
         image::open(path).ok().map(image::DynamicImage::into_rgb8)
+    }
+
+    /// `ARCLENS_REPLAY_CURSOR=x,y` (frame pixels): a pointer for testing.
+    fn cursor(&self) -> Option<(f32, f32)> {
+        let value = std::env::var("ARCLENS_REPLAY_CURSOR").ok()?;
+        let (x, y) = value.split_once(',')?;
+        Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
     }
 }
