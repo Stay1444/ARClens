@@ -49,18 +49,26 @@ impl Address {
 
     #[allow(clippy::unused_async, reason = "same signature as the Unix backend")]
     pub async fn bind(&self) -> std::io::Result<Listener> {
-        // `first_pipe_instance` fails while another process owns the name,
-        // i.e. while another instance runs. Pipes vanish with their owner,
-        // so nothing is left behind to clean up.
+        // A live instance answers (or is busy with its overlay). Pipes
+        // vanish with their owner, so nothing is left behind to clean up.
+        let in_use = || {
+            std::io::Error::new(
+                std::io::ErrorKind::AddrInUse,
+                "another ARClens instance is running",
+            )
+        };
+        match ClientOptions::new().open(&self.0) {
+            Ok(_) => return Err(in_use()),
+            Err(e) if e.raw_os_error() == Some(PIPE_BUSY) => return Err(in_use()),
+            Err(_) => {}
+        }
+        // Also refused by the system while another process owns the name.
         let next = ServerOptions::new()
             .first_pipe_instance(true)
             .create(&self.0)
             .map_err(|e| {
                 if e.kind() == std::io::ErrorKind::PermissionDenied {
-                    std::io::Error::new(
-                        std::io::ErrorKind::AddrInUse,
-                        "another ARClens instance is running",
-                    )
+                    in_use()
                 } else {
                     e
                 }
