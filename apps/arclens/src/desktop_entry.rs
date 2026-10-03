@@ -47,18 +47,22 @@ pub fn install() {
 }
 
 fn write(data_dir: &Path, exe: &Path) -> std::io::Result<()> {
-    let icon = data_dir
-        .join("icons/hicolor/scalable/apps")
-        .join(format!("{APP_ID}.svg"));
+    let icons = data_dir.join("icons/hicolor");
+    let svg = icons.join("scalable/apps").join(format!("{APP_ID}.svg"));
+    let png = icons.join("256x256/apps").join(format!("{APP_ID}.png"));
     let desktop = data_dir
         .join("applications")
         .join(format!("{APP_ID}.desktop"));
-    write_if_changed(&icon, ICON_SVG)?;
-    write_if_changed(&desktop, entry(exe).as_bytes())
+    write_if_changed(&svg, ICON_SVG)?;
+    write_if_changed(&png, ICON_PNG)?;
+    write_if_changed(&desktop, entry(exe, &svg).as_bytes())
 }
 
-/// The packaged desktop file, launching `exe`.
-fn entry(exe: &Path) -> String {
+/// The packaged desktop file, launching `exe`, with the icon by path:
+/// KDE caches icon-theme lookups, so a freshly installed themed icon shows
+/// as "?" until that cache is rebuilt (field report 2026-10-03); a path
+/// needs no lookup.
+fn entry(exe: &Path, icon: &Path) -> String {
     let exe = exe.to_string_lossy();
     // Desktop-entry Exec quoting: wrap in quotes, escape `"`, `` ` ``, `$`, `\`.
     let quoted: String = exe
@@ -73,6 +77,8 @@ fn entry(exe: &Path) -> String {
         .map(|line| {
             if line.starts_with("Exec=") {
                 format!("Exec=\"{quoted}\"")
+            } else if line.starts_with("Icon=") {
+                format!("Icon={}", icon.display())
             } else {
                 line.to_owned()
             }
@@ -109,7 +115,10 @@ mod tests {
         )
         .unwrap();
         assert!(desktop.contains("Exec=\"/home/me/My Games/arclens\"\n"));
-        assert!(desktop.contains("Icon=io.github.Stay1444.ARClens\n"));
+        let icon = dir
+            .path()
+            .join("icons/hicolor/scalable/apps/io.github.Stay1444.ARClens.svg");
+        assert!(desktop.contains(&format!("Icon={}\n", icon.display())));
         assert!(
             dir.path()
                 .join("icons/hicolor/scalable/apps/io.github.Stay1444.ARClens.svg")
@@ -117,6 +126,6 @@ mod tests {
         );
         // Unchanged files are left alone.
         write(dir.path(), exe).unwrap();
-        assert!(entry(Path::new("/a/$b")).contains("Exec=\"/a/\\$b\""));
+        assert!(entry(Path::new("/a/$b"), &icon).contains("Exec=\"/a/\\$b\""));
     }
 }

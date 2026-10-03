@@ -50,7 +50,8 @@ green CI.
 - [x] **App icon** (lens over a map pin) and app id
       `io.github.Stay1444.ARClens`. KDE on Wayland takes a window's icon
       from the desktop file matching its app id, so a plain build writes
-      that file and the icon to `~/.local/share` on start (not in Flatpak
+      that file (icon by absolute path: KDE caches theme lookups) and the
+      icon to `~/.local/share` on start (not in Flatpak
       or AppImage; `ARCLENS_NO_DESKTOP_ENTRY=1` turns it off).
 
 ## M1.5: Smarter advice (done 2026-10-03)
