@@ -209,6 +209,7 @@ fn reason(card: &ItemCard<'_>) -> String {
             (Some(_), Some(_)) => "Same value either way".to_owned(),
             _ => "Doesn't recycle into anything useful".to_owned(),
         },
+        Verdict::Learn => "Learn it to unlock crafting rather than selling it".to_owned(),
         Verdict::Unknown => "No value data for this item".to_owned(),
     }
 }

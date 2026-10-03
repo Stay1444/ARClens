@@ -246,6 +246,7 @@ pub enum Message {
     SetStationLevel(String, u32),
     SetQuestDone(String, bool),
     SetProjectPhases(String, u32),
+    SetBlueprintLearned(ItemId, bool),
     SetProgressSection(crate::views::progress::Section),
     /// Every 30 s while the main-menu card is up.
     RefreshMenuCard,
@@ -440,7 +441,9 @@ impl App {
                     .insert(station, level);
                 self.progress_changed();
             }
-            Message::SetQuestDone(..) | Message::SetProjectPhases(..) => {
+            Message::SetQuestDone(..)
+            | Message::SetProjectPhases(..)
+            | Message::SetBlueprintLearned(..) => {
                 self.set_quest_or_project(message);
             }
             Message::SetProgressSection(section) => self.progress_section = section,
@@ -798,6 +801,12 @@ impl App {
             }
             Message::SetProjectPhases(project, phases) => {
                 progress.projects.insert(project, phases);
+            }
+            Message::SetBlueprintLearned(id, true) => {
+                progress.blueprints.insert(id);
+            }
+            Message::SetBlueprintLearned(id, false) => {
+                progress.blueprints.remove(&id);
             }
             _ => return,
         }
@@ -1745,6 +1754,12 @@ impl App {
             stations: &catalog.stations,
             quests: &catalog.quests,
             projects: &catalog.projects,
+            blueprints: {
+                let mut blueprints: Vec<&Item> =
+                    catalog.items.iter().filter(|i| i.is_blueprint()).collect();
+                blueprints.sort_by(|a, b| a.name.cmp(&b.name));
+                blueprints
+            },
             progress: self.progress.as_ref(),
         })
     }

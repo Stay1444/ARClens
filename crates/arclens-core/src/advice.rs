@@ -16,6 +16,8 @@ pub enum Verdict {
     Recycle,
     /// Selling is the best use.
     Sell,
+    /// A blueprint the player hasn't learned: learn it, don't sell it.
+    Learn,
     /// Not enough data to decide.
     Unknown,
 }
@@ -127,7 +129,10 @@ pub fn advise_in<'a>(
         _ => false,
     };
 
-    let verdict = if !needs.is_empty() {
+    let verdict = if item.is_blueprint() && progress.is_none_or(|p| !p.blueprint_learned(&item.id))
+    {
+        Verdict::Learn
+    } else if !needs.is_empty() {
         Verdict::Keep
     } else if parts_for.is_some() && cheap_to_break_down {
         Verdict::Recycle
@@ -192,6 +197,24 @@ mod tests {
 
     fn catalogue(items: &[Item]) -> HashMap<ItemId, Item> {
         items.iter().map(|i| (i.id.clone(), i.clone())).collect()
+    }
+
+    #[test]
+    fn blueprints_are_learned_until_marked_learned() {
+        let mut canto = item("canto_blueprint", Some(5000));
+        canto.category = Some("Blueprint".into());
+        assert_eq!(advise(&canto, |_| None).verdict, Verdict::Learn);
+        let mut progress = crate::Progress::default();
+        assert_eq!(
+            advise_in(&canto, Situation::default(), Some(&progress), |_| None).verdict,
+            Verdict::Learn
+        );
+        // A duplicate of one already learned is just worth its price.
+        progress.blueprints.insert(canto.id.clone());
+        assert_eq!(
+            advise_in(&canto, Situation::default(), Some(&progress), |_| None).verdict,
+            Verdict::Sell
+        );
     }
 
     #[test]

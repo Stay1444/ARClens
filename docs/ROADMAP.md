@@ -96,6 +96,10 @@ green CI.
       (`docs/assets/progress-quests.png`). Items asked for by finished
       quests or phases stop counting as reasons to keep. Requirements now
       carry the quest or project id (catalogue schema 4).
+- [x] **Blueprints say LEARN** (2026-10-03, user request): a blueprint
+      not ticked as learned on the Progress page's Blueprints section gets
+      its own verdict instead of SELL; once learned, a duplicate gets the
+      usual value advice. Protocol v14 (new verdict).
 - [ ] Autofill quests and project phases from the game's screens (needs
       fixture frames of the quest log and project pages).
 

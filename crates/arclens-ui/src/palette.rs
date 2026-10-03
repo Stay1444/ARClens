@@ -71,6 +71,7 @@ pub fn verdict(verdict: Verdict) -> Color {
         Verdict::Keep => Color::from_rgb8(0x2e, 0xc4, 0x8a),
         Verdict::Sell => Color::from_rgb8(0xf5, 0xb8, 0x2e),
         Verdict::Recycle => Color::from_rgb8(0x3c, 0xc8, 0xe6),
+        Verdict::Learn => Color::from_rgb8(0xa7, 0x8b, 0xfa),
         Verdict::Unknown => Color::from_rgb8(0x80, 0x86, 0x90),
     }
 }
@@ -88,6 +89,7 @@ pub fn verdict_label(verdict: Verdict) -> &'static str {
         Verdict::Keep => "KEEP",
         Verdict::Sell => "SELL",
         Verdict::Recycle => "RECYCLE",
+        Verdict::Learn => "LEARN",
         Verdict::Unknown => "NO DATA",
     }
 }

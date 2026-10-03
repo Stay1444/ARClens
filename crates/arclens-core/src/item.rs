@@ -43,6 +43,15 @@ pub struct ItemQuantity {
     pub quantity: u32,
 }
 
+impl Item {
+    /// Blueprints unlock crafting once learned (the data's `type`).
+    pub fn is_blueprint(&self) -> bool {
+        self.category
+            .as_deref()
+            .is_some_and(|c| c.eq_ignore_ascii_case("blueprint"))
+    }
+}
+
 /// Everything ARClens knows about a single item.
 ///
 /// Fields that upstream sources do not always provide are `Option`al so a

@@ -3,7 +3,7 @@
 //! workshop levels, quests, and projects (expeditions among them).
 
 use crate::app::Message;
-use arclens_core::{Progress, Project, Quest, Station};
+use arclens_core::{Item, Progress, Project, Quest, Station};
 use arclens_ui::palette::{self, with_alpha};
 use iced::widget::{Space, button, checkbox, column, container, row, scrollable, text};
 use iced::{Alignment, Border, Element, Font, Length, font};
@@ -20,16 +20,23 @@ pub enum Section {
     Workshop,
     Quests,
     Projects,
+    Blueprints,
 }
 
 impl Section {
-    pub const ALL: [Self; 3] = [Self::Workshop, Self::Quests, Self::Projects];
+    pub const ALL: [Self; 4] = [
+        Self::Workshop,
+        Self::Quests,
+        Self::Projects,
+        Self::Blueprints,
+    ];
 
     fn title(self) -> &'static str {
         match self {
             Self::Workshop => "Workshop",
             Self::Quests => "Quests",
             Self::Projects => "Projects",
+            Self::Blueprints => "Blueprints",
         }
     }
 
@@ -58,6 +65,14 @@ impl Section {
                 });
                 format!("{done} of {total} phases")
             }
+            Self::Blueprints => {
+                let learned = page
+                    .blueprints
+                    .iter()
+                    .filter(|b| page.progress.is_some_and(|p| p.blueprint_learned(&b.id)))
+                    .count();
+                format!("{learned} of {} learned", page.blueprints.len())
+            }
         }
     }
 }
@@ -67,6 +82,8 @@ pub struct ProgressView<'a> {
     pub stations: &'a [Station],
     pub quests: &'a [Quest],
     pub projects: &'a [Project],
+    /// Blueprint items, sorted by name.
+    pub blueprints: Vec<&'a Item>,
     /// `None`: never set.
     pub progress: Option<&'a Progress>,
 }
@@ -83,6 +100,7 @@ pub fn view<'a>(page: &ProgressView<'a>) -> Element<'a, Message> {
         Section::Workshop => workshop(page),
         Section::Quests => quests(page),
         Section::Projects => projects(page),
+        Section::Blueprints => blueprints(page),
     };
     row![
         container(sections).padding(24),
@@ -279,6 +297,36 @@ fn projects<'a>(page: &ProgressView<'a>) -> Element<'a, Message> {
             )
         });
     column![text("Projects").size(24).font(BOLD), explainer, rows]
+        .spacing(16)
+        .max_width(640)
+        .into()
+}
+
+/// Blueprints, ticked once learned: until then advice says LEARN.
+fn blueprints<'a>(page: &ProgressView<'a>) -> Element<'a, Message> {
+    let explainer = text(
+        "Blueprints you haven't learned show LEARN instead of a price. Tick the ones you \
+         know: a duplicate is then just worth its price.",
+    )
+    .size(13)
+    .color(palette::TEXT_MUTED);
+    let list = page
+        .blueprints
+        .iter()
+        .fold(column![].spacing(6), |col, blueprint| {
+            let learned = page
+                .progress
+                .is_some_and(|p| p.blueprint_learned(&blueprint.id));
+            let id = blueprint.id.clone();
+            col.push(
+                checkbox(learned)
+                    .label(blueprint.name.as_str())
+                    .on_toggle(move |learned| Message::SetBlueprintLearned(id.clone(), learned))
+                    .size(16)
+                    .text_size(14),
+            )
+        });
+    column![text("Blueprints").size(24).font(BOLD), explainer, list]
         .spacing(16)
         .max_width(640)
         .into()

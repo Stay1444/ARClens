@@ -52,6 +52,9 @@ pub struct Progress {
     /// Phases finished per project id. Missing means none.
     #[serde(default)]
     pub projects: BTreeMap<String, u32>,
+    /// Ids of blueprints already learned.
+    #[serde(default)]
+    pub blueprints: BTreeSet<crate::ItemId>,
 }
 
 impl Progress {
@@ -62,6 +65,10 @@ impl Progress {
     /// Phases of `project` finished.
     pub fn phases_done(&self, project: &str) -> u32 {
         self.projects.get(project).copied().unwrap_or(0)
+    }
+
+    pub fn blueprint_learned(&self, blueprint: &crate::ItemId) -> bool {
+        self.blueprints.contains(blueprint)
     }
 
     pub fn quest_done(&self, quest: &str) -> bool {
