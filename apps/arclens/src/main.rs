@@ -13,6 +13,7 @@ mod icons;
 mod overlay_link;
 mod overlay_process;
 mod paths;
+mod presets;
 mod progress;
 mod store;
 mod views;

@@ -16,7 +16,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 
-pub const PROTOCOL_VERSION: u32 = 7;
+pub const PROTOCOL_VERSION: u32 = 8;
 
 /// Default socket path: `$XDG_RUNTIME_DIR/arclens.sock`, falling back to the
 /// temp dir when the variable is unset (non-systemd systems).
@@ -107,6 +107,28 @@ pub struct MapPanel {
     /// Marker kinds of this map, with counts and whether they are shown.
     #[serde(default)]
     pub categories: Vec<PanelCategory>,
+    /// The map's condition as read on screen ("Hurricane"), if known.
+    /// Markers of other conditions are left out of `categories`.
+    #[serde(default)]
+    pub condition: Option<String>,
+    /// Presets suited to this map and condition, best first.
+    #[serde(default)]
+    pub presets: Vec<PanelPreset>,
+    /// The preset applied last, and whether toggles changed it since.
+    #[serde(default)]
+    pub active_preset: Option<String>,
+    #[serde(default)]
+    pub edited: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PanelPreset {
+    /// Sent back in [`ToApp::ApplyPreset`].
+    pub id: String,
+    pub name: String,
+    /// Made for this condition (rather than general).
+    #[serde(default)]
+    pub for_condition: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -190,6 +212,10 @@ pub enum ToApp {
     },
     ShowAllMarkers,
     HideAllMarkers,
+    /// The player picked a map preset in the panel.
+    ApplyPreset {
+        id: String,
+    },
     /// The overlay is about to exit.
     Bye,
 }

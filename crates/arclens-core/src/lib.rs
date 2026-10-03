@@ -8,6 +8,7 @@ pub mod areas;
 pub mod events;
 pub mod item;
 pub mod map;
+pub mod presets;
 pub mod progress;
 
 pub use advice::{
@@ -19,4 +20,5 @@ pub use item::{Item, ItemId, ItemQuantity, Rarity, Requirement, RequirementKind}
 pub use map::{
     MapId, MapPoint, Marker, MarkerFilter, PointPair, Transform, humanize, marker_counts,
 };
+pub use presets::{Preset, PresetBook};
 pub use progress::{Progress, Station};

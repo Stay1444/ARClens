@@ -86,9 +86,13 @@ pub fn view(state: &PanelState, screen: Size) -> Option<Element<'_, Message>> {
         state.expanded,
     );
 
+    let title = match &panel.condition {
+        Some(condition) => format!("{} · {condition}", panel.map_name.to_uppercase()),
+        None => panel.map_name.to_uppercase(),
+    };
     let mut content = column![
         row![
-            text(panel.map_name.to_uppercase())
+            text(title)
                 .size(13)
                 .font(BOLD)
                 .wrapping(iced::widget::text::Wrapping::None)
@@ -96,8 +100,9 @@ pub fn view(state: &PanelState, screen: Size) -> Option<Element<'_, Message>> {
             text("ARClens").size(10).color(palette::TEXT_MUTED),
         ]
         .align_y(Alignment::Center),
-        toggle,
     ]
+    .push(preset_switcher(panel))
+    .push(toggle)
     .spacing(8);
 
     if state.expanded {
@@ -131,6 +136,88 @@ pub fn view(state: &PanelState, screen: Size) -> Option<Element<'_, Message>> {
             })
             .into(),
     )
+}
+
+/// `◂ First Wave caches ▸`: steps through the presets suited to the map
+/// and condition.
+fn preset_switcher(panel: &MapPanel) -> Option<Element<'_, Message>> {
+    if panel.presets.is_empty() {
+        return None;
+    }
+    let active = panel
+        .presets
+        .iter()
+        .find(|p| Some(&p.id) == panel.active_preset.as_ref());
+    let name = active.map_or("Custom", |p| p.name.as_str());
+    let label = if panel.edited && active.is_some() {
+        format!("{name} *")
+    } else {
+        name.to_owned()
+    };
+    let step = |by| cycle(panel, by).map(|id| send(ToApp::ApplyPreset { id }));
+    let arrow = |glyph, by| {
+        button(text(glyph).size(13))
+            .padding([2, 8])
+            .on_press_maybe(step(by))
+            .style(|_, status| button::Style {
+                background: Some(
+                    with_alpha(
+                        palette::TEXT,
+                        if matches!(status, button::Status::Hovered) {
+                            0.14
+                        } else {
+                            0.07
+                        },
+                    )
+                    .into(),
+                ),
+                text_color: palette::TEXT,
+                border: Border {
+                    color: palette::BORDER,
+                    width: 1.0,
+                    radius: 6.0.into(),
+                },
+                ..button::Style::default()
+            })
+    };
+    Some(
+        row![
+            arrow("◂", -1),
+            column![
+                text("PRESET").size(9).color(palette::TEXT_MUTED),
+                text(label)
+                    .size(13)
+                    .font(BOLD)
+                    .wrapping(iced::widget::text::Wrapping::None),
+            ]
+            .align_x(Alignment::Center)
+            .width(Length::Fill),
+            arrow("▸", 1),
+        ]
+        .spacing(6)
+        .align_y(Alignment::Center)
+        .into(),
+    )
+}
+
+/// The preset `by` steps from the active one (wrapping); from no or an
+/// unlisted preset, forward starts at the first and back at the last.
+fn cycle(panel: &MapPanel, by: isize) -> Option<String> {
+    let n = isize::try_from(panel.presets.len())
+        .ok()
+        .filter(|&n| n > 0)?;
+    let current = panel
+        .presets
+        .iter()
+        .position(|p| Some(&p.id) == panel.active_preset.as_ref())
+        .and_then(|i| isize::try_from(i).ok());
+    let next = match current {
+        Some(i) => (i + by).rem_euclid(n),
+        None if by > 0 => 0,
+        None => n - 1,
+    };
+    let next = usize::try_from(next).ok()?;
+    Some(panel.presets[next].id.clone())
 }
 
 fn expand_button<'a>(label: String, expanded: bool) -> Element<'a, Message> {
@@ -318,6 +405,10 @@ mod tests {
             panel: Some(MapPanel {
                 map_name: "Dam Battlegrounds".into(),
                 categories: Vec::new(),
+                condition: None,
+                presets: Vec::new(),
+                active_preset: None,
+                edited: false,
             }),
             expanded,
             ..PanelState::default()
@@ -334,6 +425,30 @@ mod tests {
         // Stays on screen.
         assert!(expanded.y + expanded.height <= screen.height);
         assert!(PanelState::default().bounds(screen).is_none());
+    }
+
+    #[test]
+    fn preset_arrows_wrap_around() {
+        let preset = |id: &str| arclens_ipc::PanelPreset {
+            id: id.into(),
+            name: id.into(),
+            for_condition: false,
+        };
+        let mut panel = MapPanel {
+            map_name: String::new(),
+            categories: Vec::new(),
+            condition: None,
+            presets: vec![preset("a"), preset("b"), preset("c")],
+            active_preset: Some("a".into()),
+            edited: false,
+        };
+        assert_eq!(cycle(&panel, 1).as_deref(), Some("b"));
+        assert_eq!(cycle(&panel, -1).as_deref(), Some("c"));
+        panel.active_preset = Some("gone".into());
+        assert_eq!(cycle(&panel, 1).as_deref(), Some("a"));
+        assert_eq!(cycle(&panel, -1).as_deref(), Some("c"));
+        panel.presets.clear();
+        assert_eq!(cycle(&panel, 1), None);
     }
 
     #[test]

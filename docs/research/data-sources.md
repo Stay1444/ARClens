@@ -118,8 +118,21 @@ _Last researched: 2026-10-03. Re-verify before relying on anything marked
   - `lat`/`lng` are **pixel coordinates of a Leaflet `CRS.Simple` image map**,
     not geographic coordinates. Importing them needs a per-map
     `Transform` into ARClens map space (`arclens_core::Transform`).
-  - `eventConditionMask` appears to filter markers by map condition
-    (**unverified**).
+  - `eventConditionMask` is a **bit set over the map's condition list**
+    (**verified** 2026-10-03 on Dam's 7662 records). MetaForge's map page
+    bundle lists each map's conditions as `eventConditions:[{name,mask}]`,
+    where `mask` is the bit number, and the numbering differs per map
+    (Cold Snap is 9 on Dam, 11 on the Spaceport, 8 on Buried City). On Dam:
+    hurricane caches carry 4096 (bit 12, Hurricane), snow piles and
+    candleberries 512 (bit 9, Cold Snap), wasp and rocketeer husks 16
+    (bit 4, Husk Graveyard), probes 2 (bit 1, Prospecting Probes),
+    assessors and combat supplies 16384 (bit 14, Close Scrutiny), baskets
+    576 (Cold Snap + Lush Blooms). 5851 records have no mask and 1247 have
+    `1` (bit 0, "No Event"); the latter are ordinary markers (lockers,
+    raider caches), so ARClens reads absent, 0 and 1 as "every condition".
+    The tables are in `arclens_data::metaforge::CONDITIONS`.
+  - The bundle also lists a map not in our list yet, `pendola-pass`
+    (conditions: No Event only), 2026-10-03.
   - ARClens imports them as `x = lng`, `y = lat`: `lat` grows *down* the
     map (**verified** 2026-10-03 on Dam: Victory Ridge, lat 1461, is at the
     top of the in-game map; Formicai Hills, lat 3915, at the bottom).

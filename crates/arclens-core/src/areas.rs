@@ -156,6 +156,7 @@ mod tests {
             position: MapPoint::new(x, y),
             label: None,
             locked: false,
+            conditions: None,
         }
     }
 

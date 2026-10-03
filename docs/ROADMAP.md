@@ -90,6 +90,20 @@ green CI.
       per region. The Events tab asks for the server region on first launch
       (pills, saved to `settings.json`), requests `?region=<id>` and warns
       if the response is for another region.
+- [x] **Condition-aware markers** (2026-10-03): markers carry the
+      conditions they exist in (`eventConditionMask`, a per-map bit set,
+      see data-sources.md). The condition read from the in-game map panel
+      (or picked on the Map tab) leaves out markers of other conditions,
+      e.g. hurricane caches outside Hurricane.
+- [x] **Map presets**: named marker selections per map and/or condition
+      (`arclens_core::presets`, defaults in `arclens-data/data/presets.json`:
+      Everything, Loot run, Ways out, ARC threats, Quests, Gathering, and one
+      per condition such as "First Wave caches" for Hurricane). The current
+      map and condition pick one (the player's last choice there, else the
+      best fit); switch in game with the panel's ◂ ▸ arrows (protocol v8),
+      or on the Map tab, where presets can also be saved as new (scoped to
+      the map or condition), updated from the toggles, deleted, or reset to
+      the shipped default (`~/.config/arclens/presets.json`).
 - [ ] Confirm the region query parameter and ids (only `europe` seen so
       far).
 - [x] Condition icons on the Events tab: MetaForge's per-event icon, else

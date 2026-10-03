@@ -2,7 +2,7 @@
 //! and icons. The same filter decides what the overlay shows in game.
 
 use crate::app::Message;
-use arclens_core::{Marker, MarkerFilter, humanize, marker_counts};
+use arclens_core::{Marker, MarkerFilter, Preset, humanize, marker_counts};
 use arclens_ui::markers::{badge, draw_area, draw_badge};
 use arclens_ui::palette::{self, with_alpha};
 use iced::widget::canvas::{self, Frame, Geometry, Path, Stroke};
@@ -57,9 +57,16 @@ pub struct CategorySummary {
 }
 
 impl MapSummary {
-    pub fn new(markers: &[Marker], query: &str, filter: &MarkerFilter) -> Self {
+    /// `condition`: the bit of the map's current condition; markers of
+    /// other conditions are left out.
+    pub fn new(
+        markers: &[Marker],
+        query: &str,
+        filter: &MarkerFilter,
+        condition: Option<u8>,
+    ) -> Self {
         let matching: Vec<usize> = (0..markers.len())
-            .filter(|&i| markers[i].matches(query))
+            .filter(|&i| markers[i].occurs_in(condition) && markers[i].matches(query))
             .collect();
         let visible: Vec<usize> = matching
             .iter()
@@ -71,8 +78,7 @@ impl MapSummary {
             .copied()
             .filter(|&i| markers[i].label.is_some())
             .collect();
-        let subset: Vec<Marker> = matching.iter().map(|&i| markers[i].clone()).collect();
-        let categories = marker_counts(&subset)
+        let categories = marker_counts(matching.iter().map(|&i| &markers[i]))
             .into_iter()
             .map(|(category, subs)| CategorySummary {
                 id: category.to_owned(),
@@ -115,6 +121,17 @@ pub struct MapView<'a> {
     pub query: &'a str,
     /// Categories opened to show their subcategories.
     pub expanded: &'a BTreeSet<String>,
+    /// The selected map's conditions, and the one markers are shown for.
+    pub conditions: &'a [(&'static str, u8)],
+    pub condition: Option<&'static str>,
+    pub presets: PresetsView<'a>,
+}
+
+/// The preset section of the panel.
+pub struct PresetsView<'a> {
+    /// Presets suited to the map and condition, best first.
+    pub suited: Vec<&'a Preset>,
+    pub presets: &'a crate::presets::Presets,
 }
 
 pub fn view<'a>(map: &MapView<'a>) -> Element<'a, Message> {
@@ -129,6 +146,34 @@ pub fn view<'a>(map: &MapView<'a>) -> Element<'a, Message> {
             ))
         })
         .wrap();
+
+    let conditions = (!map.conditions.is_empty()).then(|| {
+        map.conditions
+            .iter()
+            .fold(
+                row![
+                    text("CONDITION")
+                        .size(11)
+                        .color(palette::TEXT_MUTED)
+                        .width(80),
+                    pill(
+                        "Any",
+                        map.condition.is_none(),
+                        Message::SelectCondition(None)
+                    ),
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center),
+                |r, &(name, _)| {
+                    r.push(pill(
+                        name,
+                        map.condition == Some(name),
+                        Message::SelectCondition(Some(name)),
+                    ))
+                },
+            )
+            .wrap()
+    });
 
     let body: Element<'a, Message> = match map.markers {
         Markers::Loading => centered(text("Loading markers…").color(palette::TEXT_MUTED)),
@@ -160,9 +205,12 @@ pub fn view<'a>(map: &MapView<'a>) -> Element<'a, Message> {
         .into(),
     };
 
-    column![container(pills).padding([12, 16]), body]
-        .height(Length::Fill)
-        .into()
+    column![
+        container(column![pills].push(conditions).spacing(8)).padding([12, 16]),
+        body
+    ]
+    .height(Length::Fill)
+    .into()
 }
 
 /// Left panel: search, show/hide all, categories with icons and counts.
@@ -240,6 +288,7 @@ fn panel<'a>(map: &MapView<'a>, markers: &'a [Marker]) -> Element<'a, Message> {
 
     container(
         column![
+            presets(&map.presets, map.condition),
             text_input("Search markers…", map.query)
                 .id(SEARCH_ID)
                 .on_input(Message::MarkerQuery)
@@ -263,6 +312,90 @@ fn panel<'a>(map: &MapView<'a>, markers: &'a [Marker]) -> Element<'a, Message> {
     .width(PANEL_WIDTH)
     .height(Length::Fill)
     .into()
+}
+
+/// Preset pills, then saving: update the active one, or save as new.
+fn presets<'a>(view: &PresetsView<'a>, condition: Option<&'static str>) -> Element<'a, Message> {
+    let book = view.presets;
+    let active = book.active();
+    let pills = view
+        .suited
+        .iter()
+        .fold(row![].spacing(6), |r, p| {
+            let active = active.is_some_and(|a| a.id == p.id);
+            let label = if active && book.edited {
+                format!("{} *", p.name)
+            } else {
+                p.name.clone()
+            };
+            r.push(pill_owned(
+                label,
+                active,
+                Message::ApplyPreset(p.id.clone()),
+            ))
+        })
+        .wrap();
+
+    let description = active
+        .map(|p| p.description.as_str())
+        .filter(|d| !d.is_empty())
+        .map(|d| text(d).size(12).color(palette::TEXT_MUTED));
+
+    let mut actions = row![].spacing(6).align_y(Alignment::Center);
+    if let Some(active) = active {
+        if book.edited {
+            actions = actions.push(small_button_owned(
+                format!("Save to \"{}\"", active.name),
+                Message::UpdatePreset,
+            ));
+        }
+        if book.is_customised(&active.id) {
+            actions = actions.push(small_button_owned(
+                if crate::presets::Presets::is_builtin(&active.id) {
+                    "Reset to default".to_owned()
+                } else {
+                    "Delete".to_owned()
+                },
+                Message::DeletePreset(active.id.clone()),
+            ));
+        }
+    }
+
+    let mut scope = row![
+        checkbox(book.for_map)
+            .label("This map only")
+            .text_size(12)
+            .size(13)
+            .on_toggle(Message::PresetForMap)
+    ]
+    .spacing(12);
+    if let Some(condition) = condition {
+        scope = scope.push(
+            checkbox(book.for_condition)
+                .label(format!("{condition} only"))
+                .text_size(12)
+                .size(13)
+                .on_toggle(Message::PresetForCondition),
+        );
+    }
+    let save_as = row![
+        text_input("New preset name…", &book.draft)
+            .on_input(Message::PresetDraft)
+            .on_submit(Message::SavePresetAs)
+            .padding([5, 8])
+            .size(13),
+        small_button("Save as new", Message::SavePresetAs),
+    ]
+    .spacing(6)
+    .align_y(Alignment::Center);
+
+    column![text("PRESET").size(11).color(palette::TEXT_MUTED), pills]
+        .push(description)
+        .push(actions)
+        .push(save_as)
+        .push(scope)
+        .spacing(8)
+        .into()
 }
 
 /// A category: icon, toggle, name, count and (if it has subcategories) an
@@ -497,6 +630,10 @@ impl Fit {
 }
 
 fn pill(label: &str, active: bool, on_press: Message) -> Element<'_, Message> {
+    pill_owned(label.to_owned(), active, on_press)
+}
+
+fn pill_owned<'a>(label: String, active: bool, on_press: Message) -> Element<'a, Message> {
     button(text(label).size(13))
         .padding([5, 12])
         .on_press(on_press)
@@ -526,6 +663,10 @@ fn pill(label: &str, active: bool, on_press: Message) -> Element<'_, Message> {
 }
 
 fn small_button(label: &str, on_press: Message) -> Element<'_, Message> {
+    small_button_owned(label.to_owned(), on_press)
+}
+
+fn small_button_owned<'a>(label: String, on_press: Message) -> Element<'a, Message> {
     button(text(label).size(12))
         .padding([3, 8])
         .on_press(on_press)

@@ -179,16 +179,19 @@ pub async fn load_markers(paths: Paths, map: String) -> Result<Vec<arclens_core:
             .error_for_status()?
             .bytes()
             .await?;
-        let markers = metaforge::parse_map_markers(&bytes, &map)?;
+        // Validate before caching.
+        metaforge::parse_map_markers(&bytes, &map)?;
         if let Some(dir) = cache.parent() {
             let _ = tokio::fs::create_dir_all(dir).await;
         }
         let _ = tokio::fs::write(&cache, &bytes).await;
-        Ok::<_, arclens_data::Error>(markers)
+        Ok::<_, arclens_data::Error>(bytes)
     }
     .await;
     match fetched {
-        Ok(markers) => Ok(markers),
+        // Parsed again so the place names come along (cheap next to the
+        // download).
+        Ok(bytes) => parse(&bytes),
         Err(error) => {
             tracing::warn!(%error, map, "map data fetch failed; trying cache");
             let bytes = tokio::fs::read(&cache)

@@ -61,6 +61,11 @@ pub struct App {
     map: String,
     markers: std::collections::HashMap<String, Load<Vec<arclens_core::Marker>>>,
     marker_filter: arclens_core::MarkerFilter,
+    /// Map tab and in game: the map's condition (a name from
+    /// `metaforge::conditions`), `None` when unknown. Markers of other
+    /// conditions are left out.
+    map_condition: Option<&'static str>,
+    presets: crate::presets::Presets,
     marker_query: String,
     expanded_categories: std::collections::BTreeSet<String>,
     /// Map tab: what the view derives from markers, query and filter, and
@@ -169,6 +174,14 @@ pub enum Message {
     MarkerQuery(String),
     ToggleMarkerCategory(String),
     ToggleMarkerSubcategory(String, String),
+    SelectCondition(Option<&'static str>),
+    ApplyPreset(String),
+    PresetDraft(String),
+    PresetForMap(bool),
+    PresetForCondition(bool),
+    SavePresetAs,
+    UpdatePreset,
+    DeletePreset(String),
     ExpandMarkerCategory(String),
     ShowAllMarkers,
     HideAllMarkers,
@@ -215,6 +228,8 @@ impl App {
             map: arclens_data::metaforge::MAPS[0].0.to_owned(),
             markers: std::collections::HashMap::new(),
             marker_filter: crate::store::load(&paths.marker_filter()).unwrap_or_default(),
+            map_condition: None,
+            presets: crate::presets::Presets::load(paths.presets()),
             marker_query: String::new(),
             expanded_categories: std::collections::BTreeSet::new(),
             map_screen: None,
@@ -352,14 +367,6 @@ impl App {
             }
             Message::FilterEventsMap(map) => self.event_map_filter = map,
             Message::SetRegion(region) => return self.set_region(region),
-            Message::SelectMap(_)
-            | Message::MarkersLoaded(..)
-            | Message::MarkerQuery(_)
-            | Message::ExpandMarkerCategory(_)
-            | Message::ToggleMarkerCategory(_)
-            | Message::ToggleMarkerSubcategory(..)
-            | Message::ShowAllMarkers
-            | Message::HideAllMarkers => return self.update_map(message),
             Message::SetStationLevel(station, level) => {
                 self.progress
                     .get_or_insert_with(Progress::default)
@@ -375,6 +382,8 @@ impl App {
             Message::OverlayProcess(overlay_process::Event::Unavailable(error)) => {
                 self.status.push(format!("Overlay not started: {error}"));
             }
+            // The rest are Map-tab messages.
+            message => return self.update_map(message),
         }
         Task::none()
     }
@@ -412,6 +421,9 @@ impl App {
             }
             overlay_link::Event::Message(arclens_ipc::ToApp::HideAllMarkers) => {
                 self.edit_marker_filter(Message::HideAllMarkers);
+            }
+            overlay_link::Event::Message(arclens_ipc::ToApp::ApplyPreset { id }) => {
+                return self.update_map(Message::ApplyPreset(id));
             }
             overlay_link::Event::Listening | overlay_link::Event::Message(_) => {}
             overlay_link::Event::Failed(error) => {
@@ -496,13 +508,20 @@ impl App {
                 }
                 self.map_screen = Some(MapScreen { map });
                 let mut task = Task::none();
-                if let Some(map) = map
-                    && map != self.map
-                {
-                    map.clone_into(&mut self.map);
+                if let Some(map) = map {
+                    let condition = game_condition(map, header.condition.as_deref());
+                    if map != self.map {
+                        map.clone_into(&mut self.map);
+                        self.map_condition = None;
+                    }
+                    match condition {
+                        ConditionLine::Condition(name) => self.map_condition = Some(name),
+                        ConditionLine::Other => self.map_condition = None,
+                        // Keep what was read before on this map.
+                        ConditionLine::Unread => {}
+                    }
+                    self.sync_preset();
                     self.refresh_map_summary();
-                }
-                if map.is_some() {
                     task = self.load_map_markers();
                 }
                 self.push_map_panel();
@@ -652,9 +671,55 @@ impl App {
     fn update_map(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::SelectMap(map) => {
-                self.map = map;
+                if map != self.map {
+                    self.map = map;
+                    self.map_condition = None;
+                }
+                self.sync_preset();
                 self.refresh_map_summary();
                 return self.load_map_markers();
+            }
+            Message::SelectCondition(condition) => {
+                self.map_condition = condition;
+                self.sync_preset();
+                self.refresh_map_summary();
+                self.push_map_panel();
+                self.push_map_markers();
+            }
+            Message::ApplyPreset(id) => {
+                if let Some(preset) = self.presets.choose(&id, &self.map, self.map_condition) {
+                    self.set_filter_from(&preset);
+                }
+            }
+            Message::PresetDraft(name) => self.presets.draft = name,
+            Message::PresetForMap(on) => self.presets.for_map = on,
+            Message::PresetForCondition(on) => self.presets.for_condition = on,
+            Message::SavePresetAs | Message::UpdatePreset => {
+                if let Some(Load::Ready(markers)) = self.markers.get(&self.map) {
+                    let kinds = arclens_core::marker_counts(markers);
+                    if matches!(message, Message::SavePresetAs) {
+                        self.presets.save_draft(
+                            &self.marker_filter,
+                            &kinds,
+                            &self.map,
+                            self.map_condition,
+                        );
+                    } else {
+                        self.presets.update_active(&self.marker_filter, &kinds);
+                    }
+                }
+                self.refresh_map_summary();
+                self.push_map_panel();
+            }
+            Message::DeletePreset(id) => {
+                self.presets.remove(&id);
+                // A reverted default applies as shipped.
+                if let Some(preset) = self.presets.active().cloned() {
+                    self.set_filter_from(&preset);
+                } else {
+                    self.refresh_map_summary();
+                    self.push_map_panel();
+                }
             }
             Message::MarkersLoaded(map, result) => {
                 if let Err(error) = &result {
@@ -664,6 +729,7 @@ impl App {
                 let on_screen = self
                     .map_screen
                     .is_some_and(|screen| screen.map == Some(map.as_str()));
+                let selected = map == self.map;
                 self.markers.insert(
                     map,
                     match result {
@@ -671,6 +737,9 @@ impl App {
                         Err(error) => Load::Failed(error),
                     },
                 );
+                if selected {
+                    self.sync_preset();
+                }
                 self.refresh_map_summary();
                 if on_screen {
                     self.push_map_panel();
@@ -732,6 +801,36 @@ impl App {
         self.push_map_markers();
     }
 
+    /// Applies the preset of the current map and condition if they changed
+    /// since the filter was set (needs the map's markers).
+    fn sync_preset(&mut self) {
+        if !matches!(self.markers.get(&self.map), Some(Load::Ready(_))) {
+            return;
+        }
+        if let Some(preset) = self.presets.on_context(&self.map, self.map_condition) {
+            tracing::info!(preset = %preset.id, map = %self.map, condition = ?self.map_condition, "preset applied");
+            self.set_filter_from(&preset);
+        }
+    }
+
+    /// Makes `preset` the marker filter.
+    fn set_filter_from(&mut self, preset: &arclens_core::Preset) {
+        let Some(Load::Ready(markers)) = self.markers.get(&self.map) else {
+            return;
+        };
+        self.marker_filter = preset.filter(&arclens_core::marker_counts(markers));
+        crate::store::save(&self.paths.marker_filter(), &self.marker_filter);
+        self.refresh_map_summary();
+        self.push_map_panel();
+        self.push_map_markers();
+    }
+
+    /// The bit of the current condition in markers' condition masks.
+    fn condition_bit(&self, map: &str) -> Option<u8> {
+        let condition = self.map_condition.filter(|_| map == self.map)?;
+        arclens_data::metaforge::condition_on_map(map, condition).map(|(_, bit)| bit)
+    }
+
     /// Places the selected markers on the open in-game map, located from
     /// the labels read on screen. Clears them when the view can't be
     /// located, rather than drawing them in the wrong place.
@@ -765,8 +864,10 @@ impl App {
             (left..=MAP_VIEWPORT[2]).contains(&x)
                 && (MAP_VIEWPORT[1]..=MAP_VIEWPORT[3]).contains(&y)
         };
+        let bit = self.condition_bit(map);
         let enabled = markers.iter().enumerate().filter(|(_, m)| {
             self.marker_filter.shows(m)
+                && m.occurs_in(bit)
                 // The game draws place names itself.
                 && !(m.label.is_some() && m.category.to_lowercase().contains("label"))
         });
@@ -796,7 +897,15 @@ impl App {
     fn refresh_map_summary(&mut self) {
         self.map_summary = match self.markers.get(&self.map) {
             Some(Load::Ready(markers)) => {
-                crate::views::map::MapSummary::new(markers, &self.marker_query, &self.marker_filter)
+                self.presets.edited = self.presets.active().is_some_and(|p| {
+                    !p.matches(&self.marker_filter, &arclens_core::marker_counts(markers))
+                });
+                crate::views::map::MapSummary::new(
+                    markers,
+                    &self.marker_query,
+                    &self.marker_filter,
+                    self.condition_bit(&self.map),
+                )
             }
             _ => crate::views::map::MapSummary::default(),
         };
@@ -811,13 +920,34 @@ impl App {
         let map_name = map
             .and_then(|id| arclens_data::metaforge::MAPS.iter().find(|m| m.0 == id))
             .map_or("Unknown map", |m| m.1);
-        let categories = match map.and_then(|m| self.markers.get(m)) {
-            Some(Load::Ready(markers)) => panel_categories(markers, &self.marker_filter),
+        let categories = match map.and_then(|m| Some((m, self.markers.get(m)?))) {
+            Some((map, Load::Ready(markers))) => {
+                panel_categories(markers, &self.marker_filter, self.condition_bit(map))
+            }
             _ => Vec::new(),
+        };
+        let here = map == Some(self.map.as_str());
+        let condition = self.map_condition.filter(|_| here);
+        let presets = if here {
+            self.presets
+                .suited(&self.map, condition)
+                .into_iter()
+                .map(|p| arclens_ipc::PanelPreset {
+                    id: p.id.clone(),
+                    name: p.name.clone(),
+                    for_condition: !p.conditions.is_empty(),
+                })
+                .collect()
+        } else {
+            Vec::new()
         };
         let panel = arclens_ipc::MapPanel {
             map_name: map_name.to_owned(),
             categories,
+            condition: condition.map(str::to_owned),
+            presets,
+            active_preset: self.presets.active().map(|p| p.id.clone()),
+            edited: self.presets.edited,
         };
         self.send(ToOverlay::ShowMapPanel { panel });
     }
@@ -917,7 +1047,17 @@ impl App {
             plot: &self.map_plot,
             query: &self.marker_query,
             expanded: &self.expanded_categories,
+            conditions: arclens_data::metaforge::conditions(&self.map),
+            condition: self.map_condition,
+            presets: self.presets_view(),
         })
+    }
+
+    fn presets_view(&self) -> crate::views::map::PresetsView<'_> {
+        crate::views::map::PresetsView {
+            suited: self.presets.suited(&self.map, self.map_condition),
+            presets: &self.presets,
+        }
     }
 
     fn view_events(&self) -> Element<'_, Message> {
@@ -1349,7 +1489,7 @@ fn tab_button(label: &str, active: bool, on_press: Message) -> Element<'_, Messa
 
 /// The in-game map viewport, `[left, top, right, bottom]` as screen
 /// fractions: markers outside it would sit on the game's side panels.
-const MAP_VIEWPORT: [f32; 4] = [0.02, 0.075, 0.77, 0.90];
+const MAP_VIEWPORT: [f32; 4] = [0.02, 0.105, 0.77, 0.90];
 /// The viewport's left edge while the quest panel is open.
 const MAP_VIEWPORT_LEFT_WITH_QUESTS: f32 = 0.275;
 
@@ -1357,9 +1497,10 @@ const MAP_VIEWPORT_LEFT_WITH_QUESTS: f32 = 0.275;
 fn panel_categories(
     markers: &[arclens_core::Marker],
     filter: &arclens_core::MarkerFilter,
+    condition: Option<u8>,
 ) -> Vec<arclens_ipc::PanelCategory> {
     use arclens_core::humanize;
-    arclens_core::marker_counts(markers)
+    arclens_core::marker_counts(markers.iter().filter(|m| m.occurs_in(condition)))
         .into_iter()
         .map(|(category, subs)| arclens_ipc::PanelCategory {
             id: category.to_owned(),
@@ -1379,6 +1520,28 @@ fn panel_categories(
                 .collect(),
         })
         .collect()
+}
+
+/// What the map panel's condition line says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConditionLine {
+    /// A condition of the map.
+    Condition(&'static str),
+    /// Other text: the game shows the player's name there when the raid
+    /// has no condition.
+    Other,
+    /// Nothing read.
+    Unread,
+}
+
+fn game_condition(map: &str, line: Option<&str>) -> ConditionLine {
+    match line.map(str::trim).filter(|l| !l.is_empty()) {
+        None => ConditionLine::Unread,
+        Some(line) => arclens_data::metaforge::condition_on_map(map, line)
+            .map_or(ConditionLine::Other, |(name, _)| {
+                ConditionLine::Condition(name)
+            }),
+    }
 }
 
 /// Ctrl+1…4 switch tabs.

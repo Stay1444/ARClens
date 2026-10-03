@@ -156,6 +156,122 @@ pub fn event_on_map(event_map: &str, map_id: &str) -> bool {
         })
 }
 
+/// Each map's conditions and their bit in a marker's `eventConditionMask`,
+/// from the `eventConditions` lists in MetaForge's map page bundle
+/// (recorded 2026-10-03). The numbering differs per map (Cold Snap is 9 on
+/// Dam, 11 on the Spaceport). Verified on Dam's data: hurricane caches
+/// carry bit 12 (Hurricane), snow piles bit 9 (Cold Snap), husks bit 4
+/// (Husk Graveyard), probes bit 1, assessors bit 14 (Close Scrutiny).
+pub const CONDITIONS: &[(&str, &[(&str, u8)])] = &[
+    (
+        "dam",
+        &[
+            ("No Event", 0),
+            ("Prospecting Probes", 1),
+            ("Harvester", 2),
+            ("Uncovered Caches", 3),
+            ("Husk Graveyard", 4),
+            ("Electromagnetic Storm", 5),
+            ("Lush Blooms", 6),
+            ("Night Raid", 7),
+            ("Matriarch", 8),
+            ("Cold Snap", 9),
+            ("Hurricane", 12),
+            ("Close Scrutiny", 14),
+        ],
+    ),
+    (
+        "spaceport",
+        &[
+            ("No Event", 0),
+            ("Prospecting Probes", 1),
+            ("Harvester", 2),
+            ("Uncovered Caches", 3),
+            ("Husk Graveyard", 4),
+            ("Launch Tower Loot", 5),
+            ("Lush Blooms", 6),
+            ("Night Raid", 7),
+            ("Electromagnetic Storm", 8),
+            ("Hidden Bunker", 9),
+            ("Matriarch", 10),
+            ("Cold Snap", 11),
+            ("Hurricane", 12),
+            ("Close Scrutiny", 14),
+        ],
+    ),
+    (
+        "buried-city",
+        &[
+            ("No Event", 0),
+            ("Prospecting Probes", 1),
+            ("Uncovered Caches", 3),
+            ("Husk Graveyard", 4),
+            ("Lush Blooms", 6),
+            ("Night Raid", 7),
+            ("Cold Snap", 8),
+            ("Hurricane", 12),
+            ("Close Scrutiny", 14),
+        ],
+    ),
+    (
+        "blue-gate",
+        &[
+            ("No Event", 0),
+            ("Harvester", 2),
+            ("Uncovered Caches", 3),
+            ("Husk Graveyard", 4),
+            ("Lush Blooms", 6),
+            ("Night Raid", 7),
+            ("Electromagnetic Storm", 8),
+            ("Cold Snap", 9),
+            ("Matriarch", 10),
+            ("Hurricane", 12),
+            ("Locked Gate", 13),
+            ("Close Scrutiny", 14),
+        ],
+    ),
+    ("stella-montis", &[("No Event", 0), ("Night Raid", 7)]),
+    (
+        "riven-tides",
+        &[("No Event", 0), ("Night Raid", 7), ("Beachcombing", 15)],
+    ),
+];
+
+/// A map's conditions with their bits (empty for an unknown map).
+pub fn conditions(map: &str) -> &'static [(&'static str, u8)] {
+    CONDITIONS
+        .iter()
+        .find(|(id, _)| *id == map)
+        .map_or(&[], |(_, list)| list)
+}
+
+/// The condition of `map` named by `text` (the map panel's condition line
+/// as read, e.g. `"? Hurricane"`, or a schedule name), with its bit.
+/// Tolerates OCR slips and stray symbols.
+pub fn condition_on_map(map: &str, text: &str) -> Option<(&'static str, u8)> {
+    let squash = |s: &str| -> String {
+        s.chars()
+            .filter(char::is_ascii_alphabetic)
+            .collect::<String>()
+            .to_lowercase()
+    };
+    let text = squash(text);
+    if text.is_empty() {
+        return None;
+    }
+    conditions(map)
+        .iter()
+        .map(|&(name, bit)| {
+            (
+                (name, bit),
+                strsim::normalized_levenshtein(&text, &squash(name)),
+            )
+        })
+        .filter(|&(_, score)| score >= 0.8)
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(condition, _)| condition)
+}
+
 /// Marker endpoint for one map (`id` from [`MAPS`]).
 pub fn map_data_url(map: &str) -> String {
     format!("https://metaforge.app/api/game-map-data?tableID=arc_map_data&mapID={map}")
@@ -192,6 +308,8 @@ struct RawMarker {
     instance_name: Option<String>,
     #[serde(default)]
     behind_locked_door: Option<bool>,
+    #[serde(default)]
+    event_condition_mask: Option<serde_json::Value>,
 }
 
 /// A coordinate, sent as a number or a numeric string.
@@ -211,6 +329,20 @@ impl Number {
         }
         .filter(|v: &f32| v.is_finite())
     }
+}
+
+/// A marker's `eventConditionMask`: a bit set over the map's
+/// [`CONDITIONS`]. Absent, `0` and `1` (bit 0 alone, "No Event") mean the
+/// marker is there in every condition: `1` is what most ordinary markers
+/// carry (1247 of 7662 on Dam, raider caches and lockers among them), so it
+/// reads as the editor's default rather than "only without a condition".
+fn condition_mask(value: Option<&serde_json::Value>) -> Option<u32> {
+    let mask = match value? {
+        serde_json::Value::Number(n) => n.as_u64()?,
+        serde_json::Value::String(s) => s.trim().parse().ok()?,
+        _ => return None,
+    };
+    u32::try_from(mask).ok().filter(|&m| m > 1)
 }
 
 /// Parses a `game-map-data` response for `map`.
@@ -243,6 +375,7 @@ pub fn parse_map_markers(bytes: &[u8], map: &str) -> Result<Vec<Marker>, Error> 
                 position: MapPoint::new(lng, lat),
                 label: clean(m.instance_name),
                 locked: m.behind_locked_door.unwrap_or(false),
+                conditions: condition_mask(m.event_condition_mask.as_ref()),
             })
         })
         .collect())
@@ -285,6 +418,45 @@ mod tests {
         assert_eq!(map_for_title("BURIED CITY 26:03"), Some("buried-city"));
         assert_eq!(map_for_title("BURIED CITY -25:57"), Some("buried-city"));
         assert_eq!(map_for_title("Stay1444"), None);
+    }
+
+    #[test]
+    fn reads_condition_masks() {
+        let markers = parse_map_markers(
+            br#"[{"id":"a","lat":1,"lng":2,"category":"containers","eventConditionMask":4096},
+                {"id":"b","lat":1,"lng":2,"category":"containers","eventConditionMask":1},
+                {"id":"c","lat":1,"lng":2,"category":"containers","eventConditionMask":"512"},
+                {"id":"d","lat":1,"lng":2,"category":"containers","eventConditionMask":null}]"#,
+            "dam",
+        )
+        .unwrap();
+        let masks: Vec<_> = markers.iter().map(|m| m.conditions).collect();
+        assert_eq!(masks, [Some(4096), None, Some(512), None]);
+        let (_, hurricane) = condition_on_map("dam", "Hurricane").unwrap();
+        assert!(markers[0].occurs_in(Some(hurricane)));
+        assert!(!markers[0].occurs_in(Some(0)));
+    }
+
+    #[test]
+    fn names_the_condition_per_map() {
+        assert_eq!(
+            condition_on_map("dam", "? Hurricane"),
+            Some(("Hurricane", 12))
+        );
+        assert_eq!(condition_on_map("dam", "COLD SNAP"), Some(("Cold Snap", 9)));
+        assert_eq!(
+            condition_on_map("spaceport", "Cold Snap"),
+            Some(("Cold Snap", 11))
+        );
+        assert_eq!(
+            condition_on_map("dam", "Husk Graveyrd"),
+            Some(("Husk Graveyard", 4))
+        );
+        assert_eq!(condition_on_map("stella-montis", "Hurricane"), None);
+        assert_eq!(condition_on_map("dam", "??"), None);
+        assert_eq!(condition_on_map("nowhere", "Hurricane"), None);
+        // Every map we list has a condition table.
+        assert!(MAPS.iter().all(|(id, _)| !conditions(id).is_empty()));
     }
 
     #[test]

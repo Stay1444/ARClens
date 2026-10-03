@@ -81,6 +81,7 @@ pub fn map_labels(map: &str) -> Vec<Marker> {
                     position: MapPoint::new(l.lng, l.lat),
                     label: Some(l.text.clone()),
                     locked: false,
+                    conditions: None,
                 })
                 .collect()
         })

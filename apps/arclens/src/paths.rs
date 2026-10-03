@@ -54,6 +54,11 @@ impl Paths {
         self.config.join("marker-filter.json")
     }
 
+    /// The player's map presets and which one each map and condition uses.
+    pub fn presets(&self) -> PathBuf {
+        self.config.join("presets.json")
+    }
+
     /// Cached `game-map-data` response for `map`.
     pub fn map_data(&self, map: &str) -> PathBuf {
         self.cache.join("map-data").join(format!("{map}.json"))

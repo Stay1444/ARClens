@@ -1,0 +1,122 @@
+[
+  {
+    "id": "everything",
+    "name": "Everything",
+    "description": "Every marker the map has.",
+    "show": ["*"]
+  },
+  {
+    "id": "loot-run",
+    "name": "Loot run",
+    "description": "Worthwhile containers, field crates and ways out; no common boxes.",
+    "show": [
+      "containers/raider_cache", "containers/weapon_case", "containers/ammo_crate",
+      "containers/med_crate", "containers/utility_crate", "containers/security_breach",
+      "containers/locker", "containers/breachable_container",
+      "locations/field_crate", "locations/supply_station", "locations/locked_room",
+      "locations/raider_camp", "locations/field_depot", "locations/extraction", "locations/hatch"
+    ]
+  },
+  {
+    "id": "ways-out",
+    "name": "Ways out",
+    "description": "Extractions, raider hatches, supply stations and key rooms.",
+    "show": [
+      "locations/extraction", "locations/hatch", "locations/supply_station",
+      "locations/locked_room", "locations/breach_room"
+    ]
+  },
+  {
+    "id": "arc-threats",
+    "name": "ARC threats",
+    "description": "Where ARC machines patrol or sit.",
+    "show": ["arc", "events/harvester"]
+  },
+  {
+    "id": "quests",
+    "name": "Quests",
+    "description": "Quest objectives, plus the ways out.",
+    "show": ["quests", "locations/extraction", "locations/hatch"]
+  },
+  {
+    "id": "gathering",
+    "name": "Gathering",
+    "description": "Plants, fruit and baskets.",
+    "show": ["nature", "containers/basket"]
+  },
+  {
+    "id": "first-wave-caches",
+    "name": "First Wave caches",
+    "description": "Hurricane: First Wave caches (rare blueprints) and raider caches, which share spawn spots, plus the ways out.",
+    "conditions": ["Hurricane"],
+    "show": [
+      "containers/hurricane_cache", "containers/raider_cache",
+      "locations/extraction", "locations/hatch"
+    ]
+  },
+  {
+    "id": "uncovered-caches",
+    "name": "Uncovered caches",
+    "description": "Raider caches, plus the ways out.",
+    "conditions": ["Uncovered Caches"],
+    "show": ["containers/raider_cache", "locations/extraction", "locations/hatch"]
+  },
+  {
+    "id": "cold-snap",
+    "name": "Snow piles",
+    "description": "Cold Snap: snow piles and candleberries, plus the ways out.",
+    "conditions": ["Cold Snap"],
+    "show": ["events/snow_pile", "nature/candleberries", "locations/extraction", "locations/hatch"]
+  },
+  {
+    "id": "husk-graveyard",
+    "name": "Husks",
+    "description": "Husk Graveyard: ARC husks to loot, plus the ways out.",
+    "conditions": ["Husk Graveyard"],
+    "show": [
+      "containers/wasp_husk", "containers/rocketeer_husk", "containers/baron_husk",
+      "locations/extraction", "locations/hatch"
+    ]
+  },
+  {
+    "id": "probes",
+    "name": "Probes and couriers",
+    "description": "ARC probes and couriers, plus the ways out.",
+    "conditions": ["Prospecting Probes", "Electromagnetic Storm"],
+    "show": [
+      "containers/arc_probe", "containers/arc_courier",
+      "locations/extraction", "locations/hatch"
+    ]
+  },
+  {
+    "id": "lush-blooms",
+    "name": "Blooms",
+    "description": "Lush Blooms: plants and baskets, plus the ways out.",
+    "conditions": ["Lush Blooms"],
+    "show": ["nature", "containers/basket", "locations/extraction", "locations/hatch"]
+  },
+  {
+    "id": "close-scrutiny",
+    "name": "Assessors",
+    "description": "Close Scrutiny: assessors, combat supplies and vaporizers, plus the ways out.",
+    "conditions": ["Close Scrutiny"],
+    "show": [
+      "events/assessor", "containers/combat_supplies", "arc/vaporizer",
+      "locations/extraction", "locations/hatch"
+    ]
+  },
+  {
+    "id": "harvester",
+    "name": "Harvester",
+    "description": "The Harvester and the Queen, plus the ways out.",
+    "conditions": ["Harvester"],
+    "show": ["events/harvester", "arc/queen", "locations/extraction", "locations/hatch"]
+  },
+  {
+    "id": "matriarch",
+    "name": "Matriarch",
+    "description": "The Matriarch, plus the ways out.",
+    "conditions": ["Matriarch"],
+    "show": ["arc/matriarch", "locations/extraction", "locations/hatch"]
+  }
+]

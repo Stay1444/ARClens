@@ -186,6 +186,11 @@ pub struct Marker {
     /// Behind a locked door (needs a key).
     #[serde(default)]
     pub locked: bool,
+    /// Map conditions the marker exists in, as a bit set over the map's
+    /// own condition list (bit `n` is that map's condition number `n`; the
+    /// numbering differs per map). `None`: in every condition.
+    #[serde(default)]
+    pub conditions: Option<u32>,
 }
 
 impl Marker {
@@ -195,6 +200,15 @@ impl Marker {
             (Some(label), _) if !label.trim().is_empty() => label.trim().to_owned(),
             (_, Some(sub)) => humanize(sub),
             _ => humanize(&self.category),
+        }
+    }
+
+    /// Whether the marker exists while the map's condition number
+    /// `condition` is on (`None`: condition unknown, so yes).
+    pub fn occurs_in(&self, condition: Option<u8>) -> bool {
+        match (self.conditions, condition) {
+            (Some(mask), Some(bit)) => bit < 32 && mask & (1 << bit) != 0,
+            _ => true,
         }
     }
 
@@ -270,7 +284,7 @@ impl MarkerFilter {
     }
 }
 
-fn sub_key(category: &str, subcategory: &str) -> String {
+pub(crate) fn sub_key(category: &str, subcategory: &str) -> String {
     format!("{category}/{subcategory}")
 }
 
@@ -282,7 +296,9 @@ fn toggle(set: &mut BTreeSet<String>, key: String) {
 
 /// Marker counts per category, then per subcategory (`""` for none), sorted
 /// by name.
-pub fn marker_counts(markers: &[Marker]) -> BTreeMap<&str, BTreeMap<&str, usize>> {
+pub fn marker_counts<'a>(
+    markers: impl IntoIterator<Item = &'a Marker>,
+) -> BTreeMap<&'a str, BTreeMap<&'a str, usize>> {
     let mut counts: BTreeMap<&str, BTreeMap<&str, usize>> = BTreeMap::new();
     for marker in markers {
         *counts
@@ -364,6 +380,7 @@ mod tests {
             position: MapPoint::new(0.0, 0.0),
             label: label.map(Into::into),
             locked: false,
+            conditions: None,
         }
     }
 
@@ -413,6 +430,21 @@ mod tests {
         assert!(!filter.shows(&queen) && !filter.shows(&case));
         filter.show_all();
         assert!(filter.shows(&queen));
+    }
+
+    #[test]
+    fn condition_masks_pick_the_conditions_a_marker_exists_in() {
+        let always = marker("containers", Some("raider_cache"), None);
+        // Bit 12: Hurricane on Dam.
+        let hurricane = Marker {
+            conditions: Some(1 << 12),
+            ..marker("containers", Some("hurricane_cache"), None)
+        };
+        assert!(always.occurs_in(Some(12)) && always.occurs_in(Some(0)));
+        assert!(hurricane.occurs_in(Some(12)));
+        assert!(!hurricane.occurs_in(Some(0)));
+        assert!(hurricane.occurs_in(None));
+        assert!(!hurricane.occurs_in(Some(40)));
     }
 
     #[test]
