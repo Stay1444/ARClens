@@ -9,7 +9,11 @@ use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
 /// Image hosts we may fetch from.
-const ALLOWED_HOSTS: &[&str] = &["cdn.metaforge.app", "cdn.arctracker.io"];
+const ALLOWED_HOSTS: &[&str] = &[
+    "static.metaforge.app",
+    "cdn.metaforge.app",
+    "cdn.arctracker.io",
+];
 
 #[derive(Debug, Clone)]
 pub struct ImageCache {
@@ -80,6 +84,8 @@ mod tests {
         let name = file_name("https://cdn.metaforge.app/arc-raiders/custom/coldsnap.webp").unwrap();
         assert_eq!((name.len(), &name[17..]), (21, "webp"));
         assert!(file_name("https://cdn.arctracker.io/map-events/night_raid.png?v=2").is_some());
+        // The host the live events-schedule uses (2026-10-03).
+        assert!(file_name("https://static.metaforge.app/arc-raiders/custom/night.webp").is_some());
         assert_eq!(file_name("http://cdn.arctracker.io/a.png"), None);
         assert_eq!(file_name("https://evil.example/a.png"), None);
         assert_eq!(file_name("https://cdn.arctracker.io/a.svg"), None);

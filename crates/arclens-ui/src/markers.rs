@@ -35,12 +35,12 @@ const KEYWORDS: &[(Glyph, &[&str])] = &[
     (Glyph::Hatch, &["hatch"]),
     (
         Glyph::Extraction,
-        &["extract", "exit", "elevator", "train", "metro"],
+        &["extract", "exit", "elevator", "train", "metro", "lift"],
     ),
     (Glyph::Key, &["key", "door", "lock"]),
     (
         Glyph::Medical,
-        &["medic", "health", "first_aid", "first aid"],
+        &["medic", "med_", "med-", "health", "first_aid", "first aid"],
     ),
     (
         Glyph::Weapon,
@@ -56,7 +56,7 @@ const KEYWORDS: &[(Glyph, &[&str])] = &[
     (Glyph::Quest, &["quest", "objective", "mission", "task"]),
     (
         Glyph::Event,
-        &["event", "harvester", "graveyard", "probe", "supply", "drop"],
+        &["event", "harvester", "graveyard", "snow", "assessor"],
     ),
     (
         Glyph::Container,
@@ -96,7 +96,9 @@ const KEYWORDS: &[(Glyph, &[&str])] = &[
     (Glyph::Spawn, &["spawn", "player"]),
     (
         Glyph::Place,
-        &["label", "location", "zone", "poi", "area", "landmark"],
+        &[
+            "label", "location", "zone", "poi", "area", "landmark", "station", "depot", "camp",
+        ],
     ),
 ];
 
@@ -207,6 +209,16 @@ mod tests {
         assert_eq!(glyph("locations", Some("extraction")), Glyph::Extraction);
         assert_eq!(glyph("nature", Some("prickly_pear")), Glyph::Nature);
         assert_eq!(glyph("labels", Some("poi")), Glyph::Place);
+        // Real MetaForge subcategories (Dam, 2026-10-03).
+        assert_eq!(glyph("locations", Some("supply_station")), Glyph::Place);
+        assert_eq!(glyph("containers", Some("arc_probe")), Glyph::Arc);
+        assert_eq!(glyph("containers", Some("raider_cache")), Glyph::Container);
+        assert_eq!(glyph("containers", Some("med_crate")), Glyph::Medical);
+        assert_eq!(glyph("arc", Some("rollbot")), Glyph::Arc);
+        assert_eq!(glyph("events", Some("snow_pile")), Glyph::Event);
+        assert_eq!(glyph("locations", Some("locked_room")), Glyph::Key);
+        assert_eq!(glyph("locations", Some("player_spawn")), Glyph::Spawn);
+        assert_eq!(glyph("nature", Some("candleberries")), Glyph::Nature);
         // Unknown subcategory: the category decides.
         assert_eq!(glyph("quests", Some("xyz")), Glyph::Quest);
         assert_eq!(glyph("mystery", None), Glyph::Other);

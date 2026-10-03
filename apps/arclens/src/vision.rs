@@ -85,13 +85,27 @@ pub fn subscription() -> Subscription<Event> {
     })
 }
 
-fn run(mut output: mpsc::Sender<Event>) {
-    let mut send = |event: Event| output.try_send(event).is_ok();
+/// The worker's link to the UI.
+struct Outbox(mpsc::Sender<Event>);
+
+impl Outbox {
+    /// `false` when the UI is gone or hopelessly behind.
+    fn send(&mut self, event: Event) -> bool {
+        self.0.try_send(event).is_ok()
+    }
+
+    fn closed(&self) -> bool {
+        self.0.is_closed()
+    }
+}
+
+fn run(output: mpsc::Sender<Event>) {
+    let mut out = Outbox(output);
 
     let paths = match Paths::discover() {
         Ok(paths) => paths,
         Err(error) => {
-            send(Event::Unavailable(error.to_string()));
+            out.send(Event::Unavailable(error.to_string()));
             return;
         }
     };
@@ -101,7 +115,7 @@ fn run(mut output: mpsc::Sender<Event>) {
     let mut analyzer = match analyzer {
         Ok(reader) => Analyzer::new(reader),
         Err(error) => {
-            send(Event::Unavailable(format!(
+            out.send(Event::Unavailable(format!(
                 "OCR model unavailable: {error}"
             )));
             return;
@@ -111,7 +125,7 @@ fn run(mut output: mpsc::Sender<Event>) {
     let mut source = match frame_source(&paths) {
         Ok(source) => source,
         Err(error) => {
-            send(Event::Unavailable(format!(
+            out.send(Event::Unavailable(format!(
                 "screen capture unavailable: {error:#}"
             )));
             return;
@@ -119,7 +133,7 @@ fn run(mut output: mpsc::Sender<Event>) {
     };
 
     if let Some(monitor) = source.monitor() {
-        send(Event::Monitor(monitor));
+        out.send(Event::Monitor(monitor));
     }
 
     let mut last: Option<Hover> = None;
@@ -128,11 +142,17 @@ fn run(mut output: mpsc::Sender<Event>) {
     let mut map_read: Option<Instant> = None;
     let mut map_view = MapView::default();
     while let Some(frame) = source.next_frame() {
-        if !watch_map(&analyzer, &frame, &mut map_read, &mut send) {
+        // Capture turned off (the UI dropped the subscription): stop, which
+        // drops the source and ends the screencast session.
+        if out.closed() {
+            tracing::info!("item detection stopped");
+            return;
+        }
+        if !watch_map(&analyzer, &frame, &mut map_read, &mut |e| out.send(e)) {
             return;
         }
         if map_read.is_some() {
-            if !watch_labels(&mut analyzer, &frame, &mut map_view, &mut send) {
+            if !watch_labels(&mut analyzer, &frame, &mut map_view, &mut |e| out.send(e)) {
                 return;
             }
             // Keep sampling quickly while the map is open: panning.
@@ -166,7 +186,7 @@ fn run(mut output: mpsc::Sender<Event>) {
             (Some(_), None) => Event::Gone,
         };
         last = hover;
-        if !send(event) {
+        if !out.send(event) {
             return; // UI gone or hopelessly behind.
         }
     }

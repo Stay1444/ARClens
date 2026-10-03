@@ -149,9 +149,13 @@ green CI.
 - [x] Live capture: ScreenCast portal (`ashpd`) plus the PipeWire stream
       (`crates/arclens-capture`). Opt-in toggle, restore token persisted,
       ≤ 5 fps, cursor hidden. **Works on KDE (2026-10-03 field test).**
-- [ ] Pause capture when the game isn't focused (no direct signal on
-      Wayland; maybe pause when no ARC Raiders UI has been seen for N
-      seconds).
+- [x] Capture only while the game runs: "Game capture" mode Auto (default)
+      starts it when an ARC Raiders process appears in `/proc` and stops it
+      when it exits; also Always / Off. Stopping now really ends the
+      portal session and the PipeWire thread (each toggle used to leak a
+      screencast session, reported 2026-10-03).
+- [ ] Pause while the game isn't focused (no portable focus signal on
+      Wayland; a KWin script could provide one).
 - [x] Wire the hover detector to the overlay (`ShowHover`).
 - [x] Map open → `ShowMarkers` with the live transform (map →
       normalised screen, protocol v6), markers inside the viewport only,

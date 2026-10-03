@@ -27,8 +27,7 @@ pub const MAX_FPS: u32 = 10;
 /// Default pace while nothing interesting is on screen.
 pub const IDLE_INTERVAL: Duration = Duration::from_millis(250);
 
-/// A running capture of one monitor.
-#[derive(Debug)]
+/// A running capture of one monitor. Dropping it stops the capture.
 pub struct Capture {
     shared: Arc<Shared>,
     last_seq: u64,
@@ -37,6 +36,37 @@ pub struct Capture {
     /// Where the captured monitor sits in the compositor's logical space,
     /// as `(x, y, width, height)`, if the portal reports it.
     pub monitor: Option<(i32, i32, i32, i32)>,
+    /// Ends the portal session (the desktop's "screen is shared" indicator).
+    stop_portal: Option<tokio::sync::oneshot::Sender<()>>,
+    /// Quits the PipeWire loop.
+    stop_pipewire: Option<pw::channel::Sender<()>>,
+}
+
+impl std::fmt::Debug for Capture {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Capture")
+            .field("last_seq", &self.last_seq)
+            .field("monitor", &self.monitor)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Drop for Capture {
+    /// Stops streaming and closes the portal session, so turning capture
+    /// off leaves nothing running.
+    fn drop(&mut self) {
+        if let Some(stop) = self.stop_pipewire.take() {
+            let _ = stop.send(());
+        }
+        if let Some(stop) = self.stop_portal.take() {
+            let _ = stop.send(());
+        }
+        // Wake a consumer blocked in `next_frame`.
+        if let Ok(mut state) = self.shared.state.lock() {
+            state.closed = true;
+            self.shared.ready.notify_all();
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -62,8 +92,9 @@ impl Capture {
     /// `restore_token` is still valid) and starts streaming.
     pub fn start(restore_token: Option<String>) -> anyhow::Result<Self> {
         let (tx, rx) = std::sync::mpsc::channel();
-        // The portal session lives on its own thread/runtime for as long as
-        // the process runs; dropping it would end the cast.
+        let (stop_portal, stop_portal_rx) = tokio::sync::oneshot::channel::<()>();
+        // The portal session lives on its own thread/runtime until the
+        // `Capture` is dropped; closing it ends the cast.
         std::thread::Builder::new()
             .name("arclens-portal".into())
             .spawn(move || {
@@ -79,10 +110,15 @@ impl Capture {
                 };
                 runtime.block_on(async move {
                     match open_portal(restore_token.as_deref()).await {
-                        Ok((session_keepalive, remote)) => {
+                        Ok(((_proxy, session), remote)) => {
                             let _ = tx.send(Ok(remote));
-                            let _keep = session_keepalive;
-                            std::future::pending::<()>().await;
+                            // Until the Capture is dropped (or the sender
+                            // vanishes with it).
+                            let _ = stop_portal_rx.await;
+                            if let Err(error) = session.close().await {
+                                tracing::debug!(%error, "closing screencast session");
+                            }
+                            tracing::info!("screen capture stopped");
                         }
                         Err(e) => {
                             let _ = tx.send(Err(e));
@@ -98,10 +134,11 @@ impl Capture {
         let shared = Arc::new(Shared::default());
         let pw_shared = Arc::clone(&shared);
         let (fd, node) = (remote.fd, remote.node_id);
+        let (stop_pipewire, stop_pipewire_rx) = pw::channel::channel::<()>();
         std::thread::Builder::new()
             .name("arclens-pipewire".into())
             .spawn(move || {
-                if let Err(error) = run_pipewire(fd, node, &pw_shared) {
+                if let Err(error) = run_pipewire(fd, node, &pw_shared, stop_pipewire_rx) {
                     tracing::error!(%error, "PipeWire capture stopped");
                 }
                 let mut state = pw_shared
@@ -117,6 +154,8 @@ impl Capture {
             last_seq: 0,
             restore_token: remote.restore_token,
             monitor: remote.monitor,
+            stop_portal: Some(stop_portal),
+            stop_pipewire: Some(stop_pipewire),
         })
     }
 
@@ -164,7 +203,11 @@ struct Remote {
     monitor: Option<(i32, i32, i32, i32)>,
 }
 
-async fn open_portal(restore_token: Option<&str>) -> anyhow::Result<(impl Sized + use<>, Remote)> {
+/// The portal proxy and session (kept alive while capturing), and the
+/// PipeWire remote to read from.
+type Portal = (Screencast, ashpd::desktop::Session<Screencast>);
+
+async fn open_portal(restore_token: Option<&str>) -> anyhow::Result<(Portal, Remote)> {
     let proxy = Screencast::new().await?;
     let session = proxy
         .create_session(ashpd::desktop::CreateSessionOptions::default())
@@ -217,9 +260,18 @@ struct StreamState {
     last_convert: Option<Instant>,
 }
 
-fn run_pipewire(fd: OwnedFd, node_id: u32, shared: &Arc<Shared>) -> anyhow::Result<()> {
+fn run_pipewire(
+    fd: OwnedFd,
+    node_id: u32,
+    shared: &Arc<Shared>,
+    stop: pw::channel::Receiver<()>,
+) -> anyhow::Result<()> {
     pw::init();
     let mainloop = pw::main_loop::MainLoopRc::new(None)?;
+    let _stop = stop.attach(mainloop.loop_(), {
+        let mainloop = mainloop.clone();
+        move |()| mainloop.quit()
+    });
     let context = pw::context::ContextRc::new(&mainloop, None)?;
     let core = context.connect_fd_rc(fd, None)?;
     let stream = pw::stream::StreamBox::new(

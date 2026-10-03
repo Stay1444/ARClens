@@ -68,6 +68,22 @@ _Last researched: 2026-10-03. Re-verify before relying on anything marked
   Times are Unix milliseconds.
 - `event-timers` is the static table the schedule is expanded from:
   `{name, map, icon, days[], times:[{start:"HH:MM", end:"HH:MM"}]}` in UTC.
+- **Live check (2026-10-03, maintainer's curl dumps):**
+  - `events-schedule` matches the documented shape and adds
+    `"region":"europe"` at the top level: the schedule is per region.
+    Icons are on **`static.metaforge.app`** (`…/arc-raiders/custom/*.webp`).
+  - `game-map-data` for Dam: 7 662 records, all with `id, lat, lng,
+    zlayers, mapID, category, subcategory, instanceName, added_by,
+    behindLockedDoor, last_edited_by, updated_at, eventConditionMask,
+    lootAreas, sourceID, routeID, community`. Categories: containers 5 434,
+    nature 1 518, events 224, arc 194, locations 164, quests 128.
+    `lat` 975–4 293, `lng` 2 455–5 573.
+  - **No place-name labels** in this table: `instanceName` is the object
+    ("Generator", "Locker") or a free note ("On top of Pipeline Tower").
+    The Labels/Zones layers of MetaForge's map must come from another
+    table or endpoint (unknown yet), which label anchoring needs.
+  - Some subcategories mark spawn **areas**, not spots: e.g. 884
+    `raider_cache` records form dense blobs of candidate positions.
 - `game-map-data?tableID=arc_map_data&mapID=dam` returns:
 
   ```json

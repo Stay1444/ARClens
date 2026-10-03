@@ -114,3 +114,13 @@ ARLO-style "OCR the screen". Everything else on this page stands.
   screenshots and video in `crates/arclens-vision/tests/fixtures/`, with
   precision and recall tests, before wiring up live capture. See
   [ROADMAP.md](../ROADMAP.md).
+
+## Update 2026-10-03: is the game running?
+
+Capture now runs only while the game runs. The app scans `/proc/*/cmdline`
+every 5 s for the game's executable (`PioneerGame*.exe` under Proton) or its
+Steam install path (`steamapps/common/ARC Raiders/`). This is the process
+list `ps` shows: no handle on the game is opened, nothing is read from its
+memory, nothing is signalled, so rule 1 holds. Executable name
+**unverified** on a live install. Inside a Flatpak sandbox the host's
+processes are invisible, so there the user picks "Always".

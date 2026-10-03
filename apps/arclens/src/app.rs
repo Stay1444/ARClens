@@ -3,7 +3,7 @@
 use crate::icons::{Icon, Icons};
 use crate::overlay_link::OverlayHandle;
 use crate::paths::Paths;
-use crate::{data, hotkeys, overlay_link, overlay_process, vision};
+use crate::{data, game_process, hotkeys, overlay_link, overlay_process, vision};
 use arclens_core::{Item, ItemId, Place, Progress, Situation, advise_in, breakdown};
 use arclens_data::{Catalog, ItemSearch};
 use arclens_hotkeys::Action;
@@ -36,9 +36,10 @@ pub struct App {
     overlay: Option<OverlayHandle>,
     overlay_visible: bool,
     overlay_interactive: bool,
-    /// Whether screen-based item detection runs (opt-in: starting it opens
-    /// the desktop's screen-share dialog the first time).
-    vision_enabled: bool,
+    /// When screen capture (item and map detection) runs.
+    capture: CaptureMode,
+    /// Whether an ARC Raiders process is running.
+    game_running: bool,
     /// The player's workshop levels (`None`: never set, value-only advice).
     progress: Option<Progress>,
     progress_path: std::path::PathBuf,
@@ -79,6 +80,25 @@ pub enum Tab {
     Workshop,
 }
 
+/// When to capture the screen for item and map detection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CaptureMode {
+    /// While the game runs (found in the process list).
+    Auto,
+    Always,
+    Off,
+}
+
+impl CaptureMode {
+    fn next(self) -> Self {
+        match self {
+            Self::Auto => Self::Always,
+            Self::Always => Self::Off,
+            Self::Off => Self::Auto,
+        }
+    }
+}
+
 /// The in-game map screen, as last read from the screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct MapScreen {
@@ -103,7 +123,9 @@ pub enum Message {
     IconLoaded(ItemId, Option<Icon>),
     ToggleOverlay,
     ToggleInteractive,
+    /// Cycle the capture mode (auto → always → off).
     ToggleVision,
+    GameRunning(bool),
     SetTab(Tab),
     EventsLoaded(Result<Vec<arclens_core::ScheduledEvent>, String>),
     EventIconLoaded(String, Option<iced::widget::image::Handle>),
@@ -139,8 +161,14 @@ impl App {
             overlay: None,
             overlay_visible: false,
             overlay_interactive: false,
-            vision_enabled: std::env::var(vision::ENABLE_ENV).is_ok_and(|v| v == "1")
-                || std::env::var_os(vision::REPLAY_DIR_ENV).is_some(),
+            capture: if std::env::var(vision::ENABLE_ENV).is_ok_and(|v| v == "1")
+                || std::env::var_os(vision::REPLAY_DIR_ENV).is_some()
+            {
+                CaptureMode::Always
+            } else {
+                CaptureMode::Auto
+            },
+            game_running: false,
             hover: None,
             progress: crate::progress::load(&paths.progress()),
             progress_path: paths.progress(),
@@ -179,7 +207,10 @@ impl App {
             overlay_link::subscription().map(Message::Overlay),
             hotkeys::subscription().map(Message::Hotkey),
         ];
-        if self.vision_enabled {
+        if self.capture == CaptureMode::Auto {
+            subscriptions.push(game_process::subscription().map(Message::GameRunning));
+        }
+        if self.capturing() {
             subscriptions.push(vision::subscription().map(Message::Vision));
         }
         if overlay_process::enabled() {
@@ -264,11 +295,14 @@ impl App {
             }
             Message::Overlay(event) => return self.on_overlay_event(event),
             Message::ToggleVision => {
-                self.vision_enabled = !self.vision_enabled;
-                if !self.vision_enabled {
-                    self.hover = None;
-                    self.send(ToOverlay::ClearHover);
-                }
+                let was = self.capturing();
+                self.capture = self.capture.next();
+                self.capture_changed(was);
+            }
+            Message::GameRunning(running) => {
+                let was = self.capturing();
+                self.game_running = running;
+                self.capture_changed(was);
             }
             Message::SetTab(tab) => return self.set_tab(tab),
             Message::EventsLoaded(result) => return self.on_events_loaded(result),
@@ -510,6 +544,27 @@ impl App {
                 icon: self.icons.get(id).map(|icon| icon.path.clone()),
                 recycle_names: recycle_names(item, catalog, Place::Workshop),
             });
+        }
+    }
+
+    /// Whether the screen is being captured now.
+    fn capturing(&self) -> bool {
+        match self.capture {
+            CaptureMode::Auto => self.game_running,
+            CaptureMode::Always => true,
+            CaptureMode::Off => false,
+        }
+    }
+
+    /// Clears what capture showed once it stops.
+    fn capture_changed(&mut self, was_capturing: bool) {
+        if was_capturing && !self.capturing() {
+            self.hover = None;
+            self.map_screen = None;
+            self.map_labels.clear();
+            self.send(ToOverlay::ClearHover);
+            self.send(ToOverlay::HideMapPanel);
+            self.send(ToOverlay::ClearMarkers);
         }
     }
 
@@ -845,8 +900,13 @@ impl App {
             middle,
             status,
             pill_button(
-                "Detect items",
-                if self.vision_enabled { "on" } else { "off" },
+                "Game capture",
+                match (self.capture, self.game_running) {
+                    (CaptureMode::Auto, true) => "auto · game running",
+                    (CaptureMode::Auto, false) => "auto · waiting for game",
+                    (CaptureMode::Always, _) => "always",
+                    (CaptureMode::Off, _) => "off",
+                },
                 Message::ToggleVision,
             ),
             pill_button(
