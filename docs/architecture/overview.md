@@ -6,13 +6,13 @@
 ┌──────────────────────────── arclens (companion app) ────────────────────────────┐
 │  iced window (winit)                                                            │
 │  ├─ data:     Catalog ← DiskCache ← RaidTheory download   (arclens-data)        │
-│  ├─ hotkeys:  XDG GlobalShortcuts portal                  (arclens-hotkeys)     │
-│  ├─ vision:   ScreenCast portal → detect → OCR → match   (capture + vision)     │
-│  └─ IPC server  $XDG_RUNTIME_DIR/arclens.sock             (arclens-ipc)         │
+│  ├─ hotkeys:  portal (Linux) / RegisterHotKey (Windows)   (arclens-hotkeys)     │
+│  ├─ vision:   screen capture → detect → OCR → match       (capture + vision)    │
+│  └─ IPC server  Unix socket / named pipe                  (arclens-ipc)         │
 └──────────────────────────────────────┬──────────────────────────────────────────┘
                                        │ newline-delimited JSON (ToOverlay / ToApp)
 ┌──────────────────────────────────────▼──────────────────────────────────────────┐
-│  arclens-overlay: iced_layershell, OVERLAY layer, click-through, wgpu only      │
+│  arclens-overlay: layer-shell (Linux) / topmost window (Windows), wgpu only     │
 │  Renders item cards and map markers. Holds no game logic.                       │
 └─────────────────────────────────────────────────────────────────────────────────┘
 
@@ -37,13 +37,27 @@ overlay state (visibility, interactivity, current item).
 |---|---|---|---|
 | `arclens-core` | lib | Domain types (`Item`, `Marker`, `Transform`), loot advice. **Pure: no I/O, async or UI** | serde |
 | `arclens-data` | lib | Providers (RaidTheory), download, disk cache, icon cache, fuzzy search | core |
-| `arclens-ipc` | lib | Wire protocol, socket framing, version handshake | core, tokio |
-| `arclens-hotkeys` | lib | GlobalShortcuts portal wrapper, stable action ids | ashpd |
+| `arclens-ipc` | lib | Wire protocol, framing, version handshake, `Endpoint` (Unix socket / named pipe) | core, tokio |
+| `arclens-hotkeys` | lib | Global hotkeys, stable action ids (portal / `RegisterHotKey`) | ashpd / global-hotkey |
 | `arclens-ui` | lib | Design tokens and the shared item card used by app and overlay | core, iced |
-| `arclens-vision` | lib | Frame → tooltip panels → name lines → OCR text (`Analyzer`); map registration planned | image, ocrs |
-| `arclens-capture` | lib | ScreenCast portal + PipeWire → RGB frames, ≤ 5 fps | ashpd, pipewire |
+| `arclens-vision` | lib | Frame → tooltip panels → name lines → OCR text (`Analyzer`); map labels, header, pan/zoom tracking | image, ocrs, rustfft |
+| `arclens-capture` | lib | Screen → RGB frames at a set pace (portal + PipeWire / Graphics Capture) | ashpd, pipewire / windows-capture |
 | `arclens` | bin | Companion app: owns state, wires everything | all libs, iced |
-| `arclens-overlay` | bin | Overlay renderer | core, ipc, iced_layershell |
+| `arclens-overlay` | bin | Overlay renderer: platform-free core + `shell` per OS | core, ipc, iced (+ iced_layershell on Linux) |
+
+## Platform backends
+
+Each platform-dependent area keeps one API; the OS picks one backend
+module with a single `#[cfg]`:
+
+| Area | API | Linux | Windows |
+|---|---|---|---|
+| IPC transport | `arclens_ipc::Endpoint` | Unix socket in `$XDG_RUNTIME_DIR` | named pipe `\\.\pipe\arclens-<user>` |
+| Screen capture | `arclens_capture::Capture` | XDG ScreenCast portal + PipeWire | Windows Graphics Capture (primary monitor) |
+| Hotkeys | `arclens_hotkeys::{init, listen}` | GlobalShortcuts portal | `RegisterHotKey` (global-hotkey) |
+| Overlay surface | `arclens-overlay` `shell::{run, sync_surface, input_task}` | layer-shell, OVERLAY layer, input region | topmost transparent window, cursor-polled click-through |
+| Desktop integration | `arclens::platform::{integrate, window_platform}` | desktop entry + app id | nothing (window icon) |
+| Game detection | `game_process` | sysinfo (portable) | sysinfo (portable) |
 
 Rules:
 - Dependencies point **down** the table: no lib depends on a bin, and

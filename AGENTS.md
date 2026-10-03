@@ -5,7 +5,7 @@ Guidance for AI coding agents (and humans) working in this repository.
 
 ## What this is
 
-ARClens is a Linux-first companion app and in-game overlay for **ARC Raiders**
+ARClens is a Linux-first (Windows too) companion app and in-game overlay for **ARC Raiders**
 (Embark Studios). It does item lookup with keep/sell/recycle advice, map
 markers and event timers. Primary target: **KDE Plasma 6 on Wayland
 (Fedora)**, with the game under Steam/Proton.
@@ -16,8 +16,9 @@ markers and event timers. Primary target: **KDE Plasma 6 on Wayland
    "read-only"), no injection, no Vulkan layers, no `LD_PRELOAD`, no hooking,
    no sniffing its network traffic, and no synthesising input into it. The
    game runs Denuvo Anti-Cheat, and users' accounts are at stake. Game state
-   comes only from public data and **screen capture through the XDG portal**.
-   See `docs/research/game-state-detection.md`.
+   comes only from public data and **the OS's screen capture** (the XDG
+   portal on Linux, Windows Graphics Capture on Windows; what screen
+   recorders use). See `docs/research/game-state-detection.md`.
 2. **Respect data sources.** Use only sources listed in
    `docs/research/data-sources.md`, with their caching and terms.
    Attribution goes in the README's "Data and attribution" section, not in
@@ -36,6 +37,18 @@ markers and event timers. Primary target: **KDE Plasma 6 on Wayland
 7. Don't `cargo update` `winit-core`/`winit-common` past `0.31.0-beta.2`
    until `iced_exdevtools` is fixed upstream (see
    `docs/research/wayland-overlay.md`).
+
+## Platforms
+
+Platform-specific code sits behind one API per area, with one backend
+module per OS chosen by a single `#[cfg]` at the module boundary (no
+`if cfg!` chains in callers): `arclens-ipc` transport (Unix socket / named
+pipe), `arclens-capture` (portal + PipeWire / Graphics Capture),
+`arclens-hotkeys` (portal / `RegisterHotKey`), the overlay's `shell`
+(layer-shell / topmost window) and the app's `platform` (desktop entry /
+nothing). New platform code goes into those backends. Check Windows with
+`cargo clippy --target x86_64-pc-windows-gnu --workspace --all-targets`
+(mingw-w64); CI builds and tests natively on Windows.
 
 ## Layout
 
