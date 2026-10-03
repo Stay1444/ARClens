@@ -106,14 +106,55 @@ Results on the 18 committed fixture frames:
 
 Speed: **1.4–6.5 ms per 1440p frame** on one core in a release build.
 
+## Name recognition (implemented)
+
+- **Engine:** [`ocrs`](https://github.com/robertknight/ocrs), pure Rust on the
+  `rten` runtime.
+  - Only its **recognition** model runs, on the detected line crops, so the
+    detection model and any full-frame pass are skipped.
+- **Result: 17/17 names read exactly** on the fixtures (opt-in test
+  `crates/arclens-vision/tests/ocr.rs`).
+- **Speed:** ~30–40 ms per one-line name and ~75 ms for two lines, on one CPU
+  core (release build).
+- **Known model weakness:** CTC decoding merges repeated characters, so
+  "OSPREY II" comes out as "OSPREY I", and it drops the space in
+  "GRIP I" → "GRIPI".
+  - This matters because *Osprey I and Torrente I exist* as separate items.
+  - Fix: count the bars of a trailing word made only of narrow full-height
+    glyphs in the image itself, then rewrite the numeral.
+  - Measured spacing at 23 px cap height: letter gaps 3–4 px, the gap between
+    the bars of "II" 6 px, word gaps 12 px.
+- **Matching:** `arclens_data::match_name` normalises the text (case,
+  whitespace, trader `x25` prefix) and requires an exact match or ≥ 0.9
+  similarity. All 13 distinct names map to the right dataset id.
+- **Model licence:**
+  - the ocrs models are trained only on HierText (CC BY-SA 4.0);
+  - no separate licence for the weights was found (**unverified**);
+  - the app **downloads** `text-recognition.rten` from the upstream URL at
+    runtime and never bundles or redistributes it.
+
+## Performance budget (why no GPU OCR)
+
+The game is GPU-bound, and GPU inference would compete with it for every
+frame. The CPU has headroom, and the work is small:
+
+| Stage | When | Cost (1 core, release) |
+|---|---|---|
+| Capture | 4 fps, only while the game window is focused | DMA-BUF from PipeWire, no copy (planned) |
+| Find panels + name lines | every captured frame | 1.4–6.5 ms at 1440p |
+| OCR | only when the name crop changed since the last frame | 30–75 ms, once per *new* hover |
+
+- That is under 3% of one core while browsing, plus a short burst per new
+  item, run on a low-priority background thread.
+- Perceived latency is at most one capture interval (≤ 250 ms at 4 fps) plus
+  ~35 ms.
+- If needed, the capture rate can rise only while a tooltip is visible.
+
 ## Open questions
 
 - **Crafting screens:** not yet seen.
-- **Other resolutions and UI scales:** offsets need to scale. Test 1080p.
-- **OCR engine:**
-  - candidates: `ocrs` (pure Rust, ONNX-free models) vs. Tesseract via FFI;
-  - prefer pure Rust if accuracy on this font is good;
-  - benchmark on crops from this video.
+- **Other resolutions and UI scales:** thresholds are mostly relative, but
+  test 1080p and 4K.
 
 ## Fixtures
 

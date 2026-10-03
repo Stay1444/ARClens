@@ -11,13 +11,29 @@ use image::RgbImage;
 
 /// Near-black: the tooltip's text colour. Measured ≤ 25 per channel on the
 /// name; grey "COMMON" chips are ~100–115, so 60 separates them cleanly.
-fn is_ink([r, g, b]: [u8; 3]) -> bool {
+pub(crate) fn is_ink([r, g, b]: [u8; 3]) -> bool {
     r.max(g).max(b) <= 60
 }
 
-/// The name line(s) of `panel`, tightly bounded. `None` if the panel holds no
-/// text (or isn't really a tooltip).
+/// The name of `panel` as one box covering all its lines. `None` if the
+/// panel holds no text (or isn't really a tooltip).
 pub fn name_line(frame: &RgbImage, panel: Rect) -> Option<Rect> {
+    let lines = name_lines(frame, panel);
+    let first = lines.first()?;
+    let last = lines.last()?;
+    let left = lines.iter().map(|r| r.x).min()?;
+    let right = lines.iter().map(Rect::right).max()?;
+    Some(Rect::new(
+        left,
+        first.y,
+        right - left,
+        last.bottom() - first.y,
+    ))
+}
+
+/// Each line of `panel`'s name (one, or two for long wrapped names), tightly
+/// bounded, top to bottom.
+pub fn name_lines(frame: &RgbImage, panel: Rect) -> Vec<Rect> {
     // Ignore a margin so panel borders/shadows never count as ink.
     let margin = (panel.width / 40).max(2);
     let x0 = panel.x + margin;
@@ -72,22 +88,29 @@ pub fn name_line(frame: &RgbImage, panel: Rect) -> Option<Rect> {
         .into_iter()
         .filter(on_cream)
         .collect();
-    let first = *bands.first()?;
+    let Some(&first) = bands.first() else {
+        return Vec::new();
+    };
     let first_h = first.1 - first.0;
-    let mut name = first;
+    let mut lines = vec![first];
     // A wrapped name continues with a band of similar height right below.
     for &(start, end) in &bands[1..] {
         let h = end - start;
-        let gap = start - name.1;
+        let gap = start - lines[lines.len() - 1].1;
         if gap * 10 <= first_h * 8 && h * 10 >= first_h * 8 {
-            name.1 = end;
+            lines.push((start, end));
         } else {
             break;
         }
     }
 
-    let (left, right) = ink_extent(name)?;
-    Some(Rect::new(left, name.0, right - left, name.1 - name.0))
+    lines
+        .into_iter()
+        .filter_map(|band| {
+            let (left, right) = ink_extent(band)?;
+            Some(Rect::new(left, band.0, right - left, band.1 - band.0))
+        })
+        .collect()
 }
 
 /// Runs of consecutive rows for which `has_ink` holds, as `(start, end)`

@@ -8,7 +8,8 @@
 //! 1. [`find_panels`]: cream-coloured panels (hover tooltips, and on trader
 //!    screens also the persistent purchase panel).
 //! 2. [`name_line`]: the bold item-name line at the top of a panel.
-//! 3. (next) recognise the name text and fuzzy-match it against the catalog.
+//! 3. [`NameReader`]: recognise the name text (OCR on just those lines).
+//!    Matching the text to a catalogue item is `arclens_data::match_name`.
 
 #![allow(
     clippy::cast_possible_truncation,
@@ -20,8 +21,10 @@
 
 mod geometry;
 mod panel;
+mod read;
 mod text;
 
 pub use geometry::Rect;
 pub use panel::{PanelParams, find_panels};
-pub use text::name_line;
+pub use read::{NameReader, RECOGNITION_MODEL_URL};
+pub use text::{name_line, name_lines};

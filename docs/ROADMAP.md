@@ -66,7 +66,10 @@ green CI.
   - [ ] which-map classifier;
   - [x] tooltip detector (cream panel → rectangle → name line), golden
         tests on 18 frames from stash, raid and trader;
-  - [ ] name-line reader with fuzzy catalogue match; pick the OCR engine (`ocrs` vs
+  - [x] name-line reader (ocrs recognition model, Roman-numeral stroke
+        count) and catalogue match: 17/17 fixture names exact;
+  - [ ] OCR model download + cache in the app; skip OCR when the crop is
+        unchanged; pick the OCR engine (`ocrs` vs
         Tesseract) by benchmarking on crops from the stash video;
   - [ ] read the tooltip footer value (weapons differ from the dataset);
   - [ ] place the overlay card next to the detected tooltip;

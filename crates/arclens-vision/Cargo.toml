@@ -8,7 +8,11 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
+anyhow = { workspace = true }
 image = { workspace = true }
+ocrs = "0.13"
+rten = "0.26"
+rten-imageproc = "0.26"
 
 [dev-dependencies]
 image = { workspace = true, features = ["jpeg"] }
