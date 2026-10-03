@@ -66,7 +66,7 @@ This document compares every way to get them. The decision is at the bottom.
 | Inventory open | Template-match a fixed UI element (header or tab bar) on a downscaled frame | Easy |
 | Map open | Same, with the map screen's chrome | Easy |
 | Which map | Compare against reference map images (colour histogram, then feature match) | Easy–medium |
-| Hovered item | Cursor position from PipeWire cursor metadata (`SPA_META_Cursor`), crop the tooltip, match the **item icon** against reference icons (perceptual hash or normalised cross-correlation) | Medium |
+| Hovered item | Find the cream tooltip panel (colour threshold + largest rectangle), read its **name line** and fuzzy-match against the catalogue (see update below) | Easy–medium |
 | Map pan/zoom | The map is top-down with no rotation, so view = scale + translation. Feature match (ORB/AKAZE + RANSAC) against the reference map, or phase correlation at the game's discrete zoom levels | Medium–hard |
 
 **Cost.**
@@ -85,6 +85,22 @@ This document compares every way to get them. The decision is at the bottom.
   capture our own reference icons.
 - Markers may trail the map by a frame or two while it is being dragged.
 - HDR, colour filters and resolution scaling need normalisation.
+
+## Update 2026-10-03: real footage changes the plan for signal 2
+
+A stash recording (see `docs/vision/findings-2026-10-03-stash-video.md`)
+shows the following:
+
+- **Detecting the tooltip is easy.** It's an opaque cream panel, the
+  brightest object on screen.
+- **Its name is bold, dark, single-line uppercase text** that matches dataset
+  names exactly.
+- **It has no item icon**, so icon matching is the wrong tool. Reading the
+  one name line and fuzzy-matching it against the ~580 catalogue names is
+  simpler and more robust.
+
+This narrow, closed-vocabulary text recognition is a different thing from
+ARLO-style "OCR the screen". Everything else on this page stands.
 
 ## Decision
 

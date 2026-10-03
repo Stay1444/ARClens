@@ -56,14 +56,19 @@ green CI.
 
 ## M3: Vision (see `docs/research/game-state-detection.md`)
 
-- [ ] **Collect fixtures** (see `docs/vision/capture-guide.md`). Screenshots and short recordings at 1080p and
+- [ ] **Collect fixtures** (see `docs/vision/capture-guide.md`). A stash hover
+      video is in; findings: `docs/vision/findings-2026-10-03-stash-video.md`. Screenshots and short recordings at 1080p and
       1440p of the inventory (with tooltips), the map screen at several
       zooms and pans on each map, and the HUD. Store them under
       `crates/arclens-vision/tests/fixtures/` (git LFS if large).
 - [ ] `arclens-vision` offline detectors with precision/recall tests:
   - [ ] inventory-open and map-open template matchers;
   - [ ] which-map classifier;
-  - [ ] hovered-item icon matcher (reference icons captured by us);
+  - [ ] tooltip detector (cream panel → rectangle) and name-line reader
+        with fuzzy catalogue match; pick the OCR engine (`ocrs` vs
+        Tesseract) by benchmarking on crops from the stash video;
+  - [ ] read the tooltip footer value (weapons differ from the dataset);
+  - [ ] place the overlay card next to the detected tooltip;
   - [ ] map registration → `Transform` (scale + translation).
 - [ ] Benchmarks (`criterion`): a CPU budget per frame at 4 fps.
 - [ ] Live capture: ScreenCast portal (`ashpd`) plus the PipeWire stream

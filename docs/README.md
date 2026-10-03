@@ -8,5 +8,6 @@
 | [research/wayland-overlay.md](research/wayland-overlay.md) | Layer-shell on KWin, click-through, hotkeys, toolkit comparison, pitfalls |
 | [guidelines/code-quality.md](guidelines/code-quality.md) | Lints, structure, errors, tests, commits |
 | [vision/capture-guide.md](vision/capture-guide.md) | Which game screenshots to capture for the vision detectors |
+| [vision/findings-2026-10-03-stash-video.md](vision/findings-2026-10-03-stash-video.md) | What the in-game tooltip looks like; why we read the name instead of matching icons |
 | [development.md](development.md) | Setup on Fedora, running, headless screenshots |
 | [ROADMAP.md](ROADMAP.md) | Milestones and what's next |
