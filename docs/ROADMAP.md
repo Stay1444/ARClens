@@ -89,6 +89,12 @@ green CI.
       verified headlessly on a synthetic frame and against all fixtures.
 - [ ] Workshop overview tiles (roman numerals under each station) for
       autofill without opening each station; needs fixture frames.
+- [x] Station headers read for long names too (field report 2026-10-03:
+      Explosives and Utility Station weren't recognised; their
+      "— LEVEL 01" fell outside the header region). The title now runs from
+      the first bright column to the first wide gap, before the CRAFTING
+      tab. The stash left the list: its upgrades cost only coins, so they
+      never change advice.
 - [x] **Quests and projects on the Progress page** (2026-10-03): tick
       finished quests, grouped per trader in chain order (ticking one ticks
       the quests before it, unticking clears the ones after), and step

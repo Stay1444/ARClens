@@ -128,7 +128,13 @@ impl RaidTheoryDir {
                         });
                 }
             }
-            if station.max_level > 0 {
+            // Upgrades bought with coins only (the stash) never make an
+            // item worth keeping: nothing to track.
+            let needs_items = station
+                .levels
+                .iter()
+                .any(|level| !level.requirement_item_ids.is_empty());
+            if station.max_level > 0 && needs_items {
                 stations.push(Station {
                     id: station.id,
                     name: station_name,

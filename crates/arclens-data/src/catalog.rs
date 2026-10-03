@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 /// Everything fetched from a [`crate::Provider`], plus where and when it came from.
 /// Bump when the catalogue's content or meaning changes (new fields filled by
 /// the loader), so caches written by older versions are rebuilt.
-pub const SCHEMA_VERSION: u32 = 4;
+pub const SCHEMA_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Catalog {
