@@ -78,6 +78,9 @@ green CI.
   - [ ] read the tooltip footer value (weapons differ from the dataset);
   - [ ] map screen: read map name, raid time and condition from the right
         panel (text, same OCR);
+  - [ ] map label finder (white outlined text in the viewport) +
+        recognition-only OCR; full ocrs pipeline reads the labels but takes
+        ~2 s/frame, see the map findings doc;
   - [ ] map registration → `Transform` by **label anchoring** (OCR the POI
         labels, fit scale + translation; see
         `docs/vision/findings-2026-10-03-map-video.md`); calibration tool

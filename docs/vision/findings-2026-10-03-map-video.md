@@ -68,6 +68,31 @@ Why this beats feature matching:
 Feature matching (ORB/AKAZE against a reference mosaic) stays the fallback
 for views with fewer than two labels.
 
+## First OCR experiment (2026-10-03)
+
+- Ran ocrs' full pipeline (text detection + recognition) on
+  `fixtures/map/dam_zoom_in.jpg` with
+  `crates/arclens-vision/examples/read_map.rs`.
+- **Read correctly or near-correctly:**
+  - "DAM BATTLEGROUNDS - 18:55" and "Matriarch";
+  - POI labels with screen positions: "Pale Apartments", "Ben Welder's
+    Sunroof", "Old Battleground", "Rubv Residence", "Floodgates", "South
+    Swamp Outpost", "Water Treatment Control" (the last two merged into one
+    line).
+- Errors are the usual character-level ones (`v` for `y`, dropped letters).
+  Fuzzy-matching against a known label list absorbs them, just as with item
+  names.
+- **Too slow as-is: ~2 s per frame**, because generic text detection runs on
+  the full 1440p screen.
+- **Plan:**
+  - find map labels the way we find tooltips, by colour: white text (≥ 225,
+    low saturation) with a dark outline, inside the map viewport;
+  - run only the recognition model on those crops (~30 ms each);
+  - only do it when the map is open and the view changed (a cheap
+    frame-difference check);
+  - read the right-panel header once per map open, for the map name, time
+    and condition.
+
 ## Marker data
 
 - The game already shows extractions and their timers.
