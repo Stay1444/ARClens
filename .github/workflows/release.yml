@@ -13,8 +13,9 @@ env:
 
 jobs:
   appimage:
-    # Oldest supported LTS: the AppImage then runs on older glibc too.
-    runs-on: ubuntu-22.04
+    # Oldest LTS whose PipeWire headers (1.0) the pipewire crate builds
+    # against; the AppImage needs glibc >= 2.39.
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
     - name: Install system dependencies

@@ -2,8 +2,8 @@
 # Builds ARClens-<version>-x86_64.AppImage in the repository root.
 #
 # Needs the app's build dependencies (see docs/development.md) and network
-# access to fetch linuxdeploy. CI runs it on Ubuntu 22.04 so the result
-# works on older glibc too.
+# access to fetch linuxdeploy. CI runs it on Ubuntu 24.04 (the oldest LTS
+# with PipeWire headers the pipewire crate accepts).
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"

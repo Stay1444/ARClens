@@ -12,6 +12,8 @@ runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
+  # libclang, for the PipeWire bindings (bindgen).
+  - org.freedesktop.Sdk.Extension.llvm20
 command: arclens
 finish-args:
   # The overlay is a wlr-layer-shell surface: Wayland only.
@@ -25,9 +27,11 @@ finish-args:
   # Screen capture and global shortcuts go through portals, which a
   # sandboxed app reaches without extra permissions.
 build-options:
-  append-path: /usr/lib/sdk/rust-stable/bin
+  append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/llvm20/bin
+  prepend-ld-library-path: /usr/lib/sdk/llvm20/lib
   env:
     CARGO_HOME: /run/build/arclens/cargo
+    LIBCLANG_PATH: /usr/lib/sdk/llvm20/lib
     CARGO_TERM_COLOR: always
 modules:
   - name: arclens
