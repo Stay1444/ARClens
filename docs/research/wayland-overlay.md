@@ -38,7 +38,8 @@ under Steam/Proton._
   which forces composition: a few percent FPS, plus latency and power. KWin
   6.5+ KMS overlay planes can mitigate this.
 - **When hidden, the overlay must unmap or destroy its surface**, not just draw
-  transparent pixels. (Today it draws transparent pixels; see the roadmap.)
+  transparent pixels. Implemented (2026-10-03): daemon mode, with the surface
+  created and removed on demand.
 
 ## Rendering: transparency pitfall (verified)
 

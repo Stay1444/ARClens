@@ -17,9 +17,9 @@ green CI.
 
 ## M1: Overlay you can use in a raid
 
-- [ ] **Unmap when hidden.** Destroy and recreate the layer surface
-      (`iced_layershell` daemon mode, `RemoveWindow` / `NewLayerShell`) so
-      KWin regains direct scanout.
+- [x] **Unmap when hidden.** The overlay runs in `iced_layershell` daemon
+      mode and only has a layer surface while something is drawn, so KWin can
+      scan the game out directly the rest of the time.
 - [ ] **Interactive mode.** Swap the input region (`SetInputRegion`) to
       cover only the overlay's panels, and add a search box in the overlay
       (`ToApp::Search` already exists).

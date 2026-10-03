@@ -4,6 +4,10 @@
 //! layer KWin stacks above fullscreen windows), click-through by default.
 //! It is a dumb renderer: all state comes from the companion app over IPC
 //! (see `arclens-ipc`). It never touches the game process.
+//!
+//! The surface only exists while there is something to draw. A mapped
+//! surface — even a fully transparent one — over a fullscreen game stops the
+//! compositor from scanning the game out directly, which costs frames.
 
 mod ipc;
 mod outputs;
@@ -12,8 +16,10 @@ mod view;
 use arclens_core::{Advice, Item, Marker, Transform};
 use arclens_ipc::ToOverlay;
 use iced::{Color, Subscription, Task};
-use iced_layershell::application;
-use iced_layershell::reexport::{Anchor, KeyboardInteractivity, Layer};
+use iced_layershell::daemon;
+use iced_layershell::reexport::{
+    Anchor, IcedId, KeyboardInteractivity, Layer, NewLayerShellSettings, OutputOption,
+};
 use iced_layershell::settings::{LayerShellSettings, Settings, StartMode};
 use iced_layershell::to_layer_message;
 
@@ -26,30 +32,50 @@ fn main() -> Result<(), iced_layershell::Error> {
         .init();
 
     // Open on the monitor the game is captured from, if the app told us.
-    let start_mode = outputs::requested_monitor()
-        .and_then(|monitor| {
-            let name = outputs::output_for(monitor);
-            tracing::info!(?monitor, output = ?name, "target monitor");
-            name
-        })
-        .map_or(StartMode::Active, StartMode::TargetScreen);
+    let output = outputs::requested_monitor().and_then(|monitor| {
+        let name = outputs::output_for(monitor);
+        tracing::info!(?monitor, output = ?name, "target monitor");
+        name
+    });
 
-    application(Overlay::default, namespace, update, view::view)
-        .style(style)
-        .subscription(subscription)
-        .settings(Settings {
-            layer_settings: LayerShellSettings {
-                anchor: Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right,
-                layer: Layer::Overlay,
-                exclusive_zone: -1,
-                keyboard_interactivity: KeyboardInteractivity::None,
-                events_transparent: true,
-                start_mode,
-                ..Default::default()
-            },
+    daemon(
+        move || Overlay::new(output.clone()),
+        namespace,
+        update,
+        view_window,
+    )
+    .style(style)
+    .subscription(subscription)
+    .settings(Settings {
+        layer_settings: LayerShellSettings {
+            // No surface until there is something to show.
+            start_mode: StartMode::Background,
             ..Default::default()
-        })
-        .run()
+        },
+        ..Default::default()
+    })
+    .run()
+}
+
+/// One surface, one view.
+fn view_window(state: &Overlay, _window: IcedId) -> iced::Element<'_, Message> {
+    view::view(state)
+}
+
+/// The full-screen, click-through surface on the OVERLAY layer.
+fn surface_settings(output: Option<&String>) -> NewLayerShellSettings {
+    NewLayerShellSettings {
+        anchor: Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right,
+        layer: Layer::Overlay,
+        exclusive_zone: Some(-1),
+        keyboard_interactivity: KeyboardInteractivity::None,
+        events_transparent: true,
+        output_option: output.map_or(OutputOption::Active, |name| {
+            OutputOption::OutputName(name.clone())
+        }),
+        namespace: Some(namespace()),
+        ..NewLayerShellSettings::default()
+    }
 }
 
 /// The item card currently on screen.
@@ -64,6 +90,10 @@ pub struct ShownItem {
 /// Everything the overlay currently displays.
 #[derive(Debug, Default)]
 pub struct Overlay {
+    /// Output (monitor) name to open on; `None` = the active one.
+    output: Option<String>,
+    /// The layer surface, while one exists.
+    surface: Option<IcedId>,
     connected: bool,
     visible: bool,
     interactive: bool,
@@ -75,7 +105,44 @@ pub struct Overlay {
     transform: Option<Transform>,
 }
 
-#[to_layer_message]
+impl Overlay {
+    fn new(output: Option<String>) -> (Self, Task<Message>) {
+        (
+            Self {
+                output,
+                ..Self::default()
+            },
+            Task::none(),
+        )
+    }
+
+    /// Whether anything would be drawn.
+    fn has_content(&self) -> bool {
+        self.visible
+            || self.hover.is_some()
+            || (!self.markers.is_empty() && self.transform.is_some())
+    }
+
+    /// Creates or removes the surface to match [`Self::has_content`].
+    fn sync_surface(&mut self) -> Task<Message> {
+        match (self.has_content(), self.surface) {
+            (true, None) => {
+                let (id, task) = Message::layershell_open(surface_settings(self.output.as_ref()));
+                tracing::debug!("mapping overlay surface");
+                self.surface = Some(id);
+                task
+            }
+            (false, Some(id)) => {
+                tracing::debug!("unmapping overlay surface");
+                self.surface = None;
+                Task::done(Message::RemoveWindow(id))
+            }
+            _ => Task::none(),
+        }
+    }
+}
+
+#[to_layer_message(multi)]
 #[derive(Debug, Clone)]
 pub enum Message {
     Ipc(ipc::Event),
@@ -87,6 +154,8 @@ fn namespace() -> String {
 }
 
 fn subscription(_: &Overlay) -> Subscription<Message> {
+    // Surfaces closed by the compositor (e.g. output unplugged) are forgotten
+    // by `sync_surface` on the next change; nothing to listen for here.
     ipc::subscription().map(Message::Ipc)
 }
 
@@ -94,18 +163,25 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
     let Message::Ipc(event) = message else {
         return Task::none();
     };
-    match event {
+    let task = match event {
         ipc::Event::Connected => {
             tracing::info!("connected to companion app");
             state.connected = true;
+            Task::none()
         }
         ipc::Event::Disconnected => {
             // Without the companion app there is nothing trustworthy to show.
-            *state = Overlay::default();
+            let (output, surface) = (state.output.take(), state.surface.take());
+            *state = Overlay {
+                output,
+                surface,
+                ..Overlay::default()
+            };
+            Task::none()
         }
-        ipc::Event::Message(msg) => return apply(state, msg),
-    }
-    Task::none()
+        ipc::Event::Message(msg) => apply(state, msg),
+    };
+    task.chain(state.sync_surface())
 }
 
 fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
@@ -125,7 +201,12 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
             };
             // TODO(input-region): also swap the input region so clicks reach
             // the overlay while interactive; see docs/ROADMAP.md (M1).
-            return Task::done(Message::KeyboardInteractivityChange(keyboard));
+            if let Some(id) = state.surface {
+                return Task::done(Message::KeyboardInteractivityChange {
+                    id,
+                    keyboard_interactivity: keyboard,
+                });
+            }
         }
         ToOverlay::ShowItem {
             item,
