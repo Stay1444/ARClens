@@ -358,7 +358,7 @@ fn to_rgb(
     }
     let mut rgb = Vec::with_capacity(width as usize * height as usize * 3);
     for row in bytes.chunks_exact(stride).take(height as usize) {
-        for px in row[..width as usize * 4].chunks_exact(4) {
+        for px in row[..width as usize * 4].as_chunks::<4>().0 {
             if bgr {
                 rgb.extend_from_slice(&[px[2], px[1], px[0]]);
             } else {
