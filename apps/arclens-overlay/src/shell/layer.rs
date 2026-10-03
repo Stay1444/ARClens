@@ -115,9 +115,13 @@ pub fn input_task(state: &Overlay) -> Task<Message> {
             r.height.ceil() as i32,
         )
     });
-    // Keyboard only while interactive or the pointer is on the panel:
-    // otherwise the compositor may hand us focus and the game loses it.
-    let keyboard = if state.interactive || (rect.is_some() && state.panel.hovered) {
+    // Interactive mode is the user asking for mouse and keyboard (to type
+    // a quick search): take the keyboard until it is toggled off.
+    // Otherwise keyboard only while the pointer is on the panel: else the
+    // compositor may hand us focus and the game loses it.
+    let keyboard = if state.interactive {
+        KeyboardInteractivity::Exclusive
+    } else if rect.is_some() && state.panel.hovered {
         KeyboardInteractivity::OnDemand
     } else {
         KeyboardInteractivity::None

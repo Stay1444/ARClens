@@ -13,6 +13,7 @@
 mod ipc;
 mod map_panel;
 mod menu_card;
+mod search;
 mod tooltip;
 mod view;
 
@@ -84,6 +85,8 @@ pub struct Overlay {
     marker_cache: iced::widget::canvas::Cache,
     /// Map-screen panel (conditions + marker filter), the clickable part.
     panel: map_panel::PanelState,
+    /// Quick item search, shown while interactive.
+    search: search::SearchState,
     /// The main-menu card, while the game shows its main menu.
     menu_card: Option<arclens_ipc::MenuCard>,
     /// Wall clock (Unix ms) for the card's countdowns.
@@ -105,6 +108,7 @@ impl Overlay {
     /// Whether anything would be drawn.
     fn has_content(&self) -> bool {
         self.visible
+            || self.interactive
             || self.hover.is_some()
             || self.panel.panel.is_some()
             || self.menu_card.is_some()
@@ -127,6 +131,7 @@ impl Overlay {
 pub enum Message {
     Ipc(ipc::Event),
     Panel(map_panel::PanelMessage),
+    Search(search::SearchMessage),
     /// Surface size changed (logical pixels).
     Resized(iced::Size),
     /// For the platform's shell.
@@ -174,13 +179,27 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
                 Task::none()
             };
         }
+        Message::Search(msg) => {
+            if let Some(to_app) = state.search.update(msg)
+                && let Some(outbox) = &state.outbox
+            {
+                outbox.send(to_app);
+            }
+            return Task::none();
+        }
         Message::Resized(size) => {
             if state.screen == Some(size) {
                 return Task::none();
             }
             state.screen = Some(size);
             state.marker_cache.clear();
-            return shell::input_task(state);
+            let input = shell::input_task(state);
+            // The surface may have just opened for interactive mode.
+            return if state.interactive {
+                input.chain(iced::widget::operation::focus(search::INPUT_ID))
+            } else {
+                input
+            };
         }
         Message::Shell(msg) => return shell::update(state, msg),
         Message::Tick => {
@@ -191,6 +210,12 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
         #[allow(unreachable_patterns, reason = "the layer-shell variants")]
         _ => return Task::none(),
     };
+    // Ready to type as soon as the surface (mapped below if need be) has
+    // the keyboard.
+    let focus_search = matches!(
+        event,
+        ipc::Event::Message(ToOverlay::SetInteractive { interactive: true })
+    );
     let task = match event {
         ipc::Event::Connected(outbox) => {
             tracing::info!("connected to companion app");
@@ -210,7 +235,12 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
         }
         ipc::Event::Message(msg) => apply(state, msg),
     };
-    task.chain(shell::sync_surface(state))
+    let task = task.chain(shell::sync_surface(state));
+    if focus_search {
+        task.chain(iced::widget::operation::focus(search::INPUT_ID))
+    } else {
+        task
+    }
 }
 
 fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
@@ -301,6 +331,7 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
             state.menu_card = Some(card);
         }
         ToOverlay::HideMenuCard => state.menu_card = None,
+        ToOverlay::SearchResults { query, hits } => state.search.results(&query, hits),
         ToOverlay::HideMapPanel => {
             state.pointer = None;
             state.panel.panel = None;

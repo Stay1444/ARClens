@@ -1,4 +1,4 @@
-{"type":"hello","protocol":11}
+{"type":"hello","protocol":12}
 {"type":"set_visible","visible":true}
 {"type":"show_item","item":{"id":"rusted_gear","name":"Rusted Gear","rarity":"rare","value":2000,"recycles_into":[],"required_for":[{"kind":"workshop_upgrade","name":"Gunsmith 2","quantity":3},{"kind":"quest","name":"A Dead End","quantity":1}]},"advice":{"verdict":"keep","sell_value":2000,"recycle_value":1200}}
 {"type":"show_markers","map":"dam_battlegrounds","markers":[{"id":"a","map":"dam_battlegrounds","position":{"x":0.2,"y":0.3},"category":"extraction"},{"id":"b","map":"dam_battlegrounds","position":{"x":0.5,"y":0.5},"category":"arc","subcategory":"queen"},{"id":"c","map":"dam_battlegrounds","position":{"x":0.7,"y":0.4},"category":"quests"},{"id":"d","map":"dam_battlegrounds","position":{"x":0.4,"y":0.8},"category":"extraction","subcategory":"raider_hatch"}],"transform":{"a":1.0,"b":0.0,"c":0.0,"d":1.0,"tx":0.0,"ty":0.0}}

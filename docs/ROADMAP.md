@@ -27,7 +27,14 @@ green CI.
       click.
 - [ ] Verify clicks and typing in the map panel on KDE (the headless seat
       has no pointer).
-- [ ] Quick item search in the overlay (`ToApp::Search` already exists).
+- [x] **Quick item search in the overlay** (2026-10-03): in interactive
+      mode a search box sits at the top of the screen and takes the
+      keyboard (exclusive on Linux until interactive mode is toggled off).
+      The app answers each query with its top 8 matches and icons
+      (`SearchResults`, protocol v12). Enter or a click shows the item's
+      card (`PickItem`), and the overlay is shown if it was hidden
+      (`docs/assets/overlay-search.png`, headless with wtype). Unverified
+      on KDE and Windows.
 - [ ] Overlay position and scale settings (anchor corner, per-monitor
       `StartMode::TargetScreen`).
 - [ ] Settings file (`$XDG_CONFIG_HOME/arclens/config.toml`): data refresh

@@ -10,7 +10,7 @@
 //! [`PROTOCOL_VERSION`] on any breaking change to [`ToOverlay`] /
 //! [`ToApp`].
 
-use arclens_core::{Advice, Item, MapId, Marker, Transform};
+use arclens_core::{Advice, Item, ItemId, MapId, Marker, Rarity, Transform};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
@@ -18,7 +18,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 mod transport;
 pub use transport::{Endpoint, Listener};
 
-pub const PROTOCOL_VERSION: u32 = 11;
+pub const PROTOCOL_VERSION: u32 = 12;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hello {
@@ -111,6 +111,24 @@ pub enum ToOverlay {
         card: MenuCard,
     },
     HideMenuCard,
+    /// Items matching the overlay's quick search for `query`, best first.
+    /// The overlay drops results for a query it no longer shows.
+    SearchResults {
+        query: String,
+        hits: Vec<SearchHit>,
+    },
+}
+
+/// One quick-search result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchHit {
+    pub id: ItemId,
+    pub name: String,
+    #[serde(default)]
+    pub rarity: Option<Rarity>,
+    /// Local path of the item's icon, if cached.
+    #[serde(default)]
+    pub icon: Option<PathBuf>,
 }
 
 /// What the overlay's map panel shows: the map's marker kinds. The app
@@ -235,9 +253,14 @@ impl MonitorRect {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ToApp {
     Hello(Hello),
-    /// The user typed into the overlay's quick-search box.
+    /// The user typed into the overlay's quick-search box; the app answers
+    /// with [`ToOverlay::SearchResults`].
     Search {
         query: String,
+    },
+    /// The user picked a quick-search result: show its card.
+    PickItem {
+        id: ItemId,
     },
     /// Map panel: show or hide a marker category…
     ToggleMarkerCategory {

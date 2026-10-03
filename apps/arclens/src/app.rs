@@ -17,6 +17,8 @@ use std::sync::Arc;
 
 /// Rows shown in the result list (the whole catalogue is ~600 items).
 const MAX_RESULTS: usize = 100;
+/// Results sent to the overlay's quick search.
+const SEARCH_HITS: usize = 8;
 const SEARCH_ID: &str = "search";
 const LIST_WIDTH: f32 = 400.0;
 const BOLD: Font = Font {
@@ -376,6 +378,8 @@ impl App {
             Message::IconLoaded(id, icon) => {
                 let is_selected = self.selected.as_ref() == Some(&id);
                 let is_hovered = self.hover.as_ref().is_some_and(|(h, ..)| *h == id);
+                let in_search = self.overlay_interactive
+                    && self.results.iter().take(SEARCH_HITS).any(|r| *r == id);
                 self.icons.insert(id, icon);
                 // Resend so the overlay picks up the icon path.
                 if is_selected {
@@ -383,6 +387,9 @@ impl App {
                 }
                 if is_hovered {
                     self.push_hover_to_overlay();
+                }
+                if in_search {
+                    self.push_search_results();
                 }
             }
             Message::ToggleOverlay
@@ -470,7 +477,18 @@ impl App {
             overlay_link::Event::Disconnected => self.overlay = None,
             overlay_link::Event::Message(arclens_ipc::ToApp::Search { query }) => {
                 self.query = query;
-                return self.refresh_results();
+                let icons = self.refresh_results();
+                self.push_search_results();
+                return icons;
+            }
+            overlay_link::Event::Message(arclens_ipc::ToApp::PickItem { id }) => {
+                self.selected = Some(id);
+                self.push_selected_to_overlay();
+                // The card is only drawn while the overlay is shown.
+                if !self.overlay_visible {
+                    self.overlay_visible = true;
+                    self.send(ToOverlay::SetVisible { visible: true });
+                }
             }
             overlay_link::Event::Message(arclens_ipc::ToApp::ToggleMarkerCategory { category }) => {
                 self.edit_marker_filter(Message::ToggleMarkerCategory(category));
@@ -776,6 +794,29 @@ impl App {
                 item_side: *side,
             });
         }
+    }
+
+    /// The overlay's quick-search results: the top of [`Self::results`].
+    fn push_search_results(&self) {
+        let Load::Ready(catalog) = &self.catalog else {
+            return;
+        };
+        let hits = self
+            .results
+            .iter()
+            .take(SEARCH_HITS)
+            .filter_map(|id| catalog.item(id))
+            .map(|item| arclens_ipc::SearchHit {
+                id: item.id.clone(),
+                name: item.name.clone(),
+                rarity: item.rarity,
+                icon: self.icons.get(&item.id).map(|icon| icon.path.clone()),
+            })
+            .collect();
+        self.send(ToOverlay::SearchResults {
+            query: self.query.clone(),
+            hits,
+        });
     }
 
     fn push_selected_to_overlay(&self) {

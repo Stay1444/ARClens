@@ -30,6 +30,9 @@ pub fn view(state: &Overlay) -> Element<'_, Message> {
     if let (Some(card), Some(screen)) = (&state.menu_card, state.screen) {
         layers = layers.push(crate::menu_card::view(card, state.now_ms, screen));
     }
+    if let (true, Some(screen)) = (state.interactive, state.screen) {
+        layers = layers.push(crate::search::view(&state.search, screen));
+    }
     let hover: Element<'_, Message> = layers.push(hover).into();
     if !state.visible {
         return hover;
