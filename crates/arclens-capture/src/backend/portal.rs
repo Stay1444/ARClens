@@ -121,6 +121,11 @@ async fn open_portal(restore_token: Option<&str>) -> anyhow::Result<(Portal, Rem
         Ok(modes) if modes.contains(CursorMode::Metadata) => CursorMode::Metadata,
         _ => CursorMode::Hidden,
     };
+    tracing::info!(
+        ?cursor_mode,
+        restoring = restore_token.is_some(),
+        "screen capture cursor mode"
+    );
     let session = proxy
         .create_session(ashpd::desktop::CreateSessionOptions::default())
         .await?;
@@ -169,6 +174,48 @@ async fn open_portal(restore_token: Option<&str>) -> anyhow::Result<(Portal, Rem
 struct StreamState {
     format: spa::param::video::VideoInfoRaw,
     last_convert: Option<Instant>,
+    cursor_log: CursorLog,
+}
+
+/// Says whether the compositor sends the pointer, for marker tooltips
+/// (field report 2026-10-03: no tooltips on KDE). Logs the first pointer
+/// position, or after 10 s without one, what came instead.
+#[derive(Debug, Default)]
+struct CursorLog {
+    since: Option<Instant>,
+    buffers: u32,
+    with_meta: u32,
+    last_id: Option<u32>,
+    done: bool,
+}
+
+impl CursorLog {
+    fn note(&mut self, cursor: Option<(u32, spa::utils::Point)>) {
+        if self.done {
+            return;
+        }
+        let since = *self.since.get_or_insert_with(Instant::now);
+        self.buffers += 1;
+        if let Some((id, at)) = cursor {
+            self.with_meta += 1;
+            self.last_id = Some(id);
+            if id != 0 {
+                tracing::info!(x = at.x, y = at.y, "pointer position available");
+                self.done = true;
+                return;
+            }
+        }
+        if since.elapsed() > std::time::Duration::from_secs(10) {
+            tracing::warn!(
+                buffers = self.buffers,
+                with_cursor_meta = self.with_meta,
+                last_cursor_id = ?self.last_id,
+                "no pointer position from the compositor: marker tooltips are off \
+                 (no metadata, or the pointer is hidden, e.g. drawn by the game)"
+            );
+            self.done = true;
+        }
+    }
 }
 
 fn run_pipewire(
@@ -224,7 +271,11 @@ fn run_pipewire(
             let Some(mut buffer) = stream.dequeue_buffer() else {
                 return;
             };
-            if let Some(cursor) = buffer.find_meta::<spa::buffer::meta::MetaCursor>()
+            let cursor = buffer.find_meta::<spa::buffer::meta::MetaCursor>();
+            state
+                .cursor_log
+                .note(cursor.as_ref().map(|c| (c.id(), c.position())));
+            if let Some(cursor) = cursor
                 && cursor.id() != 0
             {
                 let at = cursor.position();

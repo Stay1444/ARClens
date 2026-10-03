@@ -37,7 +37,10 @@ impl Paths {
     }
 
     pub fn capture_token(&self) -> PathBuf {
-        self.state.join("screencast-restore-token")
+        // "-cursor": sessions saved before the pointer was requested as
+        // metadata restore without it (no marker tooltips), so those
+        // tokens are left behind and the portal asks once more.
+        self.state.join("screencast-restore-token-cursor")
     }
 
     pub fn icons_dir(&self) -> PathBuf {

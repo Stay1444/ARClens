@@ -139,3 +139,25 @@ uses the label fit. **Partly verified:** one recording, and the hand
 check is itself ±2 %.
 - The capture is cursor-free (`CursorMode::Hidden`), and the game's own
   map UI is the only input; nothing touches the game process.
+
+## Marker tooltips need the compositor's pointer (2026-10-03)
+
+Field report: on KDE the markers track the map, but hovering them shows
+no tooltip. The pointer comes from the ScreenCast stream's cursor
+metadata (`CursorMode::Metadata`). KWin (source, master, read
+2026-10-03: `plugins/screencast/screencaststream.cpp`,
+`outputscreencastsource.cpp`, `cursor.cpp`) sets `spa_meta_cursor.id = 1`
+with the position only when `Cursor::isOnOutput` holds. That is false
+while the cursor is hidden (`Cursors::isCursorHidden()`) or its geometry
+misses the output; otherwise it sends `id = 0` and no position. KWin does
+queue cursor-only buffers when just the pointer moves.
+
+Two candidate causes, not yet told apart (**unverified**):
+- a restore token saved before metadata was requested brings back a
+  session without it. Fixed by storing tokens under a new name, so the
+  portal asks once more;
+- the game hides the system pointer on its map and draws its own. Then
+  KWin sends no position, and tooltips can't work this way.
+
+The capture now logs either "pointer position available" or, after 10 s,
+a warning with the buffer and metadata counts and the last cursor id.

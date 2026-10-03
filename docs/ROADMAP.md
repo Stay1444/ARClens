@@ -165,7 +165,8 @@ green CI.
       the capture, never the game: PipeWire cursor metadata on Linux, the
       OS cursor position on Windows (protocol v11, `Pointer`;
       `docs/assets/overlay-tooltip.png`). Verified headlessly with a
-      replayed cursor; **unverified** on a live KDE session.
+      replayed cursor. **Not working on KDE yet** (field report): see
+      "Marker tooltips need the compositor's pointer" in map-tracking.md.
 - [ ] Confirm the region query parameter and ids (only `europe` seen so
       far).
 - [x] Condition icons on the Events tab: MetaForge's per-event icon, else
