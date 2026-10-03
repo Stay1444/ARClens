@@ -58,6 +58,9 @@ pub struct Overlay {
     visible: bool,
     interactive: bool,
     item: Option<ShownItem>,
+    /// Item detected under the cursor in game, with the game tooltip's
+    /// position. Shown whether or not `visible` is set.
+    hover: Option<(ShownItem, arclens_ipc::NormRect)>,
     markers: Vec<Marker>,
     transform: Option<Transform>,
 }
@@ -138,6 +141,25 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
             state.markers = markers;
             state.transform = Some(transform);
         }
+        ToOverlay::ShowHover {
+            item,
+            advice,
+            icon,
+            recycle_names,
+            anchor,
+        } => {
+            tracing::debug!(item = %item.name, "hover");
+            let shown = ShownItem {
+                item,
+                advice,
+                icon: icon
+                    .as_deref()
+                    .and_then(|p| arclens_ui::decode_icon(p, 128)),
+                recycle_names,
+            };
+            state.hover = Some((shown, anchor));
+        }
+        ToOverlay::ClearHover => state.hover = None,
         ToOverlay::ClearMarkers => {
             state.markers.clear();
             state.transform = None;

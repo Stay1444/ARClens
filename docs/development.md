@@ -55,7 +55,28 @@ Useful environment variables:
 | `RUST_LOG=arclens=debug,arclens_overlay=debug` | Verbose logs |
 | `ARCLENS_RAIDTHEORY_DIR=~/src/arcraiders-data` | Load the dataset from a local checkout; skip cache and network |
 | `ARCLENS_OVERLAY_AUTOSTART=0` | Don't launch the overlay from the app |
+| `ARCLENS_REPLAY_DIR=crates/arclens-vision/tests/fixtures/frames` | Feed recorded frames to item detection instead of capturing the screen |
+| `ARCLENS_REPLAY_INTERVAL_MS=1500` | Time between replayed frames |
+| `ARCLENS_OCR_MODEL=/path/text-recognition.rten` | Use a local OCR model instead of downloading it to the cache |
 | `ARCLENS_OVERLAY_BIN=/path/to/arclens-overlay` | Overlay binary to launch |
+
+## Item detection (vision)
+
+- The app runs a background worker: frame → tooltip → OCR → catalogue match
+  → `ShowHover` to the overlay, which draws the card beside the game's
+  tooltip.
+- On first use it downloads the ocrs recognition model (~10 MB) to
+  `$XDG_CACHE_HOME/arclens/models/`.
+- Live screen capture isn't implemented yet. To try the whole path, replay
+  the fixture frames:
+
+  ```sh
+  ARCLENS_REPLAY_DIR=crates/arclens-vision/tests/fixtures/frames cargo run -p arclens
+  ```
+
+- To see the alignment, show the same frame full-screen behind the overlay
+  (e.g. `imv -f frame.jpg`). This is how `docs/assets/hover-detected.png` was
+  made.
 
 ## Global hotkeys
 

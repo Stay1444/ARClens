@@ -11,6 +11,7 @@ mod icons;
 mod overlay_link;
 mod overlay_process;
 mod paths;
+mod vision;
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()

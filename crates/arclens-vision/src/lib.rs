@@ -19,11 +19,13 @@
               conversions here are exact and non-negative"
 )]
 
+mod analyzer;
 mod geometry;
 mod panel;
 mod read;
 mod text;
 
+pub use analyzer::{Analyzer, Hover};
 pub use geometry::Rect;
 pub use panel::{PanelParams, find_panels};
 pub use read::{NameReader, RECOGNITION_MODEL_URL};

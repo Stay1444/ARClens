@@ -68,11 +68,14 @@ green CI.
         tests on 18 frames from stash, raid and trader;
   - [x] name-line reader (ocrs recognition model, Roman-numeral stroke
         count) and catalogue match: 17/17 fixture names exact;
-  - [ ] OCR model download + cache in the app; skip OCR when the crop is
-        unchanged; pick the OCR engine (`ocrs` vs
+  - [x] OCR model download + cache in the app; skip OCR when the crop is
+        unchanged (`Analyzer`);
+  - [x] app vision worker + replay frame source; overlay draws the card
+        beside the game tooltip (`ShowHover`, protocol v2), verified
+        headlessly on stash and trader frames;
+  - [ ] avoid covering other panels when placing (trader purchase panel); pick the OCR engine (`ocrs` vs
         Tesseract) by benchmarking on crops from the stash video;
   - [ ] read the tooltip footer value (weapons differ from the dataset);
-  - [ ] place the overlay card next to the detected tooltip;
   - [ ] map screen: read map name, raid time and condition from the right
         panel (text, same OCR);
   - [ ] map registration → `Transform` by **label anchoring** (OCR the POI

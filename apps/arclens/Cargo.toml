@@ -14,10 +14,11 @@ arclens-data = { workspace = true }
 arclens-hotkeys = { workspace = true }
 arclens-ipc = { workspace = true }
 arclens-ui = { workspace = true }
+arclens-vision = { workspace = true }
 directories = { workspace = true }
 futures = { workspace = true }
 iced = { workspace = true }
-image = { workspace = true }
+image = { workspace = true, features = ["jpeg"] }
 reqwest = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

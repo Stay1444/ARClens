@@ -16,7 +16,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 
 /// Default socket path: `$XDG_RUNTIME_DIR/arclens.sock`, falling back to the
 /// temp dir when the variable is unset (non-systemd systems).
@@ -58,6 +58,21 @@ pub enum ToOverlay {
         #[serde(default)]
         recycle_names: Vec<String>,
     },
+    /// The item whose in-game tooltip is under the cursor (detected from the
+    /// screen). Drawn next to `anchor` regardless of the manual visibility
+    /// toggle, until [`ToOverlay::ClearHover`].
+    ShowHover {
+        item: Box<Item>,
+        advice: Advice,
+        #[serde(default)]
+        icon: Option<PathBuf>,
+        #[serde(default)]
+        recycle_names: Vec<String>,
+        /// The game's tooltip, normalised to the screen (`0..=1`).
+        anchor: NormRect,
+    },
+    /// The in-game tooltip is gone.
+    ClearHover,
     /// Draw these markers using `transform` (map space → screen pixels).
     ShowMarkers {
         map: MapId,
@@ -65,6 +80,16 @@ pub enum ToOverlay {
         transform: Transform,
     },
     ClearMarkers,
+}
+
+/// A rectangle normalised to the screen: `0..=1` on both axes, origin
+/// top-left. Resolution- and scale-factor-independent.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct NormRect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
 }
 
 /// Messages from the overlay to the companion app.

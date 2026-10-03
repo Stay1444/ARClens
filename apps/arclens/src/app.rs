@@ -3,7 +3,7 @@
 use crate::icons::{Icon, Icons};
 use crate::overlay_link::OverlayHandle;
 use crate::paths::Paths;
-use crate::{data, hotkeys, overlay_link, overlay_process};
+use crate::{data, hotkeys, overlay_link, overlay_process, vision};
 use arclens_core::{Item, ItemId, advise};
 use arclens_data::{Catalog, ItemSearch};
 use arclens_hotkeys::Action;
@@ -35,6 +35,8 @@ pub struct App {
     overlay: Option<OverlayHandle>,
     overlay_visible: bool,
     overlay_interactive: bool,
+    /// Item currently detected under the cursor in game, and where.
+    hover: Option<(ItemId, arclens_ipc::NormRect)>,
     status: Vec<String>,
 }
 
@@ -58,6 +60,7 @@ pub enum Message {
     Overlay(overlay_link::Event),
     Hotkey(hotkeys::Event),
     OverlayProcess(overlay_process::Event),
+    Vision(vision::Event),
 }
 
 impl App {
@@ -72,6 +75,7 @@ impl App {
             overlay: None,
             overlay_visible: false,
             overlay_interactive: false,
+            hover: None,
             status: Vec::new(),
         };
         let tasks = Task::batch([
@@ -86,6 +90,7 @@ impl App {
         let mut subscriptions = vec![
             overlay_link::subscription().map(Message::Overlay),
             hotkeys::subscription().map(Message::Hotkey),
+            vision::subscription().map(Message::Vision),
         ];
         if overlay_process::enabled() {
             subscriptions.push(overlay_process::subscription().map(Message::OverlayProcess));
@@ -130,10 +135,14 @@ impl App {
             }
             Message::IconLoaded(id, icon) => {
                 let is_selected = self.selected.as_ref() == Some(&id);
+                let is_hovered = self.hover.as_ref().is_some_and(|(h, _)| *h == id);
                 self.icons.insert(id, icon);
+                // Resend so the overlay picks up the icon path.
                 if is_selected {
-                    // Resend so the overlay picks up the icon path.
                     self.push_selected_to_overlay();
+                }
+                if is_hovered {
+                    self.push_hover_to_overlay();
                 }
             }
             Message::ToggleOverlay
@@ -158,6 +167,7 @@ impl App {
                 );
             }
             Message::Overlay(event) => return self.on_overlay_event(event),
+            Message::Vision(event) => return self.on_vision_event(event),
             Message::OverlayProcess(overlay_process::Event::Unavailable(error)) => {
                 self.status.push(format!("Overlay not started: {error}"));
             }
@@ -186,6 +196,48 @@ impl App {
             overlay_link::Event::Listening | overlay_link::Event::Message(_) => {}
             overlay_link::Event::Failed(error) => {
                 self.status.push(format!("Overlay link failed: {error}"));
+            }
+        }
+        Task::none()
+    }
+
+    fn on_vision_event(&mut self, event: vision::Event) -> Task<Message> {
+        match event {
+            vision::Event::Hover(hover) => {
+                let Load::Ready(catalog) = &self.catalog else {
+                    return Task::none();
+                };
+                let Some((item, confidence)) =
+                    arclens_data::match_name(&hover.name, &catalog.items)
+                else {
+                    tracing::debug!(text = %hover.name, "no catalogue match");
+                    self.hover = None;
+                    self.send(ToOverlay::ClearHover);
+                    return Task::none();
+                };
+                tracing::info!(text = %hover.name, item = %item.id, confidence, "hovered item");
+                let [x, y, width, height] = hover.panel_normalized();
+                let anchor = arclens_ipc::NormRect {
+                    x,
+                    y,
+                    width,
+                    height,
+                };
+                let load = self.icons.request(item);
+                self.hover = Some((item.id.clone(), anchor));
+                self.push_hover_to_overlay();
+                // The icon arrives later; `IconLoaded` resends the card.
+                if let Some(load) = load {
+                    return Task::perform(load, |(id, icon)| Message::IconLoaded(id, icon));
+                }
+            }
+            vision::Event::Gone => {
+                self.hover = None;
+                self.send(ToOverlay::ClearHover);
+            }
+            vision::Event::Unavailable(reason) => {
+                tracing::info!(%reason, "item detection off");
+                self.status.push(format!("Item detection off: {reason}"));
             }
         }
         Task::none()
@@ -226,6 +278,21 @@ impl App {
             .map(|load| Task::perform(load, |(id, icon)| Message::IconLoaded(id, icon)))
             .collect();
         Task::batch(loads)
+    }
+
+    fn push_hover_to_overlay(&self) {
+        let (Load::Ready(catalog), Some((id, anchor))) = (&self.catalog, &self.hover) else {
+            return;
+        };
+        if let Some(item) = catalog.item(id) {
+            self.send(ToOverlay::ShowHover {
+                item: Box::new(item.clone()),
+                advice: advise(item, |id| catalog.item(id)),
+                icon: self.icons.get(id).map(|icon| icon.path.clone()),
+                recycle_names: recycle_names(item, catalog),
+                anchor: *anchor,
+            });
+        }
     }
 
     fn push_selected_to_overlay(&self) {

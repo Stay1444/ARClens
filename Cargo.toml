@@ -17,6 +17,7 @@ arclens-data = { path = "crates/arclens-data" }
 arclens-hotkeys = { path = "crates/arclens-hotkeys" }
 arclens-ipc = { path = "crates/arclens-ipc" }
 arclens-ui = { path = "crates/arclens-ui" }
+arclens-vision = { path = "crates/arclens-vision" }
 
 # External — keep alphabetical, versions pinned to minor.
 anyhow = "1.0"

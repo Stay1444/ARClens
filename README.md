@@ -11,6 +11,12 @@ Built with Linux in mind, ARClens is a lightweight, native companion that
 stays out of your way while you play. It is a real **Wayland overlay**: a
 `wlr-layer-shell` surface that KDE Plasma draws above your fullscreen game.
 
+**Automatic item detection** (in progress): ARClens finds the game's own
+tooltip on screen, reads the item name and puts its card right beside it.
+Below, a recorded frame is replayed through the pipeline.
+
+![Detected tooltip: ARClens card placed next to the in-game Torrente II tooltip](docs/assets/hover-detected.png)
+
 | In-game overlay | Companion app |
 |---|---|
 | ![Overlay item card: verdict, values, recycling and requirements](docs/assets/overlay-card.png) | ![Companion app: searchable item list and detail card](docs/assets/app.png) |
