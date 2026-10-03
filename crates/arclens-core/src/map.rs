@@ -40,6 +40,9 @@ impl MapPoint {
     }
 }
 
+/// A source point and where it should land.
+pub type PointPair = ((f32, f32), (f32, f32));
+
 /// A 2D affine transform `p' = [a b; c d] · p + [tx ty]`.
 ///
 /// Used both to import source coordinates into map space and to project map
@@ -94,6 +97,68 @@ impl Transform {
             to[0].0 - sx * from[0].0,
             to[0].1 - sy * from[0].1,
         ))
+    }
+
+    /// Least-squares uniform scale + translation mapping `from[i]` onto
+    /// `to[i]` (a map view that pans and zooms, no rotation or stretch).
+    /// `None` with fewer than two distinct points.
+    pub fn fit_uniform(pairs: &[PointPair]) -> Option<Self> {
+        if pairs.len() < 2 {
+            return None;
+        }
+        #[allow(clippy::cast_precision_loss, reason = "a handful of points")]
+        let n = pairs.len() as f32;
+        let mean = |f: fn(&PointPair) -> f32| pairs.iter().map(f).sum::<f32>() / n;
+        let (fx, fy) = (mean(|p| p.0.0), mean(|p| p.0.1));
+        let (tx, ty) = (mean(|p| p.1.0), mean(|p| p.1.1));
+        let (mut num, mut den) = (0.0, 0.0);
+        for ((x, y), (u, v)) in pairs {
+            let (dx, dy) = (x - fx, y - fy);
+            num += dx * (u - tx) + dy * (v - ty);
+            den += dx * dx + dy * dy;
+        }
+        if den <= f32::EPSILON {
+            return None;
+        }
+        let s = num / den;
+        (s > 0.0).then(|| Self::scale_translate(s, s, tx - s * fx, ty - s * fy))
+    }
+
+    /// Like [`Self::fit_uniform`] but robust to wrong pairs (misread or
+    /// mismatched labels): every pair of points proposes a transform, the
+    /// one most pairs agree with (within `tolerance` target units) wins,
+    /// and it is refitted on those. Returns the transform and how many
+    /// pairs agreed; `None` unless at least `min_agree` do.
+    pub fn fit_uniform_robust(
+        pairs: &[PointPair],
+        tolerance: f32,
+        min_agree: usize,
+    ) -> Option<(Self, usize)> {
+        let agreeing = |t: &Self| -> Vec<PointPair> {
+            pairs
+                .iter()
+                .copied()
+                .filter(|(from, to)| {
+                    let (x, y) = t.apply(*from);
+                    (x - to.0).hypot(y - to.1) <= tolerance
+                })
+                .collect()
+        };
+        let mut best: Option<Vec<PointPair>> = None;
+        for i in 0..pairs.len() {
+            for j in i + 1..pairs.len() {
+                let Some(t) = Self::fit_uniform(&[pairs[i], pairs[j]]) else {
+                    continue;
+                };
+                let inliers = agreeing(&t);
+                if best.as_ref().is_none_or(|b| inliers.len() > b.len()) {
+                    best = Some(inliers);
+                }
+            }
+        }
+        let inliers = best.filter(|b| b.len() >= min_agree.max(2))?;
+        let t = Self::fit_uniform(&inliers)?;
+        Some((t, agreeing(&t).len()))
     }
 
     pub fn apply(&self, (x, y): (f32, f32)) -> (f32, f32) {
@@ -259,6 +324,35 @@ mod tests {
             Transform::from_two_points([(0.5, 0.1), (0.5, 0.9)], [(0.0, 0.0), (1.0, 1.0)])
                 .is_none()
         );
+    }
+
+    #[test]
+    fn fits_pan_and_zoom_from_points() {
+        let truth = Transform::scale_translate(2.5, 2.5, 100.0, -40.0);
+        let from = [(10.0, 20.0), (300.0, 50.0), (120.0, 400.0)];
+        let pairs: Vec<_> = from.iter().map(|&p| (p, truth.apply(p))).collect();
+        let t = Transform::fit_uniform(&pairs).unwrap();
+        for (p, q) in &pairs {
+            assert!(close(t.apply(*p), *q));
+        }
+        assert!(Transform::fit_uniform(&pairs[..1]).is_none());
+        assert!(Transform::fit_uniform(&[pairs[0], pairs[0]]).is_none());
+    }
+
+    #[test]
+    fn robust_fit_ignores_a_wrong_match() {
+        let truth = Transform::scale_translate(0.8, 0.8, 500.0, 300.0);
+        let mut pairs: Vec<_> = [(0.0, 0.0), (400.0, 100.0), (200.0, 600.0), (900.0, 700.0)]
+            .iter()
+            .map(|&p| (p, truth.apply(p)))
+            .collect();
+        // A misread label matched to the wrong place.
+        pairs.push(((50.0, 50.0), (1800.0, 50.0)));
+        let (t, agree) = Transform::fit_uniform_robust(&pairs, 5.0, 3).unwrap();
+        assert_eq!(agree, 4);
+        assert!(close(t.apply((900.0, 700.0)), truth.apply((900.0, 700.0))));
+        // Not enough agreement: no transform.
+        assert!(Transform::fit_uniform_robust(&pairs[3..], 5.0, 3).is_none());
     }
 
     fn marker(category: &str, sub: Option<&str>, label: Option<&str>) -> Marker {

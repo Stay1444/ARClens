@@ -133,3 +133,32 @@ fn recognises_the_map_screen() {
         }
     }
 }
+
+/// Map labels on the mid-zoom Dam frame: every place name is found as one
+/// box, and nothing comes from the quest panel on the left.
+#[test]
+fn finds_map_labels() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/map/dam_zoom_mid.jpg");
+    let frame = image::open(path).unwrap().to_rgb8();
+    let labels = arclens_vision::find_map_labels(&frame, &arclens_vision::LabelParams::default());
+    // Checked by eye (2560×1440).
+    let expected: &[(&str, [u32; 4])] = &[
+        ("Pattern House", [777, 277, 152, 18]),
+        ("Generator Hall", [788, 477, 151, 18]),
+        ("Raider Outpost East", [1142, 503, 213, 23]),
+        ("Power Generation Complex", [862, 561, 292, 23]),
+        ("Controlled Access Zone", [699, 645, 255, 18]),
+        ("East Broken Bridge", [1314, 686, 207, 23]),
+        ("Pipeline Tower", [882, 724, 158, 23]),
+        ("The Breach", [707, 815, 120, 18]),
+    ];
+    for (name, [x, y, w, h]) in expected {
+        let want = Rect::new(*x, *y, *w, *h);
+        assert!(
+            labels.iter().any(|r| iou(*r, want) >= 0.8),
+            "{name} not found in {labels:?}"
+        );
+    }
+    let quest_panel_right = frame.width() * 21 / 100;
+    assert!(labels.iter().all(|r| r.x > quest_panel_right), "{labels:?}");
+}

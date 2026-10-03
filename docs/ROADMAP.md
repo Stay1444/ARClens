@@ -123,9 +123,14 @@ green CI.
         show/hide all) shared with the app's Map tab (`ShowMapPanel`,
         protocol v5). Verified headlessly by replaying the Dam frames
         (`docs/assets/overlay-map-panel.png`, `overlay-map-panel-open.png`);
-  - [ ] map label finder (white outlined text in the viewport) +
-        recognition-only OCR; full ocrs pipeline reads the labels but takes
-        ~2 s/frame, see the map findings doc;
+  - [x] map label finder: white text with a dark outline inside the
+        viewport, quest-panel text rejected by its flat background; ~15 ms
+        per 1440p frame. Recognition-only OCR reads all 8 labels of
+        `dam_zoom_mid` exactly in ~340 ms (release), vs ~2 s for the full
+        ocrs pipeline (`find_map_labels`, golden + OCR tests);
+  - [x] robust pan/zoom fit from label matches
+        (`Transform::fit_uniform_robust`: best pair by agreement, then
+        least squares on the agreeing ones);
   - [ ] map registration → `Transform` by **label anchoring** (OCR the POI
         labels, fit scale + translation; see
         `docs/vision/findings-2026-10-03-map-video.md`); calibration tool

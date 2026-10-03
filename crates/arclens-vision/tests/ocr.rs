@@ -114,3 +114,36 @@ fn reads_footer_value_and_raid_context() {
     }
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
+
+/// Map labels found by colour and read by the recognition model alone.
+#[test]
+#[ignore = "needs ARCLENS_OCR_MODEL"]
+fn reads_map_labels() {
+    let model = std::env::var_os("ARCLENS_OCR_MODEL").map(PathBuf::from);
+    let model = model.expect("ARCLENS_OCR_MODEL must point at text-recognition.rten");
+    let reader = NameReader::from_model_file(&model).expect("model loads");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/map/dam_zoom_mid.jpg");
+    let frame = image::open(path).unwrap().to_rgb8();
+    let start = std::time::Instant::now();
+    let read: Vec<String> =
+        arclens_vision::find_map_labels(&frame, &arclens_vision::LabelParams::default())
+            .into_iter()
+            .filter_map(|r| reader.read_free_text(&frame, r).unwrap())
+            .collect();
+    eprintln!("{read:?} in {:?}", start.elapsed());
+    for want in [
+        "Pattern House",
+        "Generator Hall",
+        "Raider Outpost East",
+        "Power Generation Complex",
+        "Controlled Access Zone",
+        "East Broken Bridge",
+        "Pipeline Tower",
+        "The Breach",
+    ] {
+        assert!(
+            read.iter().any(|got| got.trim().eq_ignore_ascii_case(want)),
+            "{want} not read: {read:?}"
+        );
+    }
+}
