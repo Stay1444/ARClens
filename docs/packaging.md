@@ -45,6 +45,11 @@ flatpak run io.github.Stay1444.ARClens
 - Config, cache and state live in `~/.var/app/io.github.Stay1444.ARClens/`
   instead of `~/.config/arclens` etc.
 
+## Status
+
+- 2026-10-03: both jobs green in CI (manual Release run 3): AppImage on
+  Ubuntu 24.04, Flatpak bundle in the Freedesktop 25.08 SDK.
+
 ## Open points
 
 - No licence file yet: the AppStream data omits `project_license`. Pick a
