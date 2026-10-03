@@ -246,6 +246,12 @@ impl App {
                     return Task::perform(load, |(id, icon)| Message::IconLoaded(id, icon));
                 }
             }
+            vision::Event::Monitor(monitor) => {
+                // Hover anchors are relative to the captured monitor, so the
+                // overlay must live there, not where the app was launched.
+                tracing::info!(?monitor, "game monitor");
+                overlay_process::set_target(Some(monitor));
+            }
             vision::Event::Gone => {
                 self.hover = None;
                 self.send(ToOverlay::ClearHover);

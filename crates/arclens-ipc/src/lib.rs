@@ -92,6 +92,37 @@ pub struct NormRect {
     pub height: f32,
 }
 
+/// A monitor in the compositor's logical coordinate space, as reported by
+/// the screen-cast portal. Passed to the overlay as `--monitor x,y,w,h` so it
+/// opens on the monitor that is being captured (where the game is).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MonitorRect {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+impl MonitorRect {
+    /// Command-line flag carrying a [`MonitorRect`].
+    pub const FLAG: &'static str = "--monitor";
+
+    pub fn to_arg(self) -> String {
+        format!("{},{},{},{}", self.x, self.y, self.width, self.height)
+    }
+
+    pub fn from_arg(arg: &str) -> Option<Self> {
+        let mut parts = arg.split(',').map(|p| p.trim().parse::<i32>());
+        let rect = Self {
+            x: parts.next()?.ok()?,
+            y: parts.next()?.ok()?,
+            width: parts.next()?.ok()?,
+            height: parts.next()?.ok()?,
+        };
+        parts.next().is_none().then_some(rect)
+    }
+}
+
 /// Messages from the overlay to the companion app.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -215,6 +246,20 @@ mod tests {
     fn wire_format_is_tagged_json() {
         let json = serde_json::to_string(&ToOverlay::SetInteractive { interactive: true }).unwrap();
         assert_eq!(json, r#"{"type":"set_interactive","interactive":true}"#);
+    }
+
+    #[test]
+    fn monitor_rect_round_trips_through_its_flag() {
+        let rect = MonitorRect {
+            x: -1920,
+            y: 0,
+            width: 1920,
+            height: 1080,
+        };
+        assert_eq!(MonitorRect::from_arg(&rect.to_arg()), Some(rect));
+        assert_eq!(MonitorRect::from_arg("1,2,3"), None);
+        assert_eq!(MonitorRect::from_arg("1,2,3,4,5"), None);
+        assert_eq!(MonitorRect::from_arg("a,2,3,4"), None);
     }
 
     #[test]

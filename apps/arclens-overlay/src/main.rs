@@ -6,6 +6,7 @@
 //! (see `arclens-ipc`). It never touches the game process.
 
 mod ipc;
+mod outputs;
 mod view;
 
 use arclens_core::{Advice, Item, Marker, Transform};
@@ -24,6 +25,15 @@ fn main() -> Result<(), iced_layershell::Error> {
         )
         .init();
 
+    // Open on the monitor the game is captured from, if the app told us.
+    let start_mode = outputs::requested_monitor()
+        .and_then(|monitor| {
+            let name = outputs::output_for(monitor);
+            tracing::info!(?monitor, output = ?name, "target monitor");
+            name
+        })
+        .map_or(StartMode::Active, StartMode::TargetScreen);
+
     application(Overlay::default, namespace, update, view::view)
         .style(style)
         .subscription(subscription)
@@ -34,7 +44,7 @@ fn main() -> Result<(), iced_layershell::Error> {
                 exclusive_zone: -1,
                 keyboard_interactivity: KeyboardInteractivity::None,
                 events_transparent: true,
-                start_mode: StartMode::Active,
+                start_mode,
                 ..Default::default()
             },
             ..Default::default()

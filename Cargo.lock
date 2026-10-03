@@ -195,6 +195,7 @@ dependencies = [
 name = "arclens-overlay"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "arclens-core",
  "arclens-ipc",
  "arclens-ui",
@@ -202,9 +203,11 @@ dependencies = [
  "iced",
  "iced_layershell",
  "image",
+ "smithay-client-toolkit 0.20.0",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "wayland-client",
 ]
 
 [[package]]

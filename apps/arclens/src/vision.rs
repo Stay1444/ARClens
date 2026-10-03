@@ -23,6 +23,8 @@ pub const MODEL_ENV: &str = "ARCLENS_OCR_MODEL";
 
 #[derive(Debug, Clone)]
 pub enum Event {
+    /// Capture started on this monitor (logical coordinates).
+    Monitor(arclens_ipc::MonitorRect),
     Hover(Hover),
     /// No tooltip on screen any more.
     Gone,
@@ -33,6 +35,11 @@ pub enum Event {
 /// Something that yields frames at its own pace (blocking).
 trait FrameSource: Send {
     fn next_frame(&mut self) -> Option<RgbImage>;
+
+    /// The monitor being captured, if known.
+    fn monitor(&self) -> Option<arclens_ipc::MonitorRect> {
+        None
+    }
 }
 
 pub fn subscription() -> Subscription<Event> {
@@ -79,6 +86,10 @@ fn run(mut output: mpsc::Sender<Event>) {
             return;
         }
     };
+
+    if let Some(monitor) = source.monitor() {
+        send(Event::Monitor(monitor));
+    }
 
     let mut last: Option<Hover> = None;
     while let Some(frame) = source.next_frame() {
@@ -128,6 +139,17 @@ struct Portal(arclens_capture::Capture);
 impl FrameSource for Portal {
     fn next_frame(&mut self) -> Option<RgbImage> {
         self.0.next_frame()
+    }
+
+    fn monitor(&self) -> Option<arclens_ipc::MonitorRect> {
+        self.0
+            .monitor
+            .map(|(x, y, width, height)| arclens_ipc::MonitorRect {
+                x,
+                y,
+                width,
+                height,
+            })
     }
 }
 

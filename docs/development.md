@@ -73,6 +73,9 @@ Useful environment variables:
     on.
   - The choice is remembered: the restore token lives in
     `$XDG_STATE_HOME/arclens/`.
+  - The overlay moves to the shared monitor. Hover positions are relative to
+    the captured screen, so the app restarts the overlay there with
+    `--monitor x,y,w,h` (matched to a Wayland output by logical position).
 - Capture goes through the XDG ScreenCast portal and PipeWire
   (`crates/arclens-capture`):
   - at most 5 fps;

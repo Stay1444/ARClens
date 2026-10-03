@@ -32,6 +32,9 @@ pub struct Capture {
     last_seq: u64,
     /// Token to pass to [`Capture::start`] next time to skip the dialog.
     pub restore_token: Option<String>,
+    /// Where the captured monitor sits in the compositor's logical space,
+    /// as `(x, y, width, height)`, if the portal reports it.
+    pub monitor: Option<(i32, i32, i32, i32)>,
 }
 
 #[derive(Debug, Default)]
@@ -109,6 +112,7 @@ impl Capture {
             shared,
             last_seq: 0,
             restore_token: remote.restore_token,
+            monitor: remote.monitor,
         })
     }
 
@@ -144,6 +148,7 @@ struct Remote {
     fd: OwnedFd,
     node_id: u32,
     restore_token: Option<String>,
+    monitor: Option<(i32, i32, i32, i32)>,
 }
 
 async fn open_portal(restore_token: Option<&str>) -> anyhow::Result<(impl Sized + use<>, Remote)> {
@@ -173,6 +178,11 @@ async fn open_portal(restore_token: Option<&str>) -> anyhow::Result<(impl Sized 
         .first()
         .ok_or_else(|| anyhow!("portal returned no streams"))?;
     let node_id = stream.pipe_wire_node_id();
+    let monitor = stream
+        .position()
+        .zip(stream.size())
+        .map(|((x, y), (w, h))| (x, y, w, h));
+    tracing::info!(?monitor, "capturing monitor");
     let restore_token = streams.restore_token().map(str::to_owned);
     let fd = proxy
         .open_pipe_wire_remote(&session, OpenPipeWireRemoteOptions::default())
@@ -183,6 +193,7 @@ async fn open_portal(restore_token: Option<&str>) -> anyhow::Result<(impl Sized 
             fd,
             node_id,
             restore_token,
+            monitor,
         },
     ))
 }
