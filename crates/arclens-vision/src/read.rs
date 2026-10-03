@@ -24,7 +24,10 @@ const PAD: u32 = 6;
 const ALLOWED: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,-'()&:/x×";
 
 pub struct NameReader {
+    /// Restricted to the characters item names use (fewer confusions).
     engine: OcrEngine,
+    /// Unrestricted, for mixed-case UI text (map conditions, labels).
+    free: OcrEngine,
 }
 
 impl std::fmt::Debug for NameReader {
@@ -36,14 +39,20 @@ impl std::fmt::Debug for NameReader {
 impl NameReader {
     /// Loads the ocrs recognition model (`text-recognition.rten`).
     pub fn from_model_file(path: &Path) -> anyhow::Result<Self> {
-        let model = rten::Model::load_file(path)
-            .with_context(|| format!("loading OCR model {}", path.display()))?;
+        let load = || {
+            rten::Model::load_file(path)
+                .with_context(|| format!("loading OCR model {}", path.display()))
+        };
         let engine = OcrEngine::new(OcrEngineParams {
-            recognition_model: Some(model),
+            recognition_model: Some(load()?),
             allowed_chars: Some(ALLOWED.to_owned()),
             ..OcrEngineParams::default()
         })?;
-        Ok(Self { engine })
+        let free = OcrEngine::new(OcrEngineParams {
+            recognition_model: Some(load()?),
+            ..OcrEngineParams::default()
+        })?;
+        Ok(Self { engine, free })
     }
 
     /// Recognises the text of `lines` (from [`crate::name_lines`]) and joins
@@ -59,18 +68,30 @@ impl NameReader {
         Ok((!text.trim().is_empty()).then(|| text.trim().to_owned()))
     }
 
-    /// Recognises one line of text in `rect` as-is (no name-specific fixes).
+    /// Recognises one line of text in `rect` as-is (no name-specific fixes),
+    /// restricted to name characters (digits, uppercase, punctuation).
     pub fn read_text(&self, frame: &RgbImage, rect: Rect) -> anyhow::Result<Option<String>> {
-        self.recognise(frame, rect)
+        self.recognise(&self.engine, frame, rect)
+    }
+
+    /// Like [`Self::read_text`] but any character (mixed-case UI text).
+    pub fn read_free_text(&self, frame: &RgbImage, rect: Rect) -> anyhow::Result<Option<String>> {
+        self.recognise(&self.free, frame, rect)
     }
 
     fn read_line(&self, frame: &RgbImage, line: Rect) -> anyhow::Result<Option<String>> {
         Ok(self
-            .recognise(frame, line)?
+            .recognise(&self.engine, frame, line)?
             .map(|text| fix_roman_tail(&text, trailing_i_count(frame, line))))
     }
 
-    fn recognise(&self, frame: &RgbImage, line: Rect) -> anyhow::Result<Option<String>> {
+    #[allow(clippy::unused_self, reason = "keeps engine choice at call sites")]
+    fn recognise(
+        &self,
+        engine: &OcrEngine,
+        frame: &RgbImage,
+        line: Rect,
+    ) -> anyhow::Result<Option<String>> {
         let x = line.x.saturating_sub(PAD);
         let y = line.y.saturating_sub(PAD);
         let w = (line.width + 2 * PAD).min(frame.width() - x);
@@ -78,9 +99,9 @@ impl NameReader {
         let crop = image::imageops::crop_imm(frame, x, y, w, h).to_image();
 
         let source = ImageSource::from_bytes(crop.as_raw(), crop.dimensions())?;
-        let input = self.engine.prepare_input(source)?;
+        let input = engine.prepare_input(source)?;
         let whole = RotatedRect::from_rect(RectF::from_tlhw(0.0, 0.0, h as f32, w as f32));
-        let lines = self.engine.recognize_text(&input, &[vec![whole]])?;
+        let lines = engine.recognize_text(&input, &[vec![whole]])?;
         Ok(lines
             .into_iter()
             .flatten()

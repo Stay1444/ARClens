@@ -88,8 +88,9 @@ green CI.
         Tesseract) by benchmarking on crops from the stash video;
   - [x] read the tooltip footer: real sell value in the menu, raid detection
         (no value cell) → salvage outputs and SALVAGE wording in raid;
-  - [ ] map screen: read map name, raid time and condition from the right
-        panel (text, same OCR);
+  - [x] map screen: read map name, raid time and condition from the right
+        panel (`read_map_header`, ~90 ms, 0.06 ms when the map is closed);
+        not yet shown in the UI;
   - [ ] map label finder (white outlined text in the viewport) +
         recognition-only OCR; full ocrs pipeline reads the labels but takes
         ~2 s/frame, see the map findings doc;
