@@ -95,39 +95,43 @@ pub const EVENTS_FILE_ENV: &str = "ARCLENS_EVENTS_FILE";
 /// Events are refetched after this long.
 pub const EVENTS_MAX_AGE: Duration = Duration::from_secs(30 * 60);
 
-/// The condition schedule: fetched from MetaForge and cached; the cache is
-/// used when offline.
-pub async fn load_events(paths: Paths) -> Result<Vec<arclens_core::ScheduledEvent>, String> {
+/// The condition schedule for `region` (`None`: MetaForge's default):
+/// fetched and cached per region; the cache is used when offline.
+pub async fn load_events(
+    paths: Paths,
+    region: Option<String>,
+) -> Result<arclens_data::metaforge::Schedule, String> {
     use arclens_data::metaforge;
     if let Some(file) = std::env::var_os(EVENTS_FILE_ENV) {
         let bytes = tokio::fs::read(&file).await.map_err(|e| e.to_string())?;
-        return metaforge::parse_events(&bytes).map_err(|e| e.to_string());
+        return metaforge::parse_schedule(&bytes).map_err(|e| e.to_string());
     }
-    let cache = paths.cache.join("events-schedule.json");
+    let name = region.as_deref().unwrap_or("auto");
+    let cache = paths.cache.join(format!("events-schedule-{name}.json"));
     let fetched = async {
         let bytes = http_client()
-            .get(metaforge::EVENTS_SCHEDULE_URL)
+            .get(metaforge::events_schedule_url(region.as_deref()))
             .send()
             .await?
             .error_for_status()?
             .bytes()
             .await?;
-        let events = metaforge::parse_events(&bytes)?;
+        let schedule = metaforge::parse_schedule(&bytes)?;
         if let Some(dir) = cache.parent() {
             let _ = tokio::fs::create_dir_all(dir).await;
         }
         let _ = tokio::fs::write(&cache, &bytes).await;
-        Ok::<_, arclens_data::Error>(events)
+        Ok::<_, arclens_data::Error>(schedule)
     }
     .await;
     match fetched {
-        Ok(events) => Ok(events),
+        Ok(schedule) => Ok(schedule),
         Err(error) => {
             tracing::warn!(%error, "event schedule fetch failed; trying cache");
             let bytes = tokio::fs::read(&cache)
                 .await
                 .map_err(|_| format!("could not load the event schedule: {error}"))?;
-            metaforge::parse_events(&bytes).map_err(|e| e.to_string())
+            metaforge::parse_schedule(&bytes).map_err(|e| e.to_string())
         }
     }
 }

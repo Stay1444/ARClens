@@ -47,6 +47,10 @@ pub struct App {
     tab: Tab,
     /// Map-condition schedule (MetaForge).
     events: Load<Vec<arclens_core::ScheduledEvent>>,
+    /// The region the loaded schedule says it is for.
+    events_region: Option<String>,
+    /// Saved settings (server region).
+    settings: Settings,
     events_loaded_at: Option<std::time::Instant>,
     /// Events tab: only this map's conditions (`None`: all maps).
     event_map_filter: Option<String>,
@@ -85,6 +89,14 @@ pub enum Tab {
     Map,
     Events,
     Workshop,
+}
+
+/// Settings saved in the config directory.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+struct Settings {
+    /// Server region for the event schedule (`None`: not chosen yet).
+    #[serde(default)]
+    region: Option<String>,
 }
 
 /// When to capture the screen for item and map detection.
@@ -134,7 +146,9 @@ pub enum Message {
     ToggleVision,
     GameRunning(bool),
     SetTab(Tab),
-    EventsLoaded(Result<Vec<arclens_core::ScheduledEvent>, String>),
+    EventsLoaded(Result<arclens_data::metaforge::Schedule, String>),
+    /// The player picked their server region.
+    SetRegion(String),
     EventIconLoaded(String, Option<iced::widget::image::Handle>),
     /// Once a second while the Events tab is open (countdowns).
     Tick,
@@ -157,6 +171,7 @@ pub enum Message {
 
 impl App {
     pub fn boot(paths: Paths) -> (Self, Task<Message>) {
+        let settings: Settings = crate::store::load(&paths.settings()).unwrap_or_default();
         let app = Self {
             catalog: Load::Loading,
             search: ItemSearch::default(),
@@ -181,6 +196,8 @@ impl App {
             progress_path: paths.progress(),
             tab: Tab::Items,
             events: Load::Loading,
+            events_region: None,
+            settings: settings.clone(),
             events_loaded_at: None,
             event_map_filter: None,
             now_ms: now_ms(),
@@ -199,7 +216,10 @@ impl App {
         };
         let tasks = Task::batch([
             Task::perform(data::load(paths.clone()), Message::CatalogLoaded),
-            Task::perform(data::load_events(paths), Message::EventsLoaded),
+            Task::perform(
+                data::load_events(paths, settings.region),
+                Message::EventsLoaded,
+            ),
             iced::widget::operation::focus(SEARCH_ID),
         ]);
         (app, tasks)
@@ -320,6 +340,7 @@ impl App {
                 return self.refresh_events_if_stale();
             }
             Message::FilterEventsMap(map) => self.event_map_filter = map,
+            Message::SetRegion(region) => return self.set_region(region),
             Message::SelectMap(_)
             | Message::MarkersLoaded(..)
             | Message::MarkerQuery(_)
@@ -768,11 +789,18 @@ impl App {
 
     fn on_events_loaded(
         &mut self,
-        result: Result<Vec<arclens_core::ScheduledEvent>, String>,
+        result: Result<arclens_data::metaforge::Schedule, String>,
     ) -> Task<Message> {
         self.events_loaded_at = Some(std::time::Instant::now());
         self.events = match result {
-            Ok(mut events) => {
+            Ok(schedule) => {
+                let mut events = schedule.events;
+                self.events_region = schedule.region;
+                if let (Some(asked), Some(got)) = (&self.settings.region, &self.events_region)
+                    && asked != got
+                {
+                    tracing::warn!(asked, got, "schedule is for another region");
+                }
                 tracing::info!(events = events.len(), "event schedule loaded");
                 // Sorted once here; the view relies on it every tick.
                 events.sort_by_key(|e| (e.start_ms, e.end_ms));
@@ -784,6 +812,18 @@ impl App {
             }
         };
         self.request_event_icons()
+    }
+
+    /// Saves the player's server region and reloads the schedule for it.
+    fn set_region(&mut self, region: String) -> Task<Message> {
+        self.settings.region = Some(region);
+        crate::store::save(&self.paths.settings(), &self.settings);
+        self.events = Load::Loading;
+        self.events_loaded_at = Some(std::time::Instant::now());
+        Task::perform(
+            data::load_events(self.paths.clone(), self.settings.region.clone()),
+            Message::EventsLoaded,
+        )
     }
 
     /// Fetches icons for scheduled events not seen before.
@@ -809,7 +849,10 @@ impl App {
             Some(at) if at.elapsed() >= data::EVENTS_MAX_AGE => {
                 // Keep showing the old schedule until the new one arrives.
                 self.events_loaded_at = Some(std::time::Instant::now());
-                Task::perform(data::load_events(self.paths.clone()), Message::EventsLoaded)
+                Task::perform(
+                    data::load_events(self.paths.clone(), self.settings.region.clone()),
+                    Message::EventsLoaded,
+                )
             }
             _ => Task::none(),
         }
@@ -855,12 +898,14 @@ impl App {
                 .spacing(6)
                 .align_x(Alignment::Center),
             ),
-            Load::Ready(events) => crate::views::events::view(
+            Load::Ready(events) => crate::views::events::view(&crate::views::events::EventsView {
                 events,
-                &self.event_icons,
-                self.now_ms,
-                self.event_map_filter.as_deref(),
-            ),
+                icons: &self.event_icons,
+                now_ms: self.now_ms,
+                map_filter: self.event_map_filter.as_deref(),
+                region: self.settings.region.as_deref(),
+                served_region: self.events_region.as_deref(),
+            }),
         }
     }
 

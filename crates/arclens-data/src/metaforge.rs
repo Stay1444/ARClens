@@ -14,9 +14,39 @@ use serde::Deserialize;
 pub const ATTRIBUTION: &str = "MetaForge (metaforge.app/arc-raiders)";
 pub const EVENTS_SCHEDULE_URL: &str = "https://metaforge.app/api/arc-raiders/events-schedule";
 
+/// Server regions the schedule can be asked for: `(id, name)`. The
+/// response's `region` field is verified (`"europe"`, 2026-10-03); the
+/// other ids and the `region` query parameter are **unverified** guesses, so
+/// callers compare [`Schedule::region`] with what they asked for.
+pub const REGIONS: &[(&str, &str)] = &[
+    ("europe", "Europe"),
+    ("north-america", "North America"),
+    ("south-america", "South America"),
+    ("asia", "Asia"),
+    ("oceania", "Oceania"),
+];
+
+/// Schedule URL for a region (`None`: MetaForge's own choice).
+pub fn events_schedule_url(region: Option<&str>) -> String {
+    match region {
+        Some(region) => format!("{EVENTS_SCHEDULE_URL}?region={region}"),
+        None => EVENTS_SCHEDULE_URL.to_owned(),
+    }
+}
+
+/// A parsed `events-schedule` response.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Schedule {
+    pub events: Vec<ScheduledEvent>,
+    /// The region the times are for, as the response states it.
+    pub region: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 struct EventsResponse {
     data: Vec<RawEvent>,
+    #[serde(default)]
+    region: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -32,8 +62,13 @@ struct RawEvent {
 
 /// Parses an `events-schedule` response body.
 pub fn parse_events(bytes: &[u8]) -> Result<Vec<ScheduledEvent>, Error> {
+    Ok(parse_schedule(bytes)?.events)
+}
+
+/// Parses an `events-schedule` response body, with its region.
+pub fn parse_schedule(bytes: &[u8]) -> Result<Schedule, Error> {
     let response: EventsResponse = serde_json::from_slice(bytes)?;
-    Ok(response
+    let events = response
         .data
         .into_iter()
         .filter(|e| e.end_time > e.start_time)
@@ -44,7 +79,11 @@ pub fn parse_events(bytes: &[u8]) -> Result<Vec<ScheduledEvent>, Error> {
             start_ms: e.start_time,
             end_ms: e.end_time,
         })
-        .collect())
+        .collect();
+    Ok(Schedule {
+        events,
+        region: response.region,
+    })
 }
 
 /// Fetches the current schedule.
@@ -244,6 +283,17 @@ mod tests {
         assert!(event_on_map("Blue Gate", "blue-gate"));
         assert!(!event_on_map("Blue Gate", "dam"));
         assert!(!event_on_map("", "dam"));
+    }
+
+    #[test]
+    fn reads_the_schedule_region() {
+        let schedule = parse_schedule(br#"{"data":[],"cachedAt":1,"region":"europe"}"#).unwrap();
+        assert_eq!(schedule.region.as_deref(), Some("europe"));
+        assert_eq!(
+            events_schedule_url(Some("asia")),
+            "https://metaforge.app/api/arc-raiders/events-schedule?region=asia"
+        );
+        assert_eq!(events_schedule_url(None), EVENTS_SCHEDULE_URL);
     }
 
     #[test]

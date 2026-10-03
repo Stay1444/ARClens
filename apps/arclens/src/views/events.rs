@@ -28,12 +28,20 @@ const COLORS: [Color; 5] = [
 /// Instances listed per condition in the schedule.
 const PER_CONDITION: usize = 4;
 
-pub fn view<'a>(
-    events: &'a [ScheduledEvent],
-    icons: &'a EventIcons,
-    now_ms: i64,
-    map_filter: Option<&'a str>,
-) -> Element<'a, Message> {
+pub struct EventsView<'a> {
+    pub events: &'a [ScheduledEvent],
+    pub icons: &'a EventIcons,
+    pub now_ms: i64,
+    pub map_filter: Option<&'a str>,
+    /// The region the player chose (`None`: not asked yet).
+    pub region: Option<&'a str>,
+    /// The region the schedule says it is for.
+    pub served_region: Option<&'a str>,
+}
+
+pub fn view<'a>(page: &EventsView<'a>) -> Element<'a, Message> {
+    let (events, icons, now_ms, map_filter) =
+        (page.events, page.icons, page.now_ms, page.map_filter);
     let agenda = agenda(
         events
             .iter()
@@ -78,7 +86,12 @@ pub fn view<'a>(
         });
 
     let content = column![
-        text("Events").size(24).font(BOLD),
+        row![
+            text("Events").size(24).font(BOLD).width(Length::Fill),
+            region_pills(page.region),
+        ]
+        .align_y(Alignment::Center),
+        region_notice(page.region, page.served_region),
         map_pills(events, map_filter),
         section(
             "ACTIVE NOW",
@@ -105,6 +118,56 @@ pub fn view<'a>(
     .spacing(18)
     .padding(24);
     scrollable(content).height(Length::Fill).into()
+}
+
+/// The player's server region; times differ per region.
+fn region_pills<'a>(chosen: Option<&str>) -> Element<'a, Message> {
+    arclens_data::metaforge::REGIONS
+        .iter()
+        .fold(row![].spacing(6), |r, &(id, name)| {
+            r.push(pill(
+                name,
+                chosen == Some(id),
+                Message::SetRegion(id.to_owned()),
+            ))
+        })
+        .into()
+}
+
+/// First launch: ask for the region. Later: say so if the schedule came
+/// back for another region than chosen.
+fn region_notice<'a>(chosen: Option<&str>, served: Option<&str>) -> Element<'a, Message> {
+    let name = |id: &str| {
+        arclens_data::metaforge::REGIONS
+            .iter()
+            .find(|r| r.0 == id)
+            .map_or_else(|| id.to_owned(), |r| r.1.to_owned())
+    };
+    let note = match (chosen, served) {
+        (None, served) => format!(
+            "Which servers do you play on? Condition times differ by region; pick yours \
+             above. Showing {} for now.",
+            served.map_or_else(|| "the default schedule".to_owned(), name)
+        ),
+        (Some(chosen), Some(served)) if chosen != served => format!(
+            "MetaForge returned the {} schedule, not {}: times may be off.",
+            name(served),
+            name(chosen)
+        ),
+        _ => return Space::new().into(),
+    };
+    container(text(note).size(13))
+        .padding([8, 12])
+        .style(|_| container::Style {
+            background: Some(with_alpha(UPCOMING, 0.12).into()),
+            border: Border {
+                color: with_alpha(UPCOMING, 0.5),
+                width: 1.0,
+                radius: 6.0.into(),
+            },
+            ..container::Style::default()
+        })
+        .into()
 }
 
 fn section<'a>(title: &'a str, body: Element<'a, Message>, empty: bool) -> Element<'a, Message> {

@@ -86,8 +86,12 @@ green CI.
       30 min, offline fallback, attributed) and an **Events** tab in the
       app: active now, next per map, schedule per condition in local time
       (`docs/assets/events.png`).
-- [ ] Verify the per-region rotation claim against the live feed and the
-      game; add a region selector if MetaForge exposes one.
+- [x] Region: the live schedule says `"region":"europe"`, so rotations are
+      per region. The Events tab asks for the server region on first launch
+      (pills, saved to `settings.json`), requests `?region=<id>` and warns
+      if the response is for another region.
+- [ ] Confirm the region query parameter and ids (only `europe` seen so
+      far).
 - [x] Condition icons on the Events tab: MetaForge's per-event icon, else
       RaidTheory's per-type icon; downloaded once, decoded once; initials
       while loading or when missing.

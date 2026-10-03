@@ -44,6 +44,11 @@ impl Paths {
         self.cache.join("icons")
     }
 
+    /// Small app settings (server region, …).
+    pub fn settings(&self) -> PathBuf {
+        self.config.join("settings.json")
+    }
+
     /// Which map-marker kinds the player hid.
     pub fn marker_filter(&self) -> PathBuf {
         self.config.join("marker-filter.json")
