@@ -1,9 +1,10 @@
 //! IPC between the companion app (`arclens`) and the overlay
 //! (`arclens-overlay`).
 //!
-//! Transport: a Unix domain socket at `$XDG_RUNTIME_DIR/arclens.sock`,
-//! owned by the companion app. Framing: one JSON object per line
-//! (newline-delimited JSON), so messages are easy to inspect with `socat`.
+//! Transport: a Unix domain socket on Linux, a named pipe on Windows
+//! ([`Endpoint`]), owned by the companion app. Framing: one JSON object per
+//! line (newline-delimited JSON), so messages are easy to inspect with
+//! `socat`.
 //!
 //! Versioning: every connection starts with a [`Hello`] from each side. Bump
 //! [`PROTOCOL_VERSION`] on any breaking change to [`ToOverlay`] /
@@ -12,19 +13,12 @@
 use arclens_core::{Advice, Item, MapId, Marker, Transform};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::UnixStream;
-use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
+
+mod transport;
+pub use transport::{Endpoint, Listener};
 
 pub const PROTOCOL_VERSION: u32 = 9;
-
-/// Default socket path: `$XDG_RUNTIME_DIR/arclens.sock`, falling back to the
-/// temp dir when the variable is unset (non-systemd systems).
-pub fn socket_path() -> PathBuf {
-    std::env::var_os("XDG_RUNTIME_DIR")
-        .map_or_else(std::env::temp_dir, PathBuf::from)
-        .join("arclens.sock")
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hello {
@@ -240,10 +234,18 @@ pub enum Error {
     VersionMismatch { peer: u32 },
 }
 
+type ReadHalf = Box<dyn AsyncRead + Send + Unpin>;
+type WriteHalf = Box<dyn AsyncWrite + Send + Unpin>;
+
 /// Reading half of a newline-delimited JSON connection.
-#[derive(Debug)]
 pub struct Receiver {
-    lines: tokio::io::Lines<BufReader<OwnedReadHalf>>,
+    lines: tokio::io::Lines<BufReader<ReadHalf>>,
+}
+
+impl std::fmt::Debug for Receiver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Receiver").finish_non_exhaustive()
+    }
 }
 
 impl Receiver {
@@ -257,9 +259,14 @@ impl Receiver {
 }
 
 /// Writing half of a newline-delimited JSON connection.
-#[derive(Debug)]
 pub struct Sender {
-    write: OwnedWriteHalf,
+    write: WriteHalf,
+}
+
+impl std::fmt::Debug for Sender {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Sender").finish_non_exhaustive()
+    }
 }
 
 impl Sender {
@@ -271,14 +278,18 @@ impl Sender {
     }
 }
 
-/// Splits a connected stream into typed halves.
-pub fn split(stream: UnixStream) -> (Receiver, Sender) {
-    let (read, write) = stream.into_split();
+/// Wraps a connection's byte halves into typed halves.
+fn split(
+    read: impl AsyncRead + Send + Unpin + 'static,
+    write: impl AsyncWrite + Send + Unpin + 'static,
+) -> (Receiver, Sender) {
     (
         Receiver {
-            lines: BufReader::new(read).lines(),
+            lines: BufReader::new(Box::new(read) as ReadHalf).lines(),
         },
-        Sender { write },
+        Sender {
+            write: Box::new(write),
+        },
     )
 }
 
@@ -296,7 +307,6 @@ pub fn check_version(hello: &Hello) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::net::UnixListener;
 
     /// `scripts/overlay-demo.jsonl` must keep matching the protocol.
     #[test]
@@ -311,16 +321,26 @@ mod tests {
         }
     }
 
+    /// A private endpoint for one test.
+    fn test_endpoint(dir: &tempfile::TempDir) -> Endpoint {
+        if cfg!(windows) {
+            let unique = dir.path().file_name().unwrap().to_string_lossy();
+            Endpoint::at(format!(r"\\.\pipe\arclens-test-{unique}"))
+        } else {
+            Endpoint::at(dir.path().join("test.sock"))
+        }
+    }
+
     #[tokio::test]
-    async fn round_trips_messages_over_a_socket() {
+    async fn round_trips_messages_over_the_endpoint() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("test.sock");
-        let listener = UnixListener::bind(&path).unwrap();
+        let endpoint = test_endpoint(&dir);
+        let mut listener = endpoint.bind().await.unwrap();
 
         let client = tokio::spawn({
-            let path = path.clone();
+            let endpoint = endpoint.clone();
             async move {
-                let (mut rx, mut tx) = split(UnixStream::connect(path).await.unwrap());
+                let (mut rx, mut tx) = endpoint.connect().await.unwrap();
                 tx.send(&ToApp::Search {
                     query: "gear".into(),
                 })
@@ -330,8 +350,7 @@ mod tests {
             }
         });
 
-        let (stream, _) = listener.accept().await.unwrap();
-        let (mut rx, mut tx) = split(stream);
+        let (mut rx, mut tx) = listener.accept().await.unwrap();
         let msg: ToApp = rx.recv().await.unwrap().unwrap();
         assert_eq!(
             msg,
@@ -346,6 +365,11 @@ mod tests {
         assert_eq!(
             client.await.unwrap(),
             Some(ToOverlay::SetVisible { visible: true })
+        );
+        // Only one instance listens at a time.
+        assert_eq!(
+            endpoint.bind().await.unwrap_err().kind(),
+            std::io::ErrorKind::AddrInUse
         );
     }
 

@@ -110,8 +110,7 @@ async fn connect_once(
     output: &mut mpsc::Sender<Event>,
     connected: &mut bool,
 ) -> Result<(), arclens_ipc::Error> {
-    let stream = tokio::net::UnixStream::connect(arclens_ipc::socket_path()).await?;
-    let (mut rx, mut tx) = arclens_ipc::split(stream);
+    let (mut rx, mut tx) = arclens_ipc::Endpoint::for_user().connect().await?;
     tx.send(&ToApp::Hello(Hello {
         protocol: PROTOCOL_VERSION,
     }))

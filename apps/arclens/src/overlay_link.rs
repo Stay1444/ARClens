@@ -6,7 +6,6 @@ use arclens_ipc::{Hello, PROTOCOL_VERSION, ToApp, ToOverlay};
 use futures::SinkExt;
 use futures::channel::mpsc;
 use iced::Subscription;
-use tokio::net::UnixListener;
 use tokio::sync::mpsc as tokio_mpsc;
 
 /// Cloneable handle for sending to the connected overlay.
@@ -45,24 +44,13 @@ pub fn subscription() -> Subscription<Event> {
 }
 
 async fn serve(output: &mut mpsc::Sender<Event>) -> Result<(), arclens_ipc::Error> {
-    let path = arclens_ipc::socket_path();
-    // A previous instance may have left the socket behind. If another
-    // instance is alive the connect succeeds and we refuse to steal it.
-    if tokio::net::UnixStream::connect(&path).await.is_ok() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::AddrInUse,
-            "another ARClens instance is running",
-        )
-        .into());
-    }
-    let _ = std::fs::remove_file(&path);
-    let listener = UnixListener::bind(&path)?;
+    let endpoint = arclens_ipc::Endpoint::for_user();
+    let mut listener = endpoint.bind().await?;
     let _ = output.send(Event::Listening).await;
-    tracing::info!(path = %path.display(), "waiting for overlay");
+    tracing::info!(endpoint = %endpoint.describe(), "waiting for overlay");
 
     loop {
-        let (stream, _) = listener.accept().await?;
-        let (mut rx, mut tx) = arclens_ipc::split(stream);
+        let (mut rx, mut tx) = listener.accept().await?;
         let (handle_tx, mut handle_rx) = tokio_mpsc::unbounded_channel();
 
         tx.send(&ToOverlay::Hello(Hello {
