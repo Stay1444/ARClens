@@ -73,7 +73,12 @@ green CI.
         Tesseract) by benchmarking on crops from the stash video;
   - [ ] read the tooltip footer value (weapons differ from the dataset);
   - [ ] place the overlay card next to the detected tooltip;
-  - [ ] map registration → `Transform` (scale + translation).
+  - [ ] map screen: read map name, raid time and condition from the right
+        panel (text, same OCR);
+  - [ ] map registration → `Transform` by **label anchoring** (OCR the POI
+        labels, fit scale + translation; see
+        `docs/vision/findings-2026-10-03-map-video.md`); calibration tool
+        to build per-map label tables;
 - [ ] Benchmarks (`criterion`): a CPU budget per frame at 4 fps.
 - [ ] Live capture: ScreenCast portal (`ashpd`) plus the PipeWire stream
       (`pipewire` crate) with cursor metadata. Run only while the game is
