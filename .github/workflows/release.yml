@@ -1,6 +1,6 @@
 name: Release
 
-# Builds the AppImage and the Flatpak bundle. On a `v*` tag they are
+# Builds the AppImage, the Flatpak bundle and a Windows zip. On a `v*` tag they are
 # attached to a GitHub release; a manual run keeps them as workflow
 # artifacts only.
 on:
@@ -56,9 +56,31 @@ jobs:
         path: ARClens-x86_64.flatpak
         if-no-files-found: error
 
+  windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: Swatinem/rust-cache@v2
+      with:
+        key: windows-release
+    - name: Build
+      run: cargo build --release --locked -p arclens -p arclens-overlay
+    - name: Zip
+      shell: pwsh
+      run: |
+        $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { (git rev-parse --short HEAD) }
+        New-Item -ItemType Directory -Force ARClens | Out-Null
+        Copy-Item target/release/arclens.exe, target/release/arclens-overlay.exe, README.md ARClens/
+        Compress-Archive -Path ARClens -DestinationPath "ARClens-$version-windows-x86_64.zip"
+    - uses: actions/upload-artifact@v4
+      with:
+        name: windows
+        path: ARClens-*-windows-x86_64.zip
+        if-no-files-found: error
+
   release:
     if: github.ref_type == 'tag'
-    needs: [ appimage, flatpak ]
+    needs: [ appimage, flatpak, windows ]
     runs-on: ubuntu-latest
     permissions:
       contents: write

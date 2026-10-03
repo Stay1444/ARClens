@@ -27,3 +27,22 @@ jobs:
       run: cargo test --workspace --locked
     - name: Build apps
       run: cargo build --workspace --locked
+
+  windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: Swatinem/rust-cache@v2
+    - name: Clippy
+      run: cargo clippy --workspace --all-targets --locked -- -D warnings
+    - name: Test
+      run: cargo test --workspace --locked
+    - name: Build apps
+      run: cargo build --release --workspace --locked
+    - name: Upload the binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: arclens-windows-x86_64
+        path: |
+          target/release/arclens.exe
+          target/release/arclens-overlay.exe
