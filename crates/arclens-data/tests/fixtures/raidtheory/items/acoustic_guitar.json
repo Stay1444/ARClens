@@ -1,0 +1,12 @@
+{
+  "id": "acoustic_guitar",
+  "name": { "de": "Akustikgitarre", "en": "Acoustic Guitar" },
+  "description": { "en": "A playable acoustic guitar used to attract ARC's attention, and impress other Raiders." },
+  "type": "Quick Use",
+  "rarity": "Legendary",
+  "value": 7000,
+  "weightKg": 1,
+  "stackSize": 1,
+  "recyclesInto": { "metal_parts": 4, "wires": 6 },
+  "imageFilename": "https://cdn.arctracker.io/items/v2/acoustic_guitar.png"
+}

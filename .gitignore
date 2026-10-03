@@ -1,0 +1,9 @@
+/target
+/dist
+*.swp
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+# Local, never-committed config / caches
+/.arclens-dev/

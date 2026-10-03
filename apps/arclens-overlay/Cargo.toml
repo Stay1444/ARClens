@@ -1,0 +1,21 @@
+[package]
+name = "arclens-overlay"
+description = "ARClens in-game overlay (wlr-layer-shell surface on the OVERLAY layer)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+arclens-core = { workspace = true }
+arclens-ipc = { workspace = true }
+futures = { workspace = true }
+iced = { workspace = true }
+iced_layershell = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,4 @@
+# Keep in sync with the [workspace.lints] table in Cargo.toml.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+doc-valid-idents = ["ARClens", "MetaForge", "RaidTheory", "ARCTracker", "KWin", "KDE", "PipeWire", "..", "ARC"]

@@ -1,0 +1,200 @@
+//! IPC between the companion app (`arclens`) and the overlay
+//! (`arclens-overlay`).
+//!
+//! Transport: a Unix domain socket at `$XDG_RUNTIME_DIR/arclens.sock`,
+//! owned by the companion app. Framing: one JSON object per line
+//! (newline-delimited JSON), so messages are easy to inspect with `socat`.
+//!
+//! Versioning: every connection starts with a [`Hello`] from each side. Bump
+//! [`PROTOCOL_VERSION`] on any breaking change to [`ToOverlay`] /
+//! [`ToApp`].
+
+use arclens_core::{Advice, Item, MapId, Marker, Transform};
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::UnixStream;
+use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
+
+pub const PROTOCOL_VERSION: u32 = 1;
+
+/// Default socket path: `$XDG_RUNTIME_DIR/arclens.sock`, falling back to the
+/// temp dir when the variable is unset (non-systemd systems).
+pub fn socket_path() -> PathBuf {
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .map_or_else(std::env::temp_dir, PathBuf::from)
+        .join("arclens.sock")
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Hello {
+    pub protocol: u32,
+}
+
+/// Messages from the companion app to the overlay.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ToOverlay {
+    Hello(Hello),
+    /// Show or hide the overlay surface entirely. Hidden means *unmapped*,
+    /// so the compositor can go back to direct scanout.
+    SetVisible {
+        visible: bool,
+    },
+    /// Switch between click-through (`false`) and interactive (`true`).
+    SetInteractive {
+        interactive: bool,
+    },
+    /// Show an item card (quick lookup or detected hovered item).
+    ShowItem {
+        item: Box<Item>,
+        advice: Advice,
+    },
+    /// Draw these markers using `transform` (map space → screen pixels).
+    ShowMarkers {
+        map: MapId,
+        markers: Vec<Marker>,
+        transform: Transform,
+    },
+    ClearMarkers,
+}
+
+/// Messages from the overlay to the companion app.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ToApp {
+    Hello(Hello),
+    /// The user typed into the overlay's quick-search box.
+    Search {
+        query: String,
+    },
+    /// The overlay is about to exit.
+    Bye,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("malformed message: {0}")]
+    Decode(#[from] serde_json::Error),
+    #[error("peer speaks protocol {peer}, we speak {PROTOCOL_VERSION}")]
+    VersionMismatch { peer: u32 },
+}
+
+/// Reading half of a newline-delimited JSON connection.
+#[derive(Debug)]
+pub struct Receiver {
+    lines: tokio::io::Lines<BufReader<OwnedReadHalf>>,
+}
+
+impl Receiver {
+    /// Next message, or `Ok(None)` when the peer closed the connection.
+    pub async fn recv<T: for<'de> Deserialize<'de>>(&mut self) -> Result<Option<T>, Error> {
+        match self.lines.next_line().await? {
+            Some(line) => Ok(Some(serde_json::from_str(&line)?)),
+            None => Ok(None),
+        }
+    }
+}
+
+/// Writing half of a newline-delimited JSON connection.
+#[derive(Debug)]
+pub struct Sender {
+    write: OwnedWriteHalf,
+}
+
+impl Sender {
+    pub async fn send<T: Serialize>(&mut self, msg: &T) -> Result<(), Error> {
+        let mut buf = serde_json::to_vec(msg)?;
+        buf.push(b'\n');
+        self.write.write_all(&buf).await?;
+        Ok(())
+    }
+}
+
+/// Splits a connected stream into typed halves.
+pub fn split(stream: UnixStream) -> (Receiver, Sender) {
+    let (read, write) = stream.into_split();
+    (
+        Receiver {
+            lines: BufReader::new(read).lines(),
+        },
+        Sender { write },
+    )
+}
+
+/// Checks a peer's [`Hello`].
+pub fn check_version(hello: &Hello) -> Result<(), Error> {
+    if hello.protocol == PROTOCOL_VERSION {
+        Ok(())
+    } else {
+        Err(Error::VersionMismatch {
+            peer: hello.protocol,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::net::UnixListener;
+
+    #[tokio::test]
+    async fn round_trips_messages_over_a_socket() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.sock");
+        let listener = UnixListener::bind(&path).unwrap();
+
+        let client = tokio::spawn({
+            let path = path.clone();
+            async move {
+                let (mut rx, mut tx) = split(UnixStream::connect(path).await.unwrap());
+                tx.send(&ToApp::Search {
+                    query: "gear".into(),
+                })
+                .await
+                .unwrap();
+                rx.recv::<ToOverlay>().await.unwrap()
+            }
+        });
+
+        let (stream, _) = listener.accept().await.unwrap();
+        let (mut rx, mut tx) = split(stream);
+        let msg: ToApp = rx.recv().await.unwrap().unwrap();
+        assert_eq!(
+            msg,
+            ToApp::Search {
+                query: "gear".into()
+            }
+        );
+        tx.send(&ToOverlay::SetVisible { visible: true })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            client.await.unwrap(),
+            Some(ToOverlay::SetVisible { visible: true })
+        );
+    }
+
+    #[test]
+    fn wire_format_is_tagged_json() {
+        let json = serde_json::to_string(&ToOverlay::SetInteractive { interactive: true }).unwrap();
+        assert_eq!(json, r#"{"type":"set_interactive","interactive":true}"#);
+    }
+
+    #[test]
+    fn rejects_other_protocol_versions() {
+        assert!(
+            check_version(&Hello {
+                protocol: PROTOCOL_VERSION
+            })
+            .is_ok()
+        );
+        assert!(matches!(
+            check_version(&Hello { protocol: 999 }),
+            Err(Error::VersionMismatch { peer: 999 })
+        ));
+    }
+}

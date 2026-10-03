@@ -1,0 +1,6 @@
+{
+  "id": "wired_up",
+  "name": { "en": "Wired Up" },
+  "trader": "Shani",
+  "requiredItemIds": [{ "itemId": "wires", "quantity": 2 }]
+}

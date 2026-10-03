@@ -1,0 +1,18 @@
+[
+  {
+    "id": "expedition",
+    "disabled": false,
+    "name": "Expedition",
+    "phases": [
+      { "name": "Foundation", "phase": 1, "requirementItemIds": [{ "itemId": "wires", "quantity": 10 }] }
+    ]
+  },
+  {
+    "id": "old_project",
+    "disabled": true,
+    "name": "Old Project",
+    "phases": [
+      { "name": "Gone", "phase": 1, "requirementItemIds": [{ "itemId": "metal_parts", "quantity": 1 }] }
+    ]
+  }
+]
