@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=ARClens
+GenericName=ARC Raiders Companion
+Comment=Item lookup, map markers and an in-game overlay for ARC Raiders
+Exec=arclens
+Icon=arclens
+Terminal=false
+Categories=Game;Utility;
+Keywords=arc;raiders;overlay;companion;
+StartupNotify=true

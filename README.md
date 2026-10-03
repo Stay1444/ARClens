@@ -1,6 +1,50 @@
 # ARClens
-ARClens is a companion app for ARC Raiders that puts useful game information right at your fingertips.
 
-Quickly check loot values, item information, map data, extraction points, and other useful intel without having to constantly switch between the game and a browser.
+ARClens is a companion app for ARC Raiders that puts useful game information
+right at your fingertips.
 
-Built with Linux in mind, ARClens is designed to be a lightweight, native companion that stays out of your way while you play.
+Quickly check loot values, item information, map data, extraction points and
+other useful intel, without constantly switching between the game and a
+browser.
+
+Built with Linux in mind, ARClens is a lightweight, native companion that
+stays out of your way while you play. It is a real **Wayland overlay**: a
+`wlr-layer-shell` surface that KDE Plasma draws above your fullscreen game.
+
+![Overlay demo: item card and map markers drawn over another window](docs/assets/overlay-demo.png)
+
+## Status
+
+Early development (milestone M0 done). See [docs/ROADMAP.md](docs/ROADMAP.md).
+
+| Works today | Planned |
+|---|---|
+| Item search with keep / sell / recycle advice and "needed for" (quests, workshop, projects) | Map markers and calibration, event timers |
+| Click-through overlay on the layer-shell OVERLAY layer (verified on Sway; KDE + fullscreen game still to be tested) | Detecting the hovered item and open map via screen capture and computer vision |
+| Global hotkeys via the desktop portal | Packaging (COPR / Flatpak) |
+
+## Safe by design
+
+ARClens **never touches the game process**: no memory reading, no injection, no
+hooks. It uses public community data and, in the future, the same
+screen-capture portal OBS uses. See
+[docs/research/game-state-detection.md](docs/research/game-state-detection.md).
+
+## Quick start (development)
+
+```sh
+# Fedora
+sudo dnf install wayland-devel libxkbcommon-devel vulkan-loader-devel
+cargo run -p arclens            # companion app
+cargo run -p arclens-overlay    # overlay, in a second terminal
+```
+
+More in [docs/development.md](docs/development.md).
+
+## Data and attribution
+
+- Game data:
+  [RaidTheory/arcraiders-data](https://github.com/RaidTheory/arcraiders-data)
+  (MIT) / [arctracker.io](https://arctracker.io).
+- ARClens is a community project, **not affiliated with or endorsed by Embark
+  Studios**. ARC Raiders and all related content are © Embark Studios AB.
