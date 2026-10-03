@@ -10,6 +10,7 @@ use arclens_hotkeys::Action;
 use arclens_ipc::ToOverlay;
 use arclens_ui::format::thousands;
 use arclens_ui::palette::{self, with_alpha};
+use arclens_ui::theme;
 use arclens_ui::{CardSize, ItemCard, item_card};
 use iced::widget::{Space, button, column, container, image, row, scrollable, text, text_input};
 use iced::{Alignment, Border, Color, Element, Font, Length, Subscription, Task, Theme, font};
@@ -356,17 +357,7 @@ impl App {
 
     #[allow(clippy::unused_self, reason = "signature required by iced")]
     pub fn theme(&self) -> Theme {
-        Theme::custom(
-            "ARClens".to_owned(),
-            iced::theme::Palette {
-                background: Color::from_rgb8(0x0d, 0x0f, 0x13),
-                text: palette::TEXT,
-                primary: Color::from_rgb8(0x3c, 0xc8, 0xe6),
-                success: palette::verdict(arclens_core::Verdict::Keep),
-                warning: palette::verdict(arclens_core::Verdict::Sell),
-                danger: Color::from_rgb8(0xe5, 0x48, 0x4d),
-            },
-        )
+        arclens_ui::theme::iced_theme()
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -1652,9 +1643,11 @@ impl App {
                 },
                 ..container::Style::default()
             }),
-            text(label).size(13).color(palette::TEXT_MUTED),
+            text(label)
+                .size(theme::size::SMALL)
+                .color(palette::TEXT_MUTED),
         ]
-        .spacing(6)
+        .spacing(8)
         .align_y(Alignment::Center);
 
         let tabs = [
@@ -1666,7 +1659,7 @@ impl App {
             ("Settings", Tab::Settings),
         ]
         .into_iter()
-        .fold(row![].spacing(4), |r, (label, tab)| {
+        .fold(row![].spacing(2), |r, (label, tab)| {
             r.push(tab_button(label, self.tab == tab, Message::SetTab(tab)))
         });
         let middle: Element<'_, Message> = if self.tab == Tab::Items {
@@ -1674,15 +1667,18 @@ impl App {
                 .id(SEARCH_ID)
                 .on_input(Message::QueryChanged)
                 .on_submit(Message::SelectFirst)
-                .padding([8, 12])
-                .size(15)
+                .padding([10, 16])
+                .size(theme::size::BODY)
                 .width(Length::Fill)
+                .style(theme::input_style)
                 .into()
         } else {
             Space::new().width(Length::Fill).into()
         };
         let bar = row![
-            text("ARClens").size(20).font(BOLD),
+            iced::widget::svg(self.logo.clone()).width(36).height(36),
+            text("ARCLENS").size(theme::size::H1).font(theme::DISPLAY),
+            Space::new().width(8),
             tabs,
             middle,
             status,
@@ -1719,10 +1715,10 @@ impl App {
         .align_y(Alignment::Center);
 
         container(bar)
-            .padding([12, 16])
+            .padding([12, 24])
             .width(Length::Fill)
             .style(|_| container::Style {
-                background: Some(Color::from_rgb8(0x14, 0x17, 0x1c).into()),
+                background: Some(Color::BLACK.into()),
                 border: Border {
                     color: palette::BORDER,
                     width: 1.0,
@@ -1920,27 +1916,25 @@ fn recycle_names(item: &Item, catalog: &Catalog, place: Place) -> Vec<String> {
 
 fn pill_button<'a>(label: &'a str, shortcut: &'a str, on_press: Message) -> Element<'a, Message> {
     button(
-        row![
-            text(label).size(13),
-            text(shortcut).size(11).color(palette::TEXT_MUTED),
+        column![
+            text(label).size(theme::size::SMALL).font(theme::STRONG),
+            text(shortcut)
+                .size(theme::size::TINY - 1.0)
+                .color(palette::TEXT_MUTED),
         ]
-        .spacing(8)
-        .align_y(Alignment::Center),
+        .align_x(Alignment::Center),
     )
-    .padding([6, 12])
+    .padding([5, 14])
     .on_press(on_press)
     .style(|_, status| {
-        let alpha = match status {
-            button::Status::Hovered | button::Status::Pressed => 0.12,
-            _ => 0.06,
-        };
+        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
         button::Style {
-            background: Some(with_alpha(palette::TEXT, alpha).into()),
+            background: Some(with_alpha(palette::TEXT, if hovered { 0.12 } else { 0.04 }).into()),
             text_color: palette::TEXT,
             border: Border {
-                color: palette::BORDER,
+                color: with_alpha(palette::TEXT, 0.18),
                 width: 1.0,
-                radius: 6.0.into(),
+                radius: theme::RADIUS.into(),
             },
             ..button::Style::default()
         }
@@ -1949,36 +1943,7 @@ fn pill_button<'a>(label: &'a str, shortcut: &'a str, on_press: Message) -> Elem
 }
 
 fn tab_button(label: &str, active: bool, on_press: Message) -> Element<'_, Message> {
-    button(
-        text(label)
-            .size(14)
-            .font(if active { BOLD } else { Font::DEFAULT }),
-    )
-    .padding([6, 12])
-    .on_press(on_press)
-    .style(move |_, status| {
-        let background = if active {
-            with_alpha(palette::TEXT, 0.14)
-        } else if matches!(status, button::Status::Hovered | button::Status::Pressed) {
-            with_alpha(palette::TEXT, 0.08)
-        } else {
-            Color::TRANSPARENT
-        };
-        button::Style {
-            background: Some(background.into()),
-            text_color: if active {
-                palette::TEXT
-            } else {
-                palette::TEXT_MUTED
-            },
-            border: Border {
-                radius: 6.0.into(),
-                ..Border::default()
-            },
-            ..button::Style::default()
-        }
-    })
-    .into()
+    theme::tab(label, active, on_press)
 }
 
 /// The in-game map viewport, `[left, top, right, bottom]` as screen

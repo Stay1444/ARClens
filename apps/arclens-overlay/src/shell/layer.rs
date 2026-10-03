@@ -50,6 +50,8 @@ pub fn run() -> anyhow::Result<()> {
     .scale_factor(crate::scale_factor)
     .subscription(crate::subscription)
     .settings(Settings {
+        fonts: arclens_ui::theme::FONTS.iter().map(|&f| f.into()).collect(),
+        default_font: arclens_ui::theme::BODY,
         layer_settings: LayerShellSettings {
             // No surface until there is something to show.
             start_mode: StartMode::Background,

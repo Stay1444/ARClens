@@ -3,18 +3,15 @@
 
 use crate::app::{Message, Tab};
 use crate::event_icons::EventIcons;
-use crate::views::events::{ACTIVE, UPCOMING, card, tile};
+use crate::views::events::{ACTIVE, UPCOMING, card};
 use arclens_core::{ScheduledEvent, agenda, countdown};
 use arclens_ui::palette::{self, with_alpha};
+use arclens_ui::theme::{self, size, space};
 use iced::widget::{Space, button, column, container, row, scrollable, svg, text, text_input};
-use iced::{Alignment, Border, Color, Element, Font, Length, font};
+use iced::{Alignment, Border, Element, Length};
 
-const BOLD: Font = Font {
-    weight: font::Weight::Bold,
-    ..Font::DEFAULT
-};
 /// Content width; the page centres it.
-const WIDTH: f32 = 1040.0;
+const WIDTH: f32 = 1240.0;
 /// Conditions shown per row.
 const ACTIVE_SHOWN: usize = 8;
 const NEXT_SHOWN: usize = 4;
@@ -51,20 +48,19 @@ pub struct HomeView<'a> {
 
 pub fn view<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
     let header = row![
-        svg(home.icon.clone()).width(56).height(56),
+        svg(home.icon.clone()).width(64).height(64),
         column![
-            text("ARClens").size(28).font(BOLD),
+            text("ARCLENS").size(size::TITLE).font(theme::DISPLAY),
             text("Companion and overlay for ARC Raiders")
-                .size(14)
+                .size(size::BODY)
                 .color(palette::TEXT_MUTED),
         ]
-        .spacing(2)
         .width(Length::Fill),
         home.status
             .iter()
-            .fold(row![].spacing(8), |r, s| r.push(chip(s))),
+            .fold(row![].spacing(10), |r, s| r.push(chip(s))),
     ]
-    .spacing(16)
+    .spacing(18)
     .align_y(Alignment::Center);
 
     let search = text_input(
@@ -77,19 +73,20 @@ pub fn view<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
     .id(SEARCH_ID)
     // Typing goes straight to the Items tab with the query.
     .on_input(Message::HomeSearch)
-    .padding([12, 16])
-    .size(17);
+    .padding([16, 20])
+    .size(size::H2)
+    .style(theme::input_style);
 
     let content = column![
         header,
         search,
         conditions(home),
         row![maps(home), workshop(home), in_game()]
-            .spacing(16)
+            .spacing(space::GAP + 4.0)
             .height(Length::Shrink),
     ]
-    .spacing(24)
-    .padding([28, 24])
+    .spacing(space::SECTION)
+    .padding(theme::PAGE_PADDING)
     .max_width(WIDTH);
 
     scrollable(container(content).center_x(Length::Fill))
@@ -105,44 +102,40 @@ fn chip<'a>(status: &Status<'a>) -> Element<'a, Message> {
     };
     container(
         row![
-            container(Space::new().width(8).height(8)).style(move |_| container::Style {
+            container(Space::new().width(10).height(10)).style(move |_| container::Style {
                 background: Some(color.into()),
                 border: Border {
-                    radius: 4.0.into(),
+                    radius: 5.0.into(),
                     ..Border::default()
                 },
                 ..container::Style::default()
             }),
             column![
-                text(status.label).size(10).color(palette::TEXT_MUTED),
-                text(status.value.clone()).size(13),
+                theme::label(status.label),
+                text(status.value.clone())
+                    .size(size::SMALL)
+                    .font(theme::STRONG),
             ],
         ]
-        .spacing(8)
+        .spacing(10)
         .align_y(Alignment::Center),
     )
-    .padding([6, 10])
-    .style(|_| tile(palette::BORDER))
+    .padding([8, 14])
+    .style(theme::card)
     .into()
 }
 
 /// Running now, then next up.
 fn conditions<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
-    let title = row![
-        text("MAP CONDITIONS")
-            .size(12)
-            .color(palette::TEXT_MUTED)
-            .width(Length::Fill),
-        link("All events →", Message::SetTab(Tab::Events)),
-    ]
-    .align_y(Alignment::Center);
+    let all = link("All events →", Message::SetTab(Tab::Events));
     let Some(events) = home.events else {
-        return column![
-            title,
-            text("Loading the schedule…").color(palette::TEXT_MUTED)
-        ]
-        .spacing(10)
-        .into();
+        return theme::panel(
+            "Map conditions",
+            Some(all),
+            text("Loading the schedule…")
+                .size(size::BODY)
+                .color(palette::TEXT_MUTED),
+        );
     };
     let now = home.now_ms;
     let agenda = agenda(events, now);
@@ -150,7 +143,7 @@ fn conditions<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
         .active
         .iter()
         .take(ACTIVE_SHOWN)
-        .fold(row![].spacing(10), |r, e| {
+        .fold(row![].spacing(space::GAP), |r, e| {
             r.push(card(
                 e,
                 home.icons,
@@ -158,12 +151,13 @@ fn conditions<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
                 ACTIVE,
             ))
         })
-        .wrap();
+        .wrap()
+        .vertical_spacing(space::GAP);
     let next = agenda
         .upcoming
         .iter()
         .take(NEXT_SHOWN)
-        .fold(row![].spacing(10), |r, e| {
+        .fold(row![].spacing(space::GAP), |r, e| {
             r.push(card(
                 e,
                 home.icons,
@@ -171,52 +165,57 @@ fn conditions<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
                 UPCOMING,
             ))
         })
-        .wrap();
-    let mut col = column![title].spacing(10);
+        .wrap()
+        .vertical_spacing(space::GAP);
+    let mut col = column![theme::label("Now")].spacing(10);
     if agenda.active.is_empty() {
-        col = col.push(text("Nothing running right now.").color(palette::TEXT_MUTED));
+        col = col.push(
+            text("Nothing running right now.")
+                .size(size::BODY)
+                .color(palette::TEXT_MUTED),
+        );
     } else {
         col = col.push(active);
     }
     if !agenda.upcoming.is_empty() {
         col = col
-            .push(text("NEXT").size(11).color(palette::TEXT_MUTED))
+            .push(Space::new().height(6))
+            .push(theme::label("Next"))
             .push(next);
     }
-    col.into()
+    theme::panel("Map conditions", Some(all), col)
 }
 
 fn maps<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
     let last: Element<'a, Message> = match &home.last_map {
         Some(last) => column![
-            text("Last seen in game")
-                .size(11)
-                .color(palette::TEXT_MUTED),
+            theme::label("Last seen in game"),
             text(match last.condition {
                 Some(c) => format!("{} · {c}", last.name),
                 None => last.name.to_owned(),
             })
-            .size(14),
+            .size(size::BODY)
+            .font(theme::STRONG),
         ]
         .push(last.preset.map(|p| {
             text(format!("Preset: {p}"))
-                .size(12)
+                .size(size::SMALL)
                 .color(palette::TEXT_MUTED)
         }))
-        .spacing(2)
+        .spacing(3)
         .into(),
         None => text("Open the map in game and markers appear on it.")
-            .size(12)
+            .size(size::SMALL)
             .color(palette::TEXT_MUTED)
             .into(),
     };
     let buttons = home
         .maps
         .iter()
-        .fold(column![].spacing(4), |col, &(id, name)| {
+        .fold(column![].spacing(6), |col, &(id, name)| {
             col.push(list_button(name, Message::OpenMap(id.to_owned())))
         });
-    panel("Maps", column![last, buttons].spacing(12))
+    panel("Maps", column![last, buttons].spacing(14))
 }
 
 fn workshop<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
@@ -229,46 +228,55 @@ fn workshop<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
                 built as f32 / total as f32
             };
             column![
-                text(format!("{built} of {total} levels built")).size(14),
+                row![
+                    text(built.to_string())
+                        .size(size::TITLE)
+                        .font(theme::DISPLAY),
+                    text(format!("/ {total} levels built"))
+                        .size(size::BODY)
+                        .color(palette::TEXT_MUTED),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
                 iced::widget::progress_bar(0.0..=1.0, share)
-                    .girth(6)
+                    .girth(8)
                     .style(|_| iced::widget::progress_bar::Style {
                         background: with_alpha(palette::TEXT, 0.08).into(),
-                        bar: ACTIVE.into(),
+                        bar: theme::ACCENT.into(),
                         border: Border {
-                            radius: 3.0.into(),
+                            radius: 4.0.into(),
                             ..Border::default()
                         },
                     }),
                 text("Advice keeps what your next upgrades need.")
-                    .size(12)
+                    .size(size::SMALL)
                     .color(palette::TEXT_MUTED),
             ]
-            .spacing(8)
+            .spacing(10)
             .into()
         }
         None => text(
             "Set your workshop levels so keep / sell / recycle advice knows what you still need.",
         )
-        .size(12)
+        .size(size::SMALL)
         .color(palette::TEXT_MUTED)
         .into(),
     };
     panel(
-        "Workshop",
+        "Progress",
         column![
             body,
-            list_button("Edit levels", Message::SetTab(Tab::Progress))
+            list_button("Edit progress", Message::SetTab(Tab::Progress))
         ]
-        .spacing(12),
+        .spacing(14),
     )
 }
 
 fn in_game<'a>() -> Element<'a, Message> {
     let tip = |title: &'a str, body: &'a str| {
         column![
-            text(title).size(13).font(BOLD),
-            text(body).size(12).color(palette::TEXT_MUTED),
+            text(title).size(size::BODY).font(theme::STRONG),
+            text(body).size(size::SMALL).color(palette::TEXT_MUTED),
         ]
         .spacing(2)
     };
@@ -285,66 +293,56 @@ fn in_game<'a>() -> Element<'a, Message> {
             ),
             tip("Ctrl+Shift+O", "Show or hide the overlay."),
         ]
-        .spacing(10),
+        .spacing(12),
     )
 }
 
 fn panel<'a>(title: &'a str, body: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
-    container(
-        column![
-            text(title.to_uppercase())
-                .size(12)
-                .color(palette::TEXT_MUTED),
-            body.into(),
-        ]
-        .spacing(12),
-    )
-    .padding(16)
-    .width(Length::FillPortion(1))
-    .style(|_| tile(palette::BORDER))
-    .into()
+    container(theme::panel(title, None, body))
+        .width(Length::FillPortion(1))
+        .into()
 }
 
 fn list_button(label: &str, on_press: Message) -> Element<'_, Message> {
     button(
-        row![text(label).size(13).width(Length::Fill), text("→").size(13)]
-            .align_y(Alignment::Center),
+        row![
+            text(label).size(size::BODY).width(Length::Fill),
+            text("›").size(size::H2).font(theme::DISPLAY),
+        ]
+        .align_y(Alignment::Center),
     )
     .width(Length::Fill)
-    .padding([6, 10])
+    .padding([8, 14])
     .on_press(on_press)
-    .style(|_, status| button::Style {
-        background: Some(
-            with_alpha(
-                palette::TEXT,
-                if matches!(status, button::Status::Hovered | button::Status::Pressed) {
-                    0.12
-                } else {
-                    0.05
-                },
-            )
-            .into(),
-        ),
-        text_color: palette::TEXT,
-        border: Border {
-            color: palette::BORDER,
-            width: 1.0,
-            radius: 6.0.into(),
-        },
-        ..button::Style::default()
+    .style(|_, status| {
+        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+        button::Style {
+            background: Some(if hovered {
+                theme::CREAM.into()
+            } else {
+                with_alpha(palette::TEXT, 0.05).into()
+            }),
+            text_color: if hovered { theme::INK } else { palette::TEXT },
+            border: Border {
+                color: palette::BORDER,
+                width: 1.0,
+                radius: theme::RADIUS.into(),
+            },
+            ..button::Style::default()
+        }
     })
     .into()
 }
 
 fn link(label: &str, on_press: Message) -> Element<'_, Message> {
-    button(text(label).size(13))
+    button(text(label).size(size::SMALL).font(theme::STRONG))
         .padding(0)
         .on_press(on_press)
         .style(|_, status| button::Style {
             text_color: if matches!(status, button::Status::Hovered) {
-                palette::TEXT
+                theme::INK
             } else {
-                Color::from_rgb(0.36, 0.62, 0.98)
+                with_alpha(theme::INK, 0.65)
             },
             ..button::Style::default()
         })

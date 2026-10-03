@@ -7,5 +7,6 @@ pub mod card;
 pub mod format;
 pub mod markers;
 pub mod palette;
+pub mod theme;
 
 pub use card::{CardSize, ItemCard, decode_icon, item_card};

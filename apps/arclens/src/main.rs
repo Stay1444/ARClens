@@ -40,6 +40,7 @@ fn main() -> anyhow::Result<()> {
         app::App::view,
     )
     .title("ARClens")
+    .default_font(arclens_ui::theme::BODY)
     .subscription(app::App::subscription)
     .theme(app::App::theme)
     .window(iced::window::Settings {
@@ -50,6 +51,11 @@ fn main() -> anyhow::Result<()> {
         icon: platform::window_icon(),
         ..Default::default()
     })
+    .font(arclens_ui::theme::FONTS[0])
+    .font(arclens_ui::theme::FONTS[1])
+    .font(arclens_ui::theme::FONTS[2])
+    .font(arclens_ui::theme::FONTS[3])
+    .font(arclens_ui::theme::FONTS[4])
     .run()?;
     Ok(())
 }

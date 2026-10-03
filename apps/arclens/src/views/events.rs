@@ -5,17 +5,14 @@ use crate::app::Message;
 use crate::event_icons::EventIcons;
 use arclens_core::{ScheduledEvent, agenda, countdown};
 use arclens_ui::palette::{self, with_alpha};
-use iced::widget::{Space, button, column, container, row, scrollable, text};
-use iced::{Alignment, Border, Color, Element, Font, Length, font};
+use arclens_ui::theme::{self, size, space};
+use iced::widget::{Space, column, container, row, scrollable, text};
+use iced::{Alignment, Border, Color, Element, Length};
 use std::collections::BTreeMap;
 
-const BOLD: Font = Font {
-    weight: font::Weight::Bold,
-    ..Font::DEFAULT
-};
 pub(crate) const ACTIVE: Color = Color::from_rgb(0.30, 0.82, 0.50);
 pub(crate) const UPCOMING: Color = Color::from_rgb(0.36, 0.62, 0.98);
-const CARD_WIDTH: f32 = 230.0;
+const CARD_WIDTH: f32 = 268.0;
 /// Backgrounds for conditions without an icon.
 const COLORS: [Color; 5] = [
     Color::from_rgb(0.55, 0.36, 0.85),
@@ -49,14 +46,17 @@ pub fn view<'a>(page: &EventsView<'a>) -> Element<'a, Message> {
         now_ms,
     );
 
-    let active = agenda.active.iter().fold(row![].spacing(10), |r, e| {
-        r.push(card(
-            e,
-            icons,
-            format!("Ends in {}", countdown(e.end_ms - now_ms)),
-            ACTIVE,
-        ))
-    });
+    let active = agenda
+        .active
+        .iter()
+        .fold(row![].spacing(space::GAP), |r, e| {
+            r.push(card(
+                e,
+                icons,
+                format!("Ends in {}", countdown(e.end_ms - now_ms)),
+                ACTIVE,
+            ))
+        });
 
     // The next occurrence on each map.
     let mut next_per_map: BTreeMap<&str, &ScheduledEvent> = BTreeMap::new();
@@ -65,7 +65,7 @@ pub fn view<'a>(page: &EventsView<'a>) -> Element<'a, Message> {
     }
     let mut next: Vec<_> = next_per_map.into_values().collect();
     next.sort_by_key(|e| e.start_ms);
-    let upcoming = next.iter().fold(row![].spacing(10), |r, e| {
+    let upcoming = next.iter().fold(row![].spacing(space::GAP), |r, e| {
         r.push(card(
             e,
             icons,
@@ -81,42 +81,43 @@ pub fn view<'a>(page: &EventsView<'a>) -> Element<'a, Message> {
     }
     let schedule = by_condition
         .into_iter()
-        .fold(row![].spacing(12), |r, (name, list)| {
+        .fold(row![].spacing(space::GAP), |r, (name, list)| {
             r.push(schedule_card(name, &list, icons, now_ms))
         });
 
     let content = column![
         row![
-            text("Events").size(24).font(BOLD).width(Length::Fill),
+            container(theme::heading("Events", size::TITLE)).width(Length::Fill),
             region_pills(page.region),
         ]
         .align_y(Alignment::Center),
         region_notice(page.region, page.served_region),
         map_pills(events, map_filter),
         section(
-            "ACTIVE NOW",
-            active.wrap().vertical_spacing(10).into(),
+            "Active now",
+            active.wrap().vertical_spacing(space::GAP).into(),
             agenda.active.is_empty()
         ),
         section(
-            "UPCOMING NEXT",
-            upcoming.wrap().vertical_spacing(10).into(),
+            "Next on each map",
+            upcoming.wrap().vertical_spacing(space::GAP).into(),
             next.is_empty()
         ),
         section(
-            "SCHEDULE",
-            schedule.wrap().vertical_spacing(12).into(),
+            "Schedule",
+            schedule.wrap().vertical_spacing(space::GAP).into(),
             agenda.upcoming.is_empty() && agenda.active.is_empty()
         ),
         text(
             "Times in your local time zone. Some sites shift the rotation per server \
              region; if times look off for you, tell us."
         )
-        .size(11)
+        .size(size::SMALL)
         .color(palette::TEXT_MUTED),
     ]
-    .spacing(18)
-    .padding(24);
+    .spacing(space::SECTION)
+    .padding(theme::PAGE_PADDING)
+    .max_width(1400);
     scrollable(content).height(Length::Fill).into()
 }
 
@@ -156,7 +157,7 @@ fn region_notice<'a>(chosen: Option<&str>, served: Option<&str>) -> Element<'a, 
         ),
         _ => return Space::new().into(),
     };
-    container(text(note).size(13))
+    container(text(note).size(size::SMALL))
         .padding([8, 12])
         .style(|_| container::Style {
             background: Some(with_alpha(UPCOMING, 0.12).into()),
@@ -173,15 +174,13 @@ fn region_notice<'a>(chosen: Option<&str>, served: Option<&str>) -> Element<'a, 
 fn section<'a>(title: &'a str, body: Element<'a, Message>, empty: bool) -> Element<'a, Message> {
     let body = if empty {
         text("Nothing here right now.")
-            .size(13)
+            .size(size::BODY)
             .color(palette::TEXT_MUTED)
             .into()
     } else {
         body
     };
-    column![text(title).size(11).color(palette::TEXT_MUTED), body]
-        .spacing(8)
-        .into()
+    theme::panel(title, None, body)
 }
 
 fn map_pills<'a>(events: &'a [ScheduledEvent], selected: Option<&'a str>) -> Element<'a, Message> {
@@ -206,32 +205,7 @@ fn map_pills<'a>(events: &'a [ScheduledEvent], selected: Option<&'a str>) -> Ele
 }
 
 pub(crate) fn pill(label: &str, active: bool, on_press: Message) -> Element<'_, Message> {
-    button(text(label).size(13))
-        .padding([5, 12])
-        .on_press(on_press)
-        .style(move |_, status| {
-            let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
-            let alpha = match (active, hovered) {
-                (true, _) => 0.18,
-                (false, true) => 0.10,
-                (false, false) => 0.04,
-            };
-            button::Style {
-                background: Some(with_alpha(palette::TEXT, alpha).into()),
-                text_color: if active {
-                    palette::TEXT
-                } else {
-                    palette::TEXT_MUTED
-                },
-                border: Border {
-                    color: palette::BORDER,
-                    width: 1.0,
-                    radius: 6.0.into(),
-                },
-                ..button::Style::default()
-            }
-        })
-        .into()
+    theme::chip(label, active, on_press)
 }
 
 pub(crate) fn card<'a>(
@@ -242,18 +216,25 @@ pub(crate) fn card<'a>(
 ) -> Element<'a, Message> {
     container(
         row![
-            event_icon(&event.name, icons, 40.0),
+            event_icon(&event.name, icons, 48.0),
             column![
-                text(event.name.clone()).size(15).font(BOLD),
-                text(event.map.clone()).size(12).color(palette::TEXT_MUTED),
-                text(when).size(12).color(accent),
+                text(event.name.clone())
+                    .size(size::BODY + 1.0)
+                    .font(theme::STRONG),
+                text(event.map.clone())
+                    .size(size::SMALL)
+                    .color(palette::TEXT_MUTED),
+                text(when)
+                    .size(size::SMALL)
+                    .font(theme::STRONG)
+                    .color(accent),
             ]
-            .spacing(2),
+            .spacing(1),
         ]
-        .spacing(10)
+        .spacing(14)
         .align_y(Alignment::Center),
     )
-    .padding([10, 12])
+    .padding([12, 14])
     .width(CARD_WIDTH)
     .style(move |_| tile(accent))
     .into()
@@ -278,7 +259,7 @@ fn event_icon<'a>(name: &str, icons: &'a EventIcons, size: f32) -> Element<'a, M
         .bytes()
         .fold(0u32, |h, b| h.wrapping_mul(31).wrapping_add(u32::from(b)));
     let color = COLORS[hue as usize % COLORS.len()];
-    container(text(initials).size(size * 0.38).font(BOLD))
+    container(text(initials).size(size * 0.38).font(theme::DISPLAY))
         .center_x(size)
         .center_y(size)
         .style(move |_| container::Style {
@@ -320,15 +301,19 @@ fn schedule_card<'a>(
                             local_time(e.start_ms),
                             local_time(e.end_ms)
                         ))
-                        .size(13),
+                        .size(size::SMALL),
                     ]
                     // The map only when the condition runs on several.
-                    .push(
-                        (maps.len() > 1)
-                            .then(|| { text(e.map.clone()).size(11).color(palette::TEXT_MUTED) })
-                    )
+                    .push((maps.len() > 1).then(|| {
+                        text(e.map.clone())
+                            .size(size::TINY)
+                            .color(palette::TEXT_MUTED)
+                    }))
                     .width(Length::Fill),
-                    text(when).size(12).color(accent),
+                    text(when)
+                        .size(size::SMALL)
+                        .font(theme::STRONG)
+                        .color(accent),
                 ]
                 .align_y(Alignment::Center),
             )
@@ -337,32 +322,34 @@ fn schedule_card<'a>(
     container(
         column![
             row![
-                event_icon(name, icons, 32.0),
+                event_icon(name, icons, 40.0),
                 column![
-                    text(name.to_owned()).size(16).font(BOLD),
-                    text(maps.join(", ")).size(11).color(palette::TEXT_MUTED),
+                    text(name.to_owned()).size(size::H2).font(theme::DISPLAY),
+                    text(maps.join(", "))
+                        .size(size::TINY)
+                        .color(palette::TEXT_MUTED),
                 ],
             ]
-            .spacing(10)
+            .spacing(12)
             .align_y(Alignment::Center),
             Space::new().height(4),
             rows,
         ]
         .spacing(2),
     )
-    .padding(14)
-    .width(300)
+    .padding(space::PANEL)
+    .width(320)
     .style(|_| tile(palette::BORDER))
     .into()
 }
 
 pub(crate) fn tile(accent: Color) -> container::Style {
     container::Style {
-        background: Some(palette::SURFACE.into()),
+        background: Some(theme::PANEL_RAISED.into()),
         border: Border {
-            color: with_alpha(accent, 0.45),
+            color: with_alpha(accent, 0.55),
             width: 1.0,
-            radius: 8.0.into(),
+            radius: theme::RADIUS.into(),
         },
         text_color: Some(palette::TEXT),
         ..container::Style::default()

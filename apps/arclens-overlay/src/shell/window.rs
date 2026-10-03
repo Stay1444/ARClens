@@ -41,6 +41,12 @@ pub fn run() -> anyhow::Result<()> {
         crate::view_window,
     )
     .title(|_: &Overlay, _| String::from("ARClens overlay"))
+    .default_font(arclens_ui::theme::BODY)
+    .font(arclens_ui::theme::FONTS[0])
+    .font(arclens_ui::theme::FONTS[1])
+    .font(arclens_ui::theme::FONTS[2])
+    .font(arclens_ui::theme::FONTS[3])
+    .font(arclens_ui::theme::FONTS[4])
     .style(crate::style)
     .scale_factor(crate::scale_factor)
     .subscription(crate::subscription)
