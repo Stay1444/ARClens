@@ -61,6 +61,7 @@ mod tests {
             recycles_into: Vec::new(),
             salvages_into: Vec::new(),
             required_for: Vec::new(),
+            ingredient_of: Vec::new(),
             image_url: None,
         }
     }

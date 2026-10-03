@@ -11,6 +11,7 @@ mod icons;
 mod overlay_link;
 mod overlay_process;
 mod paths;
+mod progress;
 mod vision;
 
 fn main() -> anyhow::Result<()> {

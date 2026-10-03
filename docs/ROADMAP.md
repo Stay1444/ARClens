@@ -36,6 +36,17 @@ green CI.
 - [ ] Packaging: `.desktop` install, Fedora COPR or Flatpak (the Flatpak
       needs the portal permissions).
 
+## M1.5: Smarter advice (done 2026-10-03)
+
+- [x] Workshop progress editor in the app (`~/.config/arclens/progress.json`).
+- [x] KEEP only for requirements still ahead of you; workshop levels you've
+      built stop counting.
+- [x] RECYCLE for parts when they feed a remaining upgrade **and** are worth
+      ≥ 60 % of the sell price; otherwise SELL with a "parts would help" hint.
+      Stash contents are unknown, so we can't count missing parts.
+- [x] "Used to craft" for materials (recipes and weapon tier upgrades).
+- [ ] Track quests and projects too (they still always count as needed).
+
 ## M2: Maps and timers
 
 - [ ] Map images, with a per-map `Transform` from source pixels into map

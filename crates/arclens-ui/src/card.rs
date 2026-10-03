@@ -63,6 +63,17 @@ pub fn item_card<'a, Message: 'a>(card: &ItemCard<'a>) -> Element<'a, Message> {
     if let Some(section) = needed_for_section(card) {
         body = body.push(section);
     }
+    if card.advice.verdict == Verdict::Sell
+        && let Some(upgrade) = &card.advice.parts_for
+    {
+        body = body.push(section(
+            "PARTS WOULD HELP WITH",
+            vec![format!("{upgrade} (recycle if you're short on parts)")],
+        ));
+    }
+    if let Some(section) = crafts_section(card) {
+        body = body.push(section);
+    }
     if card.size == CardSize::Full
         && let Some(description) = &card.item.description
     {
@@ -178,20 +189,17 @@ fn reason(card: &ItemCard<'_>) -> String {
     let advice = &card.advice;
     match advice.verdict {
         Verdict::Keep => {
-            let n = card.item.required_for.len();
-            let first = card
-                .item
-                .required_for
-                .first()
-                .map_or("", |r| r.name.as_str());
+            let n = advice.needs.len();
+            let first = advice.needs.first().map_or("", |r| r.name.as_str());
             if n == 1 {
                 format!("Needed for {first}")
             } else {
                 format!("Needed for {first} +{} more", n - 1)
             }
         }
-        Verdict::Recycle => match (advice.recycle_value, advice.sell_value) {
-            (Some(r), Some(s)) => format!("+{} more than selling", thousands(r - s)),
+        Verdict::Recycle => match (&advice.parts_for, advice.recycle_value, advice.sell_value) {
+            (Some(upgrade), _, _) => format!("Parts needed for {upgrade}"),
+            (None, Some(r), Some(s)) if r > s => format!("+{} more than selling", thousands(r - s)),
             _ => "Worth more as parts".to_owned(),
         },
         Verdict::Sell => match (advice.sell_value, advice.recycle_value) {
@@ -291,7 +299,7 @@ fn recycles_section<'a, Message: 'a>(card: &ItemCard<'a>) -> Option<Element<'a, 
 }
 
 fn needed_for_section<'a, Message: 'a>(card: &ItemCard<'a>) -> Option<Element<'a, Message>> {
-    let reqs = &card.item.required_for;
+    let reqs = &card.advice.needs;
     if reqs.is_empty() {
         return None;
     }
@@ -308,6 +316,29 @@ fn needed_for_section<'a, Message: 'a>(card: &ItemCard<'a>) -> Option<Element<'a
         lines.push(format!("+{} more", reqs.len() - limit));
     }
     Some(section("NEEDED FOR", lines))
+}
+
+/// For materials: what they're used to craft. Informational only — every
+/// common material feeds *something*, so it doesn't change the verdict.
+fn crafts_section<'a, Message: 'a>(card: &ItemCard<'a>) -> Option<Element<'a, Message>> {
+    let products = &card.item.ingredient_of;
+    if products.is_empty() {
+        return None;
+    }
+    let limit = match card.size {
+        CardSize::Compact => 4,
+        CardSize::Full => usize::MAX,
+    };
+    let mut line = products
+        .iter()
+        .take(limit)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ");
+    if products.len() > limit {
+        line = format!("{line} +{} more", products.len() - limit);
+    }
+    Some(section("USED TO CRAFT", vec![line]))
 }
 
 fn kind_tag(kind: RequirementKind) -> &'static str {

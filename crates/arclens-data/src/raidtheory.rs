@@ -15,7 +15,7 @@
 //! [RaidTheory/arcraiders-data]: https://github.com/RaidTheory/arcraiders-data
 
 use crate::{Catalog, Error};
-use arclens_core::{Item, ItemId, ItemQuantity, Rarity, Requirement, RequirementKind};
+use arclens_core::{Item, ItemId, ItemQuantity, Rarity, Requirement, RequirementKind, Station};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -41,13 +41,63 @@ impl RaidTheoryDir {
     ///
     /// Blocking: call from `spawn_blocking` in async contexts.
     pub fn load(&self) -> Result<Catalog, Error> {
-        let mut items: Vec<Item> = read_dir_json::<RawItem>(&self.root.join("items"))?
-            .into_iter()
-            .map(RawItem::into_item)
-            .collect();
+        let raw_items = read_dir_json::<RawItem>(&self.root.join("items"))?;
+        let recipes = recipes(&raw_items);
+        let mut items: Vec<Item> = raw_items.into_iter().map(RawItem::into_item).collect();
         items.sort_by(|a, b| a.id.cmp(&b.id));
 
-        let mut requirements: HashMap<ItemId, Vec<Requirement>> = HashMap::new();
+        let (mut stations, mut requirements) = self.stations()?;
+        self.quests_and_projects(&mut requirements)?;
+        let mut ingredient_of = ingredient_map(&items, &recipes);
+
+        for item in &mut items {
+            if let Some(reqs) = requirements.remove(&item.id) {
+                item.required_for = reqs;
+            }
+            if let Some(mut products) = ingredient_of.remove(&item.id) {
+                products.sort();
+                products.dedup();
+                item.ingredient_of = products;
+            }
+        }
+
+        stations.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(Catalog::new(SOURCE, items, Vec::new()).with_stations(stations))
+    }
+
+    /// Workshop stations, and the upgrade requirements per item.
+    fn stations(&self) -> Result<(Vec<Station>, Requirements), Error> {
+        let mut stations = Vec::new();
+        let mut requirements = Requirements::new();
+        for station in read_dir_json::<RawStation>(&self.root.join("hideout"))? {
+            let station_name = station.name.resolve();
+            for level in &station.levels {
+                for req in &level.requirement_item_ids {
+                    requirements
+                        .entry(ItemId::new(&req.item_id))
+                        .or_default()
+                        .push(Requirement {
+                            kind: RequirementKind::WorkshopUpgrade,
+                            name: format!("{station_name} {}", level.level),
+                            quantity: req.quantity,
+                            station: Some(station.id.clone()),
+                            level: Some(level.level),
+                        });
+                }
+            }
+            if station.max_level > 0 {
+                stations.push(Station {
+                    id: station.id,
+                    name: station_name,
+                    max_level: station.max_level,
+                });
+            }
+        }
+        Ok((stations, requirements))
+    }
+
+    /// Adds quest and project requirements to `requirements`.
+    fn quests_and_projects(&self, requirements: &mut Requirements) -> Result<(), Error> {
         let mut push = |item: &str, kind, name: String, quantity| {
             requirements
                 .entry(ItemId::new(item))
@@ -56,22 +106,10 @@ impl RaidTheoryDir {
                     kind,
                     name,
                     quantity,
+                    station: None,
+                    level: None,
                 });
         };
-
-        for station in read_dir_json::<RawStation>(&self.root.join("hideout"))? {
-            let station_name = station.name.resolve();
-            for level in station.levels {
-                for req in level.requirement_item_ids {
-                    push(
-                        &req.item_id,
-                        RequirementKind::WorkshopUpgrade,
-                        format!("{station_name} {}", level.level),
-                        req.quantity,
-                    );
-                }
-            }
-        }
 
         for quest in read_dir_json::<RawQuest>(&self.root.join("quests"))? {
             let name = quest.name.resolve();
@@ -102,15 +140,52 @@ impl RaidTheoryDir {
                 }
             }
         }
-
-        for item in &mut items {
-            if let Some(reqs) = requirements.remove(&item.id) {
-                item.required_for = reqs;
-            }
-        }
-
-        Ok(Catalog::new(SOURCE, items, Vec::new()))
+        Ok(())
     }
+}
+
+type Requirements = HashMap<ItemId, Vec<Requirement>>;
+
+/// Product id → ingredient ids, from crafting recipes and weapon tier
+/// upgrades (the cost sits on the source tier; the product is `upgradesTo`).
+fn recipes(raw_items: &[RawItem]) -> Vec<(ItemId, Vec<ItemId>)> {
+    raw_items
+        .iter()
+        .flat_map(|raw| {
+            let craft = raw
+                .recipe
+                .as_ref()
+                .map(|r| (ItemId::new(&raw.id), r.keys().map(ItemId::new).collect()));
+            let upgrade =
+                raw.upgrade_cost
+                    .as_ref()
+                    .zip(raw.upgrades_to.as_ref())
+                    .map(|(cost, target)| {
+                        (ItemId::new(target), cost.keys().map(ItemId::new).collect())
+                    });
+            craft.into_iter().chain(upgrade)
+        })
+        .collect()
+}
+
+/// Ingredient id → names of the items it is used to make.
+fn ingredient_map(
+    items: &[Item],
+    recipes: &[(ItemId, Vec<ItemId>)],
+) -> HashMap<ItemId, Vec<String>> {
+    let names: HashMap<&ItemId, &str> = items.iter().map(|i| (&i.id, i.name.as_str())).collect();
+    let mut map: HashMap<ItemId, Vec<String>> = HashMap::new();
+    for (product, inputs) in recipes {
+        let Some(name) = names.get(product) else {
+            continue;
+        };
+        for input in inputs {
+            map.entry(input.clone())
+                .or_default()
+                .push((*name).to_owned());
+        }
+    }
+    map
 }
 
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, Error> {
@@ -181,6 +256,12 @@ struct RawItem {
     #[serde(default)]
     salvages_into: BTreeMap<String, u32>,
     #[serde(default)]
+    recipe: Option<BTreeMap<String, u32>>,
+    #[serde(default)]
+    upgrade_cost: Option<BTreeMap<String, u32>>,
+    #[serde(default)]
+    upgrades_to: Option<String>,
+    #[serde(default)]
     image_filename: Option<String>,
 }
 
@@ -201,6 +282,7 @@ impl RawItem {
             recycles_into: quantities(self.recycles_into),
             salvages_into: quantities(self.salvages_into),
             required_for: Vec::new(),
+            ingredient_of: Vec::new(),
             image_url: self.image_filename.filter(|u| u.starts_with("https://")),
         }
     }
@@ -236,7 +318,10 @@ struct RawItemQuantity {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RawStation {
+    id: String,
     name: Localized,
+    #[serde(default)]
+    max_level: u32,
     #[serde(default)]
     levels: Vec<RawStationLevel>,
 }

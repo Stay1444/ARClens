@@ -6,14 +6,24 @@ use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
 /// Everything fetched from a [`crate::Provider`], plus where and when it came from.
+/// Bump when the catalogue's content or meaning changes (new fields filled by
+/// the loader), so caches written by older versions are rebuilt.
+pub const SCHEMA_VERSION: u32 = 2;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Catalog {
+    /// [`SCHEMA_VERSION`] of the code that built it (0 for pre-versioning).
+    #[serde(default)]
+    pub schema: u32,
     /// Name of the provider that produced this snapshot (for attribution).
     pub source: String,
     pub fetched_at: SystemTime,
     pub items: Vec<Item>,
     #[serde(default)]
     pub markers: Vec<Marker>,
+    /// Workshop stations, for the progress editor.
+    #[serde(default)]
+    pub stations: Vec<arclens_core::Station>,
     #[serde(skip)]
     index: HashMap<ItemId, usize>,
 }
@@ -21,14 +31,22 @@ pub struct Catalog {
 impl Catalog {
     pub fn new(source: impl Into<String>, items: Vec<Item>, markers: Vec<Marker>) -> Self {
         let mut catalog = Self {
+            schema: SCHEMA_VERSION,
             source: source.into(),
             fetched_at: SystemTime::now(),
             items,
             markers,
+            stations: Vec::new(),
             index: HashMap::new(),
         };
         catalog.reindex();
         catalog
+    }
+
+    #[must_use]
+    pub fn with_stations(mut self, stations: Vec<arclens_core::Station>) -> Self {
+        self.stations = stations;
+        self
     }
 
     /// Rebuilds the id index. Must be called after deserialising.
@@ -52,8 +70,9 @@ impl Catalog {
     /// Whether the snapshot is older than `max_age` (or from the future,
     /// which means the clock moved and we should refetch anyway).
     pub fn is_stale(&self, max_age: Duration) -> bool {
-        SystemTime::now()
-            .duration_since(self.fetched_at)
-            .map_or(true, |age| age > max_age)
+        self.schema != SCHEMA_VERSION
+            || SystemTime::now()
+                .duration_since(self.fetched_at)
+                .map_or(true, |age| age > max_age)
     }
 }

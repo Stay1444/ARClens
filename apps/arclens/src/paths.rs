@@ -7,6 +7,8 @@ use std::path::PathBuf;
 pub struct Paths {
     /// `$XDG_CACHE_HOME/arclens` — safe to delete at any time.
     pub cache: PathBuf,
+    /// `$XDG_CONFIG_HOME/arclens` — the player's own settings and progress.
+    pub config: PathBuf,
     /// `$XDG_STATE_HOME/arclens` — things worth keeping across runs that
     /// aren't settings (e.g. the screen-capture restore token).
     pub state: PathBuf,
@@ -18,6 +20,7 @@ impl Paths {
             .ok_or_else(|| anyhow::anyhow!("could not determine a home directory"))?;
         Ok(Self {
             cache: dirs.cache_dir().to_owned(),
+            config: dirs.config_dir().to_owned(),
             state: dirs
                 .state_dir()
                 .unwrap_or_else(|| dirs.data_local_dir())
@@ -27,6 +30,10 @@ impl Paths {
 
     pub fn catalog_cache(&self) -> PathBuf {
         self.cache.join("catalog.json")
+    }
+
+    pub fn progress(&self) -> PathBuf {
+        self.config.join("progress.json")
     }
 
     pub fn capture_token(&self) -> PathBuf {

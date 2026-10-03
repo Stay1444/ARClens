@@ -53,11 +53,23 @@ pub struct Advice {
     /// `sell_value` is the game's own number, not the dataset's base value.
     #[serde(default)]
     pub value_from_game: bool,
+    /// Requirements still ahead of the player (all of them without progress).
+    #[serde(default)]
+    pub needs: Vec<crate::item::Requirement>,
+    /// Set when breaking the item down is advised because its parts feed an
+    /// upgrade the player still has to build: that upgrade's name.
+    #[serde(default)]
+    pub parts_for: Option<String>,
 }
 
-/// [`advise_in`] at the workshop with dataset values.
+/// Break an item down for upgrade parts only if the parts are worth at least
+/// this share of its sell value. Beyond that the loss is too big to justify
+/// without knowing how many parts the player already owns.
+pub const PARTS_MIN_VALUE_PERCENT: u64 = 60;
+
+/// [`advise_in`] at the workshop with dataset values and no progress.
 pub fn advise<'a>(item: &Item, lookup: impl Fn(&ItemId) -> Option<&'a Item>) -> Advice {
-    advise_in(item, Situation::default(), lookup)
+    advise_in(item, Situation::default(), None, lookup)
 }
 
 /// The breakdown outputs that apply in `place`.
@@ -72,25 +84,63 @@ pub fn breakdown(item: &Item, place: Place) -> &[crate::item::ItemQuantity] {
 ///
 /// `lookup` resolves breakdown outputs to their catalogue entries; outputs it
 /// cannot resolve make the recycle value unknown rather than silently low.
+///
+/// With `progress`, upgrades already built no longer count, and an item whose
+/// parts feed a *remaining* upgrade is advised for breakdown even when
+/// selling pays more. Without it, the verdict is purely about value (every
+/// material feeds *some* upgrade, so "needed" would be meaningless).
 pub fn advise_in<'a>(
     item: &Item,
     situation: Situation,
+    progress: Option<&crate::Progress>,
     lookup: impl Fn(&ItemId) -> Option<&'a Item>,
 ) -> Advice {
+    let lookup = &lookup;
     let value_from_game = situation.sell_value.is_some();
     let sell_value = situation.sell_value.or(item.value);
-    let recycle_value = outputs_value(breakdown(item, situation.place), lookup);
+    let outputs = breakdown(item, situation.place);
+    let recycle_value = outputs_value(outputs, lookup);
+    let still_needed = |req: &&crate::item::Requirement| progress.is_none_or(|p| p.needs(req));
+    let needs: Vec<_> = item
+        .required_for
+        .iter()
+        .filter(still_needed)
+        .cloned()
+        .collect();
 
-    let verdict = if item.required_for.is_empty() {
+    // Parts for a remaining *workshop upgrade* (only meaningful with progress).
+    let parts_for = progress.and_then(|p| {
+        outputs.iter().find_map(|output| {
+            lookup(&output.item)?
+                .required_for
+                .iter()
+                .find(|r| r.kind == crate::RequirementKind::WorkshopUpgrade && p.needs(r))
+                .map(|r| r.name.clone())
+        })
+    });
+
+    // We can't see the stash, so we don't know how many parts are still
+    // missing: only trade value for parts when it costs little.
+    let cheap_to_break_down = match (recycle_value, sell_value) {
+        (Some(r), Some(s)) => u64::from(r) * 100 >= u64::from(s) * PARTS_MIN_VALUE_PERCENT,
+        (Some(_), None) => true,
+        _ => false,
+    };
+
+    let verdict = if !needs.is_empty() {
+        Verdict::Keep
+    } else if parts_for.is_some() && cheap_to_break_down {
+        Verdict::Recycle
+    } else {
         match (sell_value, recycle_value) {
             (Some(sell), Some(recycle)) if recycle > sell => Verdict::Recycle,
             (Some(_), _) => Verdict::Sell,
             (None, Some(_)) => Verdict::Recycle,
             (None, None) => Verdict::Unknown,
         }
-    } else {
-        Verdict::Keep
     };
+    // Kept as a hint even when the verdict stays SELL ("parts would help").
+    let parts_for = parts_for.filter(|_| verdict != Verdict::Keep);
 
     Advice {
         verdict,
@@ -98,6 +148,8 @@ pub fn advise_in<'a>(
         recycle_value,
         place: situation.place,
         value_from_game,
+        needs,
+        parts_for,
     }
 }
 
@@ -133,6 +185,7 @@ mod tests {
             recycles_into: Vec::new(),
             salvages_into: Vec::new(),
             required_for: Vec::new(),
+            ingredient_of: Vec::new(),
             image_url: None,
         }
     }
@@ -144,11 +197,7 @@ mod tests {
     #[test]
     fn keeps_items_that_are_required() {
         let mut gear = item("gear", Some(1000));
-        gear.required_for.push(Requirement {
-            kind: RequirementKind::WorkshopUpgrade,
-            name: "Gunsmith 2".into(),
-            quantity: 3,
-        });
+        gear.required_for.push(upgrade("weapon_bench", 2));
         let advice = advise(&gear, |_| None);
         assert_eq!(advice.verdict, Verdict::Keep);
     }
@@ -194,7 +243,7 @@ mod tests {
             place: Place::Workshop,
             sell_value: Some(800),
         };
-        let advice = advise_in(&augment, situation, |id| cat.get(id));
+        let advice = advise_in(&augment, situation, None, |id| cat.get(id));
         assert_eq!(advice.sell_value, Some(800));
         assert!(advice.value_from_game);
         assert_eq!(advice.verdict, Verdict::Recycle);
@@ -231,12 +280,85 @@ mod tests {
             place: Place::Raid,
             sell_value: None,
         };
-        let raid = advise_in(&pistol, raid, |id| cat.get(id));
+        let raid = advise_in(&pistol, raid, None, |id| cat.get(id));
         assert_eq!(
             (raid.recycle_value, raid.verdict),
             (Some(200), Verdict::Sell)
         );
         assert_eq!(raid.place, Place::Raid);
+    }
+
+    fn upgrade(station: &str, level: u32) -> Requirement {
+        Requirement {
+            kind: RequirementKind::WorkshopUpgrade,
+            name: format!("Gunsmith {level}"),
+            quantity: 5,
+            station: Some(station.into()),
+            level: Some(level),
+        }
+    }
+
+    #[test]
+    fn built_upgrades_no_longer_force_keep() {
+        let mut gear = item("gear", Some(1000));
+        gear.required_for.push(upgrade("weapon_bench", 2));
+        let mut progress = crate::Progress::default();
+        progress.stations.insert("weapon_bench".into(), 2);
+        let advice = advise_in(&gear, Situation::default(), Some(&progress), |_| None);
+        assert_eq!(advice.verdict, Verdict::Sell);
+        assert!(advice.needs.is_empty());
+    }
+
+    #[test]
+    fn recycles_for_parts_a_remaining_upgrade_needs() {
+        // Selling pays more (1000 vs 700), but the parts are needed for
+        // Gunsmith 3 and cost only 30 % of the value.
+        let mut parts = item("parts", Some(350));
+        parts.required_for.push(upgrade("weapon_bench", 3));
+        let mut gun = item("gun", Some(1000));
+        gun.recycles_into.push(ItemQuantity {
+            item: parts.id.clone(),
+            quantity: 2,
+        });
+        let cat = catalogue(&[parts]);
+        let mut progress = crate::Progress::default();
+        progress.stations.insert("weapon_bench".into(), 2);
+
+        let advice = advise_in(&gun, Situation::default(), Some(&progress), |id| {
+            cat.get(id)
+        });
+        assert_eq!(advice.verdict, Verdict::Recycle);
+        assert_eq!(advice.parts_for.as_deref(), Some("Gunsmith 3"));
+
+        // Once Gunsmith 3 is built, it's about value again.
+        progress.stations.insert("weapon_bench".into(), 3);
+        let advice = advise_in(&gun, Situation::default(), Some(&progress), |id| {
+            cat.get(id)
+        });
+        assert_eq!((advice.verdict, advice.parts_for), (Verdict::Sell, None));
+
+        // Without progress we don't guess.
+        assert_eq!(advise(&gun, |id| cat.get(id)).verdict, Verdict::Sell);
+    }
+
+    #[test]
+    fn expensive_items_are_sold_with_a_parts_hint() {
+        // Parts worth 30 % of the price: too costly to scrap blindly.
+        let mut parts = item("parts", Some(150));
+        parts.required_for.push(upgrade("weapon_bench", 3));
+        let mut gun = item("gun", Some(1000));
+        gun.recycles_into.push(ItemQuantity {
+            item: parts.id.clone(),
+            quantity: 2,
+        });
+        let cat = catalogue(&[parts]);
+        let progress = crate::Progress::default();
+
+        let advice = advise_in(&gun, Situation::default(), Some(&progress), |id| {
+            cat.get(id)
+        });
+        assert_eq!(advice.verdict, Verdict::Sell);
+        assert_eq!(advice.parts_for.as_deref(), Some("Gunsmith 3"));
     }
 
     #[test]

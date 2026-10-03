@@ -4,7 +4,7 @@ use crate::icons::{Icon, Icons};
 use crate::overlay_link::OverlayHandle;
 use crate::paths::Paths;
 use crate::{data, hotkeys, overlay_link, overlay_process, vision};
-use arclens_core::{Item, ItemId, Place, Situation, advise, advise_in, breakdown};
+use arclens_core::{Item, ItemId, Place, Progress, Situation, advise_in, breakdown};
 use arclens_data::{Catalog, ItemSearch};
 use arclens_hotkeys::Action;
 use arclens_ipc::ToOverlay;
@@ -38,9 +38,20 @@ pub struct App {
     /// Whether screen-based item detection runs (opt-in: starting it opens
     /// the desktop's screen-share dialog the first time).
     vision_enabled: bool,
+    /// The player's workshop levels (`None`: never set, value-only advice).
+    progress: Option<Progress>,
+    progress_path: std::path::PathBuf,
+    /// What the right-hand pane shows.
+    pane: Pane,
     /// Item currently detected under the cursor in game, and where.
     hover: Option<(ItemId, arclens_ipc::NormRect, Situation)>,
     status: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Pane {
+    Item,
+    Workshop,
 }
 
 #[derive(Debug)]
@@ -61,6 +72,9 @@ pub enum Message {
     ToggleOverlay,
     ToggleInteractive,
     ToggleVision,
+    ToggleWorkshop,
+    SetStationLevel(String, u32),
+    ClearProgress,
     Overlay(overlay_link::Event),
     Hotkey(hotkeys::Event),
     OverlayProcess(overlay_process::Event),
@@ -82,6 +96,9 @@ impl App {
             vision_enabled: std::env::var(vision::ENABLE_ENV).is_ok_and(|v| v == "1")
                 || std::env::var_os(vision::REPLAY_DIR_ENV).is_some(),
             hover: None,
+            progress: crate::progress::load(&paths.progress()),
+            progress_path: paths.progress(),
+            pane: Pane::Item,
             status: Vec::new(),
         };
         let tasks = Task::batch([
@@ -133,6 +150,7 @@ impl App {
                 return self.refresh_results();
             }
             Message::Select(id) => {
+                self.pane = Pane::Item;
                 self.selected = Some(id);
                 self.push_selected_to_overlay();
             }
@@ -181,6 +199,23 @@ impl App {
                     self.hover = None;
                     self.send(ToOverlay::ClearHover);
                 }
+            }
+            Message::ToggleWorkshop => {
+                self.pane = match self.pane {
+                    Pane::Item => Pane::Workshop,
+                    Pane::Workshop => Pane::Item,
+                };
+            }
+            Message::SetStationLevel(station, level) => {
+                self.progress
+                    .get_or_insert_with(Progress::default)
+                    .stations
+                    .insert(station, level);
+                self.progress_changed();
+            }
+            Message::ClearProgress => {
+                self.progress = None;
+                self.progress_changed();
             }
             Message::Vision(event) => return self.on_vision_event(event),
             Message::OverlayProcess(overlay_process::Event::Unavailable(error)) => {
@@ -309,6 +344,19 @@ impl App {
         Task::batch(loads)
     }
 
+    fn progress_changed(&self) {
+        crate::progress::save(&self.progress_path, self.progress.as_ref());
+        // Verdicts depend on progress: refresh what the overlay shows.
+        self.push_selected_to_overlay();
+        self.push_hover_to_overlay();
+    }
+
+    fn advice(&self, item: &Item, catalog: &Catalog, situation: Situation) -> arclens_core::Advice {
+        advise_in(item, situation, self.progress.as_ref(), |id| {
+            catalog.item(id)
+        })
+    }
+
     fn push_hover_to_overlay(&self) {
         let (Load::Ready(catalog), Some((id, anchor, situation))) = (&self.catalog, &self.hover)
         else {
@@ -317,7 +365,7 @@ impl App {
         if let Some(item) = catalog.item(id) {
             self.send(ToOverlay::ShowHover {
                 item: Box::new(item.clone()),
-                advice: advise_in(item, *situation, |id| catalog.item(id)),
+                advice: self.advice(item, catalog, *situation),
                 icon: self.icons.get(id).map(|icon| icon.path.clone()),
                 recycle_names: recycle_names(item, catalog, situation.place),
                 anchor: *anchor,
@@ -332,7 +380,7 @@ impl App {
         if let Some(item) = catalog.item(id) {
             self.send(ToOverlay::ShowItem {
                 item: Box::new(item.clone()),
-                advice: advise(item, |id| catalog.item(id)),
+                advice: self.advice(item, catalog, Situation::default()),
                 icon: self.icons.get(id).map(|icon| icon.path.clone()),
                 recycle_names: recycle_names(item, catalog, Place::Workshop),
             });
@@ -392,6 +440,15 @@ impl App {
                 .size(15)
                 .width(Length::Fill),
             status,
+            pill_button(
+                if self.pane == Pane::Workshop {
+                    "Items"
+                } else {
+                    "Workshop"
+                },
+                "",
+                Message::ToggleWorkshop,
+            ),
             pill_button(
                 "Detect items",
                 if self.vision_enabled { "on" } else { "off" },
@@ -462,12 +519,14 @@ impl App {
         .padding([12, 8])
         .width(LIST_WIDTH);
 
-        let detail: Element<'_, Message> =
+        let detail: Element<'_, Message> = if self.pane == Pane::Workshop {
+            self.view_workshop(catalog)
+        } else {
             match self.selected.as_ref().and_then(|id| catalog.item(id)) {
                 Some(item) => {
                     let card = item_card(&ItemCard {
                         item,
-                        advice: advise(item, |id| catalog.item(id)),
+                        advice: self.advice(item, catalog, Situation::default()),
                         icon: self.icons.get(&item.id).map(|icon| &icon.large),
                         recycle_names: recycle_names(item, catalog, Place::Workshop),
                         size: CardSize::Full,
@@ -489,7 +548,8 @@ impl App {
                     .spacing(6)
                     .align_x(Alignment::Center),
                 ),
-            };
+            }
+        };
 
         row![
             list,
@@ -501,9 +561,66 @@ impl App {
         .into()
     }
 
+    fn view_workshop<'a>(&'a self, catalog: &'a Catalog) -> Element<'a, Message> {
+        let explainer = text(
+            "Set your workshop levels so advice knows what you still need. \
+             Upgrades you've built stop counting as reasons to keep. Items whose \
+             parts feed an upgrade you still need say RECYCLE when breaking them \
+             down costs little, and show a hint otherwise.",
+        )
+        .size(13)
+        .color(palette::TEXT_MUTED);
+
+        let rows = catalog
+            .stations
+            .iter()
+            .fold(column![].spacing(6), |col, station| {
+                let level = self.progress.as_ref().map_or(0, |p| p.level(&station.id));
+                let step = |to: u32| Message::SetStationLevel(station.id.clone(), to);
+                col.push(
+                    row![
+                        text(&station.name).size(15).width(Length::Fill),
+                        button(text("−").size(15))
+                            .on_press_maybe((level > 0).then(|| step(level - 1)))
+                            .padding([2, 12]),
+                        text(format!("{level} / {}", station.max_level))
+                            .size(15)
+                            .width(70)
+                            .align_x(Alignment::Center),
+                        button(text("+").size(15))
+                            .on_press_maybe((level < station.max_level).then(|| step(level + 1)))
+                            .padding([2, 12]),
+                    ]
+                    .spacing(8)
+                    .align_y(Alignment::Center),
+                )
+            });
+
+        let status = if self.progress.is_some() {
+            "Using your progress for advice."
+        } else {
+            "Not set: advice is based on value only."
+        };
+        let mut col = column![
+            text("Workshop").size(24).font(BOLD),
+            explainer,
+            rows,
+            text(status).size(12).color(palette::TEXT_MUTED),
+        ]
+        .spacing(14)
+        .max_width(560);
+        if self.progress.is_some() {
+            col = col
+                .push(button(text("Forget my progress").size(13)).on_press(Message::ClearProgress));
+        }
+        scrollable(container(col).padding(24))
+            .height(Length::Fill)
+            .into()
+    }
+
     fn view_row<'a>(&'a self, item: &'a Item, catalog: &'a Catalog) -> Element<'a, Message> {
         let rarity = palette::rarity(item.rarity);
-        let advice = advise(item, |id| catalog.item(id));
+        let advice = self.advice(item, catalog, Situation::default());
         let verdict_color = palette::verdict(advice.verdict);
 
         let icon: Element<'_, Message> = match self.icons.get(&item.id) {

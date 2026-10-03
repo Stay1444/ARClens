@@ -74,6 +74,9 @@ pub struct Item {
     /// Workshop / hideout upgrades and quests that consume this item.
     #[serde(default)]
     pub required_for: Vec<Requirement>,
+    /// Names of items crafted from this one (it is a recipe ingredient).
+    #[serde(default)]
+    pub ingredient_of: Vec<String>,
     #[serde(default)]
     pub image_url: Option<String>,
 }
@@ -85,6 +88,11 @@ pub struct Requirement {
     /// Human-readable name of the quest / upgrade / project.
     pub name: String,
     pub quantity: u32,
+    /// For workshop upgrades: which station (id) and the level it unlocks.
+    #[serde(default)]
+    pub station: Option<String>,
+    #[serde(default)]
+    pub level: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
