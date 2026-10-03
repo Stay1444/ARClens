@@ -2,9 +2,9 @@
 name = "arclens-hotkeys"
 description = "Global hotkeys for ARClens via the XDG GlobalShortcuts portal"
 version.workspace = true
+publish.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-license.workspace = true
 repository.workspace = true
 
 [dependencies]

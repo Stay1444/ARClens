@@ -21,16 +21,10 @@ pub enum Action {
     ToggleOverlay,
     /// Make the overlay accept mouse & keyboard (e.g. to type a search).
     ToggleInteractive,
-    /// Open the overlay in interactive mode with the search box focused.
-    QuickSearch,
 }
 
 impl Action {
-    pub const ALL: [Self; 3] = [
-        Self::ToggleOverlay,
-        Self::ToggleInteractive,
-        Self::QuickSearch,
-    ];
+    pub const ALL: [Self; 2] = [Self::ToggleOverlay, Self::ToggleInteractive];
 
     /// Stable id registered with the portal. Never change these: users'
     /// customised bindings are keyed by them.
@@ -38,7 +32,6 @@ impl Action {
         match self {
             Self::ToggleOverlay => "toggle-overlay",
             Self::ToggleInteractive => "toggle-interactive",
-            Self::QuickSearch => "quick-search",
         }
     }
 
@@ -46,7 +39,6 @@ impl Action {
         match self {
             Self::ToggleOverlay => "Show or hide the ARClens overlay",
             Self::ToggleInteractive => "Let the ARClens overlay take mouse and keyboard input",
-            Self::QuickSearch => "Search for an item in the ARClens overlay",
         }
     }
 
@@ -55,7 +47,6 @@ impl Action {
         match self {
             Self::ToggleOverlay => "CTRL+SHIFT+O",
             Self::ToggleInteractive => "CTRL+SHIFT+I",
-            Self::QuickSearch => "CTRL+SHIFT+F",
         }
     }
 

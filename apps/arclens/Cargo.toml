@@ -1,6 +1,6 @@
 [package]
-name = "arclens-overlay"
-description = "ARClens in-game overlay (wlr-layer-shell surface on the OVERLAY layer)"
+name = "arclens"
+description = "ARClens companion app: data, item lookup, hotkeys, and overlay control"
 version.workspace = true
 publish.workspace = true
 edition.workspace = true
@@ -8,11 +8,15 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
+anyhow = { workspace = true }
 arclens-core = { workspace = true }
+arclens-data = { workspace = true }
+arclens-hotkeys = { workspace = true }
 arclens-ipc = { workspace = true }
+directories = { workspace = true }
 futures = { workspace = true }
 iced = { workspace = true }
-iced_layershell = { workspace = true }
+reqwest = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

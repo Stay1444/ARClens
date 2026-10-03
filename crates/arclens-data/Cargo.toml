@@ -2,9 +2,9 @@
 name = "arclens-data"
 description = "Game-data providers, caching and search for ARClens"
 version.workspace = true
+publish.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-license.workspace = true
 repository.workspace = true
 
 [dependencies]
