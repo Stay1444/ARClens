@@ -13,6 +13,9 @@ pub enum Error {
         source: serde_json::Error,
     },
 
+    #[error("HTTP error: {0}")]
+    Http(#[from] reqwest::Error),
+
     #[error("invalid JSON: {0}")]
     Json(#[from] serde_json::Error),
 }

@@ -14,17 +14,22 @@ repository = "https://github.com/Stay1444/ARClens"
 # Internal
 arclens-core = { path = "crates/arclens-core" }
 arclens-data = { path = "crates/arclens-data" }
+arclens-hotkeys = { path = "crates/arclens-hotkeys" }
 arclens-ipc = { path = "crates/arclens-ipc" }
 
 # External — keep alphabetical, versions pinned to minor.
 anyhow = "1.0"
+ashpd = { version = "0.13", default-features = false, features = ["tokio", "global_shortcuts"] }
 directories = "6.0"
+flate2 = "1.1"
 futures = "0.3"
 iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "wayland", "x11", "canvas", "tokio"] }
 iced_layershell = "0.19"
 nucleo-matcher = "0.3"
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+tar = "0.4"
 tempfile = "3.27"
 thiserror = "2.0"
 tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time", "fs"] }

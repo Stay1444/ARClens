@@ -9,10 +9,14 @@ repository.workspace = true
 
 [dependencies]
 arclens-core = { workspace = true }
+flate2 = { workspace = true }
 nucleo-matcher = { workspace = true }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tar = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

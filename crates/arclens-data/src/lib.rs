@@ -5,6 +5,7 @@
 
 mod cache;
 mod catalog;
+pub mod download;
 mod error;
 pub mod raidtheory;
 mod search;

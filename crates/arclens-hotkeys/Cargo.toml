@@ -1,0 +1,17 @@
+[package]
+name = "arclens-hotkeys"
+description = "Global hotkeys for ARClens via the XDG GlobalShortcuts portal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ashpd = { workspace = true }
+futures = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true
