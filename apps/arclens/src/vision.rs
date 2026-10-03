@@ -1,9 +1,9 @@
 //! Screen analysis: frames in, "the player is hovering item X here" out.
 //!
 //! Runs on its own thread so detection and OCR never block the UI. Frames
-//! come from a [`FrameSource`]: the XDG `ScreenCast` portal (the desktop asks
-//! once which monitor to share), or a replay of recorded frames
-//! (`ARCLENS_REPLAY_DIR`) for development.
+//! come from a [`FrameSource`]: live screen capture (`arclens-capture`; on
+//! Linux the desktop asks once which monitor to share), or a replay of
+//! recorded frames (`ARCLENS_REPLAY_DIR`) for development.
 
 use crate::data;
 use crate::paths::Paths;
@@ -566,13 +566,13 @@ fn frame_source(paths: &Paths) -> anyhow::Result<Box<dyn FrameSource>> {
         }
         std::fs::write(&token_path, token)?;
     }
-    Ok(Box::new(Portal(capture)))
+    Ok(Box::new(Live(capture)))
 }
 
-/// Live frames from the screen-cast portal.
-struct Portal(arclens_capture::Capture);
+/// Live frames from the screen.
+struct Live(arclens_capture::Capture);
 
-impl FrameSource for Portal {
+impl FrameSource for Live {
     fn next_frame(&mut self) -> Option<RgbImage> {
         self.0.next_frame()
     }
