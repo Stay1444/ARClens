@@ -150,6 +150,24 @@ frame. The CPU has headroom, and the work is small:
   ~35 ms.
 - If needed, the capture rate can rise only while a tooltip is visible.
 
+## First live run (2026-10-03, maintainer's machine)
+
+- **Setup:** KDE Plasma 6 Wayland, 2560×1440, no scaling, ARC Raiders under
+  `PROTON_ENABLE_WAYLAND=1`. Release build, "Detect items" toggled on.
+- **Capture:** the portal and PipeWire delivered `BGRx` 2560×1440 frames on
+  the first try.
+- **Results:** 10 distinct items, all matched to the right id:
+  - Looting Mk. 2, Free Loadout Augment, Combat Mk. 2;
+  - Combat Mk. 3 (Aggressive), the two-line name;
+  - Renegade IV, Tactical Mk. 2, Light Shield, Burletta I.
+- **One OCR slip:** "LLIGHT SHIELD" was absorbed by fuzzy matching (0.92 ≥
+  0.9). This is the case the threshold exists for.
+- **Felt:** "a delay, but perfectly fine." The card appeared in the right
+  place beside the game tooltip.
+- **Observation:** the same item is sometimes reported 2–3 times while
+  hovered, probably small changes in the detected rectangle between frames.
+  Harmless, but it re-sends the card. Worth debouncing.
+
 ## Open questions
 
 - **Crafting screens:** not yet seen.

@@ -78,9 +78,9 @@ Useful environment variables:
   - at most 5 fps;
   - the cursor is hidden from captures;
   - frames are converted only when the analyser is ready for one.
-- **Live capture has not yet been run on a real desktop.** In the headless
-  test session the portal handshake succeeds, but Sway's software renderer
-  can't provide screencopy frames.
+- Live capture is verified on KDE Plasma 6 (2026-10-03). It can't be tested
+  in the headless Sway session: the portal handshake succeeds there, but
+  Sway's software renderer can't provide screencopy frames.
 - To try the whole path without capture, replay the fixture frames:
 
   ```sh
