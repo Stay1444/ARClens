@@ -1622,7 +1622,8 @@ impl App {
         }
     }
 
-    fn view_top_bar(&self) -> Element<'_, Message> {
+    /// "● Overlay shown" in the top bar.
+    fn overlay_status(&self) -> Element<'_, Message> {
         let (dot, label) = match (&self.overlay, self.overlay_visible) {
             (None, _) => (palette::TEXT_MUTED, "Overlay offline"),
             (Some(_), true) => (
@@ -1634,7 +1635,7 @@ impl App {
                 "Overlay hidden",
             ),
         };
-        let status = row![
+        row![
             container(Space::new().width(8).height(8)).style(move |_| container::Style {
                 background: Some(dot.into()),
                 border: Border {
@@ -1648,8 +1649,12 @@ impl App {
                 .color(palette::TEXT_MUTED),
         ]
         .spacing(8)
-        .align_y(Alignment::Center);
+        .align_y(Alignment::Center)
+        .into()
+    }
 
+    fn view_top_bar(&self) -> Element<'_, Message> {
+        let status = self.overlay_status();
         let tabs = [
             ("Home", Tab::Home),
             ("Items", Tab::Items),
