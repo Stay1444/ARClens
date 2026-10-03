@@ -1,7 +1,6 @@
 //! Rendering. Everything outside the drawn widgets stays fully transparent.
 
 use crate::{Message, Overlay};
-use arclens_core::MarkerKind;
 use arclens_ui::{CardSize, ItemCard, item_card};
 use iced::widget::canvas::{self, Canvas, Frame, Geometry, Path};
 use iced::widget::{Space, column, container, stack, text};
@@ -116,20 +115,10 @@ impl canvas::Program<Message> for MarkerLayer<'_> {
             }
             frame.fill(
                 &Path::circle(Point::new(x, y), 6.0),
-                marker_color(&marker.kind),
+                arclens_ui::palette::marker(&marker.category),
             );
         }
         vec![frame.into_geometry()]
-    }
-}
-
-fn marker_color(kind: &MarkerKind) -> Color {
-    match kind {
-        MarkerKind::Extraction => Color::from_rgb8(0x4c, 0xaf, 0x50),
-        MarkerKind::RaiderHatch => Color::from_rgb8(0x8e, 0x5c, 0xd9),
-        MarkerKind::QuestObjective => Color::from_rgb8(0xf2, 0xb1, 0x34),
-        MarkerKind::Arc => Color::from_rgb8(0xe5, 0x39, 0x35),
-        _ => Color::from_rgb8(0xe0, 0xe0, 0xe0),
     }
 }
 

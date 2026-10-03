@@ -1,0 +1,10 @@
+{
+  "allData": [
+    { "id": "6f1c0d1e-0000-4000-8000-000000000001", "lat": 2495.7, "lng": 5211.4, "mapID": "dam", "category": "arc", "subcategory": "queen", "instanceName": "Queen", "behindLockedDoor": false, "eventConditionMask": 1 },
+    { "id": "6f1c0d1e-0000-4000-8000-000000000002", "lat": 3120.0, "lng": 4380.5, "mapID": "dam", "category": "labels", "subcategory": "poi", "instanceName": "Hydroponic Dome Complex", "behindLockedDoor": false },
+    { "id": "6f1c0d1e-0000-4000-8000-000000000003", "lat": 2810.25, "lng": 4012.0, "mapID": "dam", "category": "containers", "subcategory": "weapon_case", "instanceName": "", "behindLockedDoor": true },
+    { "id": 42, "lat": "2600.5", "lng": "3999.75", "mapID": "dam", "category": "nature", "subcategory": "mushroom" },
+    { "id": "6f1c0d1e-0000-4000-8000-000000000005", "lat": 2000, "lng": 3000, "mapID": "dam" },
+    { "id": "6f1c0d1e-0000-4000-8000-000000000006", "lat": null, "lng": 3000, "mapID": "dam", "category": "arc" }
+  ]
+}

@@ -16,7 +16,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 3;
 
 /// Default socket path: `$XDG_RUNTIME_DIR/arclens.sock`, falling back to the
 /// temp dir when the variable is unset (non-systemd systems).
@@ -203,6 +203,19 @@ pub fn check_version(hello: &Hello) -> Result<(), Error> {
 mod tests {
     use super::*;
     use tokio::net::UnixListener;
+
+    /// `scripts/overlay-demo.jsonl` must keep matching the protocol.
+    #[test]
+    fn demo_script_parses() {
+        let script = include_str!("../../../scripts/overlay-demo.jsonl");
+        for line in script.lines().filter(|l| !l.trim().is_empty()) {
+            let msg: ToOverlay = serde_json::from_str(line)
+                .unwrap_or_else(|e| panic!("{e}: {}", &line[..line.len().min(80)]));
+            if let ToOverlay::Hello(hello) = msg {
+                assert_eq!(hello.protocol, PROTOCOL_VERSION);
+            }
+        }
+    }
 
     #[tokio::test]
     async fn round_trips_messages_over_a_socket() {

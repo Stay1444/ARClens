@@ -11,6 +11,40 @@ pub const TEXT: Color = Color::from_rgb(0.93, 0.94, 0.96);
 pub const TEXT_MUTED: Color = Color::from_rgb(0.62, 0.65, 0.71);
 pub const COIN: Color = Color::from_rgb(0.98, 0.80, 0.33);
 
+/// Colour of a map-marker category. Matches on keywords, since the source's
+/// category names are free-form; unknown categories get a stable colour of
+/// their own.
+pub fn marker(category: &str) -> Color {
+    let c = category.to_lowercase();
+    let has = |words: &[&str]| words.iter().any(|w| c.contains(w));
+    if has(&["arc", "enemy", "boss"]) {
+        Color::from_rgb8(0xe5, 0x48, 0x4d)
+    } else if has(&["extract", "exit", "hatch"]) {
+        Color::from_rgb8(0x4c, 0xd1, 0x7f)
+    } else if has(&["container", "loot", "crate"]) {
+        Color::from_rgb8(0xf2, 0xb1, 0x34)
+    } else if has(&["quest", "objective"]) {
+        Color::from_rgb8(0xff, 0xd8, 0x4d)
+    } else if has(&["nature", "plant", "resource"]) {
+        Color::from_rgb8(0x8b, 0xc3, 0x4a)
+    } else if has(&["event"]) {
+        Color::from_rgb8(0xb2, 0x5c, 0xf0)
+    } else if has(&["label", "location", "zone", "poi"]) {
+        Color::from_rgb8(0x5c, 0xc8, 0xe6)
+    } else {
+        const SPARE: [Color; 4] = [
+            Color::from_rgb8(0xff, 0x8a, 0x65),
+            Color::from_rgb8(0x4d, 0xb6, 0xac),
+            Color::from_rgb8(0xba, 0x68, 0xc8),
+            Color::from_rgb8(0xa1, 0x88, 0x7f),
+        ];
+        let hash = c.bytes().fold(0usize, |h, b| {
+            h.wrapping_mul(31).wrapping_add(usize::from(b))
+        });
+        SPARE[hash % SPARE.len()]
+    }
+}
+
 pub fn rarity(rarity: Option<Rarity>) -> Color {
     match rarity {
         None | Some(Rarity::Common) => Color::from_rgb8(0x9e, 0xa3, 0xab),

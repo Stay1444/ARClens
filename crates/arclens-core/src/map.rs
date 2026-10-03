@@ -1,15 +1,16 @@
 //! Maps, markers and the coordinate spaces between them.
 //!
-//! Three coordinate spaces exist:
+//! Two coordinate spaces exist:
 //!
-//! * **Source space** — whatever the upstream marker dataset uses (often
-//!   pixels of that site's map image, or game world units).
-//! * **Map space** ([`MapPoint`]) — normalised `[0, 1]²` over ARClens' own map
-//!   image, origin top-left. Everything inside ARClens uses this.
-//! * **Screen space** — pixels on the player's monitor. Only the overlay
-//!   renderer deals with this, via a [`Transform`] produced by calibration.
+//! * **Map space** ([`MapPoint`]): the marker source's own units, with y
+//!   pointing down. For MetaForge these are pixels of its Leaflet map image
+//!   (`x = lng`, `y = -lat`). Markers of one map share one space.
+//! * **Screen space**: pixels on the player's monitor. Only the overlay
+//!   renderer deals with this, via a [`Transform`] fitted to the in-game
+//!   map view.
 
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Stable identifier of a map, e.g. `"dam-battlegrounds"`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -26,7 +27,7 @@ impl MapId {
     }
 }
 
-/// A point in normalised map space (`0.0..=1.0` on both axes, origin top-left).
+/// A point in map space (the marker source's units, y down).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct MapPoint {
     pub x: f32,
@@ -36,11 +37,6 @@ pub struct MapPoint {
 impl MapPoint {
     pub const fn new(x: f32, y: f32) -> Self {
         Self { x, y }
-    }
-
-    /// Whether the point lies on the map.
-    pub fn is_on_map(self) -> bool {
-        (0.0..=1.0).contains(&self.x) && (0.0..=1.0).contains(&self.y)
     }
 }
 
@@ -108,31 +104,129 @@ impl Transform {
     }
 }
 
-/// What a marker represents. Unknown upstream kinds are kept as `Other`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MarkerKind {
-    Extraction,
-    RaiderHatch,
-    Loot,
-    Container,
-    QuestObjective,
-    Arc,
-    Spawn,
-    Other(String),
-}
-
 /// A point of interest on a map.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Marker {
     pub id: String,
     pub map: MapId,
-    pub kind: MarkerKind,
+    /// Top-level group, as the source names it (`"arc"`, `"containers"`, …).
+    pub category: String,
+    /// Finer kind within the category (`"queen"`, `"weapon_case"`, …).
+    #[serde(default)]
+    pub subcategory: Option<String>,
     pub position: MapPoint,
+    /// Proper name, for named places ("Hydroponic Dome Complex").
     #[serde(default)]
     pub label: Option<String>,
+    /// Behind a locked door (needs a key).
     #[serde(default)]
-    pub note: Option<String>,
+    pub locked: bool,
+}
+
+impl Marker {
+    /// What to call the marker: its name, else its kind.
+    pub fn title(&self) -> String {
+        match (&self.label, &self.subcategory) {
+            (Some(label), _) if !label.trim().is_empty() => label.trim().to_owned(),
+            (_, Some(sub)) => humanize(sub),
+            _ => humanize(&self.category),
+        }
+    }
+
+    /// Whether `query` (case-insensitive) appears in its name or kind.
+    pub fn matches(&self, query: &str) -> bool {
+        let query = query.trim().to_lowercase();
+        query.is_empty()
+            || self.title().to_lowercase().contains(&query)
+            || humanize(&self.category).to_lowercase().contains(&query)
+            || self
+                .subcategory
+                .as_deref()
+                .is_some_and(|s| humanize(s).to_lowercase().contains(&query))
+    }
+}
+
+/// `"weapon_case"` / `"husk-graveyard"` → `"Weapon Case"` / `"Husk Graveyard"`.
+pub fn humanize(id: &str) -> String {
+    id.split(['_', '-', ' '])
+        .filter(|w| !w.is_empty())
+        .map(|w| {
+            let mut chars = w.chars();
+            chars.next().map_or_else(String::new, |first| {
+                first.to_uppercase().chain(chars).collect()
+            })
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Which marker kinds the player hides. Everything is shown by default, so
+/// new kinds from the source appear without the player opting in.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MarkerFilter {
+    /// Hidden categories (`"arc"`) and subcategories (`"arc/queen"`).
+    #[serde(default)]
+    pub hidden: BTreeSet<String>,
+}
+
+impl MarkerFilter {
+    pub fn shows(&self, marker: &Marker) -> bool {
+        self.shows_category(&marker.category)
+            && marker
+                .subcategory
+                .as_deref()
+                .is_none_or(|sub| self.shows_subcategory(&marker.category, sub))
+    }
+
+    pub fn shows_category(&self, category: &str) -> bool {
+        !self.hidden.contains(category)
+    }
+
+    pub fn shows_subcategory(&self, category: &str, subcategory: &str) -> bool {
+        !self.hidden.contains(&sub_key(category, subcategory))
+    }
+
+    pub fn toggle_category(&mut self, category: &str) {
+        toggle(&mut self.hidden, category.to_owned());
+    }
+
+    pub fn toggle_subcategory(&mut self, category: &str, subcategory: &str) {
+        toggle(&mut self.hidden, sub_key(category, subcategory));
+    }
+
+    pub fn show_all(&mut self) {
+        self.hidden.clear();
+    }
+
+    /// Hides every category in `markers`.
+    pub fn hide_all(&mut self, markers: &[Marker]) {
+        self.hidden
+            .extend(markers.iter().map(|m| m.category.clone()));
+    }
+}
+
+fn sub_key(category: &str, subcategory: &str) -> String {
+    format!("{category}/{subcategory}")
+}
+
+fn toggle(set: &mut BTreeSet<String>, key: String) {
+    if !set.remove(&key) {
+        set.insert(key);
+    }
+}
+
+/// Marker counts per category, then per subcategory (`""` for none), sorted
+/// by name.
+pub fn marker_counts(markers: &[Marker]) -> BTreeMap<&str, BTreeMap<&str, usize>> {
+    let mut counts: BTreeMap<&str, BTreeMap<&str, usize>> = BTreeMap::new();
+    for marker in markers {
+        *counts
+            .entry(marker.category.as_str())
+            .or_default()
+            .entry(marker.subcategory.as_deref().unwrap_or(""))
+            .or_default() += 1;
+    }
+    counts
 }
 
 #[cfg(test)]
@@ -167,9 +261,77 @@ mod tests {
         );
     }
 
+    fn marker(category: &str, sub: Option<&str>, label: Option<&str>) -> Marker {
+        Marker {
+            id: format!("{category}-{sub:?}-{label:?}"),
+            map: MapId::new("dam"),
+            category: category.into(),
+            subcategory: sub.map(Into::into),
+            position: MapPoint::new(0.0, 0.0),
+            label: label.map(Into::into),
+            locked: false,
+        }
+    }
+
     #[test]
-    fn on_map_bounds_are_inclusive() {
-        assert!(MapPoint::new(0.0, 1.0).is_on_map());
-        assert!(!MapPoint::new(-0.01, 0.5).is_on_map());
+    fn title_prefers_the_name_then_the_kind() {
+        let dome = marker("locations", Some("poi"), Some("Hydroponic Dome Complex"));
+        assert_eq!(dome.title(), "Hydroponic Dome Complex");
+        assert_eq!(
+            marker("containers", Some("weapon_case"), None).title(),
+            "Weapon Case"
+        );
+        assert_eq!(
+            marker("husk-graveyard", None, Some(" ")).title(),
+            "Husk Graveyard"
+        );
+    }
+
+    #[test]
+    fn search_covers_name_category_and_subcategory() {
+        let queen = marker("arc", Some("queen"), None);
+        assert!(queen.matches(""));
+        assert!(queen.matches("QUE"));
+        assert!(queen.matches("arc"));
+        assert!(!queen.matches("dome"));
+    }
+
+    #[test]
+    fn filter_hides_categories_and_subcategories() {
+        let queen = marker("arc", Some("queen"), None);
+        let tick = marker("arc", Some("tick"), None);
+        let case = marker("containers", None, None);
+        let mut filter = MarkerFilter::default();
+        assert!(filter.shows(&queen) && filter.shows(&case));
+
+        filter.toggle_subcategory("arc", "tick");
+        assert!(filter.shows(&queen) && !filter.shows(&tick));
+
+        filter.toggle_category("arc");
+        assert!(!filter.shows(&queen) && filter.shows(&case));
+
+        filter.toggle_category("arc");
+        filter.toggle_subcategory("arc", "tick");
+        assert!(filter.shows(&tick));
+
+        let all = [queen.clone(), case.clone()];
+        filter.hide_all(&all);
+        assert!(!filter.shows(&queen) && !filter.shows(&case));
+        filter.show_all();
+        assert!(filter.shows(&queen));
+    }
+
+    #[test]
+    fn counts_group_by_category_then_subcategory() {
+        let markers = [
+            marker("arc", Some("queen"), None),
+            marker("arc", Some("tick"), None),
+            marker("arc", Some("tick"), None),
+            marker("containers", None, None),
+        ];
+        let counts = marker_counts(&markers);
+        assert_eq!(counts["arc"]["tick"], 2);
+        assert_eq!(counts["arc"]["queen"], 1);
+        assert_eq!(counts["containers"][""], 1);
     }
 }
