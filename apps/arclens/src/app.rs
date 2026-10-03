@@ -51,6 +51,12 @@ pub struct App {
     /// Wall clock in Unix ms, advanced by the 1 s tick while it matters.
     now_ms: i64,
     paths: Paths,
+    /// Map tab: selected map (MetaForge id) and markers per map.
+    map: String,
+    markers: std::collections::HashMap<String, Load<Vec<arclens_core::Marker>>>,
+    marker_filter: arclens_core::MarkerFilter,
+    marker_query: String,
+    expanded_categories: std::collections::BTreeSet<String>,
     /// Item currently detected under the cursor in game, and where.
     hover: Option<(ItemId, arclens_ipc::NormRect, Situation)>,
     status: Vec<String>,
@@ -59,8 +65,9 @@ pub struct App {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
     Items,
-    Workshop,
+    Map,
     Events,
+    Workshop,
 }
 
 #[derive(Debug)]
@@ -86,6 +93,14 @@ pub enum Message {
     /// Once a second while the Events tab is open (countdowns).
     Tick,
     FilterEventsMap(Option<String>),
+    SelectMap(String),
+    MarkersLoaded(String, Result<Vec<arclens_core::Marker>, String>),
+    MarkerQuery(String),
+    ToggleMarkerCategory(String),
+    ToggleMarkerSubcategory(String, String),
+    ExpandMarkerCategory(String),
+    ShowAllMarkers,
+    HideAllMarkers,
     SetStationLevel(String, u32),
     ClearProgress,
     Overlay(overlay_link::Event),
@@ -116,6 +131,11 @@ impl App {
             events_loaded_at: None,
             event_map_filter: None,
             now_ms: now_ms(),
+            map: arclens_data::metaforge::MAPS[0].0.to_owned(),
+            markers: std::collections::HashMap::new(),
+            marker_filter: crate::store::load(&paths.marker_filter()).unwrap_or_default(),
+            marker_query: String::new(),
+            expanded_categories: std::collections::BTreeSet::new(),
             paths: paths.clone(),
             status: Vec::new(),
         };
@@ -227,20 +247,21 @@ impl App {
                     self.send(ToOverlay::ClearHover);
                 }
             }
-            Message::SetTab(tab) => {
-                self.tab = tab;
-                self.now_ms = now_ms();
-                if tab == Tab::Items {
-                    return iced::widget::operation::focus(SEARCH_ID);
-                }
-                return self.refresh_events_if_stale();
-            }
+            Message::SetTab(tab) => return self.set_tab(tab),
             Message::EventsLoaded(result) => self.on_events_loaded(result),
             Message::Tick => {
                 self.now_ms = now_ms();
                 return self.refresh_events_if_stale();
             }
             Message::FilterEventsMap(map) => self.event_map_filter = map,
+            Message::SelectMap(_)
+            | Message::MarkersLoaded(..)
+            | Message::MarkerQuery(_)
+            | Message::ExpandMarkerCategory(_)
+            | Message::ToggleMarkerCategory(_)
+            | Message::ToggleMarkerSubcategory(..)
+            | Message::ShowAllMarkers
+            | Message::HideAllMarkers => return self.update_map(message),
             Message::SetStationLevel(station, level) => {
                 self.progress
                     .get_or_insert_with(Progress::default)
@@ -422,6 +443,89 @@ impl App {
         }
     }
 
+    fn set_tab(&mut self, tab: Tab) -> Task<Message> {
+        self.tab = tab;
+        self.now_ms = now_ms();
+        match tab {
+            Tab::Items => iced::widget::operation::focus(SEARCH_ID),
+            Tab::Map => Task::batch([
+                self.load_map_markers(),
+                iced::widget::operation::focus(crate::views::map::SEARCH_ID),
+            ]),
+            Tab::Events => self.refresh_events_if_stale(),
+            Tab::Workshop => Task::none(),
+        }
+    }
+
+    /// Map-tab messages.
+    fn update_map(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::SelectMap(map) => {
+                self.map = map;
+                return self.load_map_markers();
+            }
+            Message::MarkersLoaded(map, result) => {
+                if let Err(error) = &result {
+                    tracing::warn!(%error, map, "markers unavailable");
+                }
+                let current = self.tab == Tab::Map && map == self.map;
+                self.markers.insert(
+                    map,
+                    match result {
+                        Ok(markers) => Load::Ready(markers),
+                        Err(error) => Load::Failed(error),
+                    },
+                );
+                // The search box only exists once markers are in.
+                if current {
+                    return iced::widget::operation::focus(crate::views::map::SEARCH_ID);
+                }
+            }
+            Message::MarkerQuery(query) => self.marker_query = query,
+            Message::ExpandMarkerCategory(category) => {
+                if !self.expanded_categories.remove(&category) {
+                    self.expanded_categories.insert(category);
+                }
+            }
+            _ => self.edit_marker_filter(message),
+        }
+        Task::none()
+    }
+
+    /// Starts loading the selected map's markers, unless already loaded.
+    fn load_map_markers(&mut self) -> Task<Message> {
+        if matches!(
+            self.markers.get(&self.map),
+            Some(Load::Ready(_) | Load::Loading)
+        ) {
+            return Task::none();
+        }
+        self.markers.insert(self.map.clone(), Load::Loading);
+        let map = self.map.clone();
+        Task::perform(
+            data::load_markers(self.paths.clone(), map.clone()),
+            move |result| Message::MarkersLoaded(map.clone(), result),
+        )
+    }
+
+    fn edit_marker_filter(&mut self, message: Message) {
+        let filter = &mut self.marker_filter;
+        match message {
+            Message::ToggleMarkerCategory(category) => filter.toggle_category(&category),
+            Message::ToggleMarkerSubcategory(category, sub) => {
+                filter.toggle_subcategory(&category, &sub);
+            }
+            Message::ShowAllMarkers => filter.show_all(),
+            Message::HideAllMarkers => {
+                if let Some(Load::Ready(markers)) = self.markers.get(&self.map) {
+                    filter.hide_all(markers);
+                }
+            }
+            _ => return,
+        }
+        crate::store::save(&self.paths.marker_filter(), &self.marker_filter);
+    }
+
     fn on_events_loaded(&mut self, result: Result<Vec<arclens_core::ScheduledEvent>, String>) {
         self.events_loaded_at = Some(std::time::Instant::now());
         self.events = match result {
@@ -449,12 +553,30 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let body: Element<'_, Message> = if self.tab == Tab::Events {
-            self.view_events()
-        } else {
-            self.view_catalog_or_status()
+        let body: Element<'_, Message> = match self.tab {
+            Tab::Events => self.view_events(),
+            Tab::Map => self.view_map(),
+            Tab::Items | Tab::Workshop => self.view_catalog_or_status(),
         };
         column![self.view_top_bar(), body, self.view_footer()].into()
+    }
+
+    fn view_map(&self) -> Element<'_, Message> {
+        use crate::views::map::{MapView, Markers};
+        let markers = match self.markers.get(&self.map) {
+            None | Some(Load::Loading) => Markers::Loading,
+            Some(Load::Ready(markers)) => Markers::Ready(markers),
+            Some(Load::Failed(error)) => Markers::Failed(error),
+        };
+        crate::views::map::view(&MapView {
+            maps: arclens_data::metaforge::MAPS,
+            selected: &self.map,
+            markers,
+            filter: &self.marker_filter,
+            query: &self.marker_query,
+            expanded: &self.expanded_categories,
+            attribution: arclens_data::metaforge::ATTRIBUTION,
+        })
     }
 
     fn view_events(&self) -> Element<'_, Message> {
@@ -522,6 +644,7 @@ impl App {
 
         let tabs = [
             ("Items", Tab::Items),
+            ("Map", Tab::Map),
             ("Events", Tab::Events),
             ("Workshop", Tab::Workshop),
         ]
@@ -529,7 +652,7 @@ impl App {
         .fold(row![].spacing(4), |r, (label, tab)| {
             r.push(tab_button(label, self.tab == tab, Message::SetTab(tab)))
         });
-        let middle: Element<'_, Message> = if self.tab == Tab::Events {
+        let middle: Element<'_, Message> = if matches!(self.tab, Tab::Events | Tab::Map) {
             Space::new().width(Length::Fill).into()
         } else {
             text_input("Search items…", &self.query)
@@ -877,7 +1000,7 @@ fn tab_button(label: &str, active: bool, on_press: Message) -> Element<'_, Messa
     .into()
 }
 
-/// Ctrl+1/2/3 switch tabs.
+/// Ctrl+1…4 switch tabs.
 fn tab_shortcut(event: iced::keyboard::Event) -> Option<Message> {
     use iced::keyboard::{Event, Key};
     let Event::KeyPressed {
@@ -893,8 +1016,9 @@ fn tab_shortcut(event: iced::keyboard::Event) -> Option<Message> {
     }
     let tab = match c.as_str() {
         "1" => Tab::Items,
-        "2" => Tab::Events,
-        "3" => Tab::Workshop,
+        "2" => Tab::Map,
+        "3" => Tab::Events,
+        "4" => Tab::Workshop,
         _ => return None,
     };
     Some(Message::SetTab(tab))

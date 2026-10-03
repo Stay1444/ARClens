@@ -131,3 +131,57 @@ pub async fn load_events(paths: Paths) -> Result<Vec<arclens_core::ScheduledEven
         }
     }
 }
+
+/// Load `<map>.json` files (saved `game-map-data` responses) from this
+/// directory instead of fetching (offline dev).
+pub const MAP_DATA_DIR_ENV: &str = "ARCLENS_MAP_DATA_DIR";
+/// Markers change rarely; refetch them once a day.
+const MAP_DATA_MAX_AGE: Duration = Duration::from_secs(24 * 3600);
+
+/// Markers of one map (MetaForge id): from the cache while it is fresh,
+/// else fetched; a stale cache is the offline fallback.
+pub async fn load_markers(paths: Paths, map: String) -> Result<Vec<arclens_core::Marker>, String> {
+    use arclens_data::metaforge;
+    let parse = |bytes: &[u8]| metaforge::parse_map_markers(bytes, &map).map_err(|e| e.to_string());
+    if let Some(dir) = std::env::var_os(MAP_DATA_DIR_ENV) {
+        let file = std::path::Path::new(&dir).join(format!("{map}.json"));
+        let bytes = tokio::fs::read(&file)
+            .await
+            .map_err(|e| format!("{}: {e}", file.display()))?;
+        return parse(&bytes);
+    }
+    let cache = paths.map_data(&map);
+    let fresh = tokio::fs::metadata(&cache)
+        .await
+        .and_then(|m| m.modified())
+        .is_ok_and(|t| t.elapsed().is_ok_and(|age| age < MAP_DATA_MAX_AGE));
+    if fresh && let Ok(bytes) = tokio::fs::read(&cache).await {
+        return parse(&bytes);
+    }
+    let fetched = async {
+        let bytes = http_client()
+            .get(metaforge::map_data_url(&map))
+            .send()
+            .await?
+            .error_for_status()?
+            .bytes()
+            .await?;
+        let markers = metaforge::parse_map_markers(&bytes, &map)?;
+        if let Some(dir) = cache.parent() {
+            let _ = tokio::fs::create_dir_all(dir).await;
+        }
+        let _ = tokio::fs::write(&cache, &bytes).await;
+        Ok::<_, arclens_data::Error>(markers)
+    }
+    .await;
+    match fetched {
+        Ok(markers) => Ok(markers),
+        Err(error) => {
+            tracing::warn!(%error, map, "map data fetch failed; trying cache");
+            let bytes = tokio::fs::read(&cache)
+                .await
+                .map_err(|_| format!("could not load markers: {error}"))?;
+            parse(&bytes)
+        }
+    }
+}

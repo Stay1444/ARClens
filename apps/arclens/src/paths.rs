@@ -44,6 +44,16 @@ impl Paths {
         self.cache.join("icons")
     }
 
+    /// Which map-marker kinds the player hid.
+    pub fn marker_filter(&self) -> PathBuf {
+        self.config.join("marker-filter.json")
+    }
+
+    /// Cached `game-map-data` response for `map`.
+    pub fn map_data(&self, map: &str) -> PathBuf {
+        self.cache.join("map-data").join(format!("{map}.json"))
+    }
+
     pub fn raidtheory_dir(&self) -> PathBuf {
         self.cache.join("raidtheory")
     }

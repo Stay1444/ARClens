@@ -51,12 +51,18 @@ green CI.
 
 - [ ] Map images, with a per-map `Transform` from source pixels into map
       space.
-- [ ] Marker sets:
-  - start with a curated in-repo set (`data/markers/<map>.json`, our own,
-    hand-placed);
-  - optionally add a MetaForge `game-map-data` provider with attribution and
-    caching (check their terms first).
-- [ ] Map view in the companion app (pan/zoom, category filters).
+- [x] MetaForge `game-map-data` provider (attributed, cached for a day,
+      offline fallback). Tolerant of shape drift: one bad record is dropped,
+      not the response.
+- [ ] Check the provider against a live response; confirm the category
+      names and the `y = -lat` orientation.
+- [x] **Map** tab in the companion app: map picker, marker search, category
+      and subcategory toggles with counts, show/hide all, and a dot plot
+      with place names and hover tooltips (`docs/assets/map-tab.png`,
+      synthetic markers). The filter is saved, and the overlay will use the
+      same one.
+- [ ] Map image behind the plot, once its alignment with MetaForge
+      coordinates is known; pan/zoom.
 - [ ] **Manual calibration.** The user opens the in-game map and clicks two
       landmarks; `Transform::from_two_points` gives map→screen. Markers then
       render while the view doesn't move. This is the stepping stone to M3.

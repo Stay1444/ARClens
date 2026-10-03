@@ -79,6 +79,11 @@ _Last researched: 2026-10-03. Re-verify before relying on anything marked
     `Transform` into ARClens map space (`arclens_core::Transform`).
   - `eventConditionMask` appears to filter markers by map condition
     (**unverified**).
+  - ARClens imports them as `x = lng`, `y = -lat` (Leaflet `CRS.Simple`
+    latitude grows upwards). **Unverified** until checked against a live
+    response and the map image. Category names (`arc`, `containers`,
+    `labels`, …) are also unverified; the app shows whatever the response
+    contains (2026-10-03).
 
 ## ardb.app
 

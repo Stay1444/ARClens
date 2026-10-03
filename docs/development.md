@@ -56,6 +56,7 @@ Useful environment variables:
 | `ARCLENS_RAIDTHEORY_DIR=~/src/arcraiders-data` | Load the dataset from a local checkout; skip cache and network |
 | `ARCLENS_OVERLAY_AUTOSTART=0` | Don't launch the overlay from the app |
 | `ARCLENS_EVENTS_FILE=events.json` | Load a saved MetaForge `events-schedule` response instead of fetching it |
+| `ARCLENS_MAP_DATA_DIR=dir` | Load markers from `dir/<map>.json` (saved MetaForge `game-map-data` responses, map ids as in `metaforge::MAPS`) instead of fetching |
 | `ARCLENS_REPLAY_DIR=crates/arclens-vision/tests/fixtures/frames` | Feed recorded frames to item detection instead of capturing the screen |
 | `ARCLENS_REPLAY_INTERVAL_MS=1500` | Time between replayed frames |
 | `ARCLENS_OCR_MODEL=/path/text-recognition.rten` | Use a local OCR model instead of downloading it to the cache |
@@ -134,8 +135,8 @@ grim shot.png
 `wtype` drops the first key of each invocation, so lead with a throwaway key
 (`wtype -k Shift_L -k Return`).
 Send modifier chords in the same invocation:
-`wtype -k Shift_L -k Shift_L -M ctrl -k 2 -m ctrl` opens the Events tab
-(Ctrl+1/2/3 switch between Items, Events and Workshop). Enter in the search box opens the top result,
+`wtype -k Shift_L -k Shift_L -M ctrl -k 2 -m ctrl` opens the Map tab
+(Ctrl+1/2/3/4 switch between Items, Map, Events and Workshop). Enter in the search box opens the top result,
 which is enough to reach the detail view without a mouse.
 
 Known limitation: the headless seat has no pointer, so simulated clicks
