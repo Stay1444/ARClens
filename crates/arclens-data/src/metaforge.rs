@@ -112,10 +112,18 @@ pub const MAPS: &[(&str, &str)] = &[
 /// `"DAM BATTLEGROUNDS - 18:45"` → `"dam"`. Tolerates OCR slips and a
 /// missing "The".
 pub fn map_for_title(title: &str) -> Option<&'static str> {
+    // The raid clock follows the name, with or without a dash
+    // ("BURIED CITY 26:03"): drop clock-like words (digits, colons, dashes);
+    // keep the rest, OCR slips like "GR0UNDS" included.
+    let is_clock = |w: &str| {
+        w.chars()
+            .all(|c| c.is_ascii_digit() || matches!(c, ':' | '-' | '—' | '–' | '.'))
+    };
     let name: String = title
-        .split(['-', '—', '–'])
-        .next()
-        .unwrap_or_default()
+        .split_whitespace()
+        .filter(|w| !is_clock(w))
+        .collect::<Vec<_>>()
+        .join(" ")
         .chars()
         .filter(|c| c.is_alphanumeric() || c.is_whitespace())
         .collect::<String>()
@@ -207,7 +215,9 @@ impl Number {
 
 /// Parses a `game-map-data` response for `map`.
 ///
-/// Leaflet `CRS.Simple` latitude grows upwards, so `y = -lat` (y down).
+/// MetaForge's `lat` grows *downwards* on the map (verified 2026-10-03 on
+/// the in-game Dam map: Victory Ridge, lat 1461, is at the top; Formicai
+/// Hills, lat 3915, at the bottom), so `x = lng`, `y = lat`.
 /// Records without coordinates are dropped; ones without a category land
 /// in `"other"`.
 pub fn parse_map_markers(bytes: &[u8], map: &str) -> Result<Vec<Marker>, Error> {
@@ -230,7 +240,7 @@ pub fn parse_map_markers(bytes: &[u8], map: &str) -> Result<Vec<Marker>, Error> 
                 map: MapId::new(map),
                 category: clean(m.category).unwrap_or_else(|| "other".to_owned()),
                 subcategory: clean(m.subcategory),
-                position: MapPoint::new(lng, -lat),
+                position: MapPoint::new(lng, lat),
                 label: clean(m.instance_name),
                 locked: m.behind_locked_door.unwrap_or(false),
             })
@@ -255,7 +265,7 @@ mod tests {
         assert_eq!(queen.category, "arc");
         assert_eq!(queen.subcategory.as_deref(), Some("queen"));
         assert_eq!(queen.title(), "Queen");
-        assert_eq!(queen.position, MapPoint::new(5211.4, -2495.7));
+        assert_eq!(queen.position, MapPoint::new(5211.4, 2495.7));
         assert_eq!(queen.map, MapId::new("dam"));
         let dome = markers.iter().find(|m| m.category == "labels").unwrap();
         assert_eq!(dome.title(), "Hydroponic Dome Complex");
@@ -272,6 +282,8 @@ mod tests {
         assert_eq!(map_for_title("THE SPACEPORT - 12:00"), Some("spaceport"));
         assert_eq!(map_for_title("BLUE GATE"), Some("blue-gate"));
         assert_eq!(map_for_title("STELLA MONTIS - 1:00"), Some("stella-montis"));
+        assert_eq!(map_for_title("BURIED CITY 26:03"), Some("buried-city"));
+        assert_eq!(map_for_title("BURIED CITY -25:57"), Some("buried-city"));
         assert_eq!(map_for_title("Stay1444"), None);
     }
 
@@ -300,7 +312,7 @@ mod tests {
     fn accepts_a_bare_array() {
         let markers =
             parse_map_markers(br#"[{"id":"a","lat":1,"lng":2,"category":"arc"}]"#, "dam").unwrap();
-        assert_eq!(markers[0].position, MapPoint::new(2.0, -1.0));
+        assert_eq!(markers[0].position, MapPoint::new(2.0, 1.0));
     }
 
     #[test]

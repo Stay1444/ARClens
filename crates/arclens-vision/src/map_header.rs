@@ -17,9 +17,19 @@ const TITLE: [f32; 4] = [0.78, 0.132, 0.19, 0.032];
 /// Left end of the top bar's "MAP" tab, whose outline is drawn when that
 /// tab is selected.
 const MAP_TAB_EDGE: [f32; 4] = [0.486, 0.022, 0.0102, 0.039];
-/// Share of bright pixels in [`MAP_TAB_EDGE`] when outlined: ~8 % measured
-/// on the Dam frames, 0 on inventory, raid and trader screens.
+/// Right end of the same outline. Both ends are needed: in raid the HUD
+/// compass ("W 276") sits where the tab's left end is (field report
+/// 2026-10-03: a bush opened the map panel).
+const MAP_TAB_RIGHT_EDGE: [f32; 4] = [0.524, 0.022, 0.0102, 0.039];
+/// Share of bright pixels in each tab edge when outlined: ~6-8 % measured
+/// on Dam and Buried City, 0 on inventory, raid and trader screens.
 const MAP_TAB_MIN_BRIGHT: f32 = 0.03;
+/// The map title sits on the dark legend panel: ≥ 83 % of the title strip
+/// is near-black on map frames. Bright scenery there is not the map.
+const TITLE_MIN_DARK: f32 = 0.6;
+/// The "QUESTS" header of the quest panel on the map's left (~20 % bright
+/// when the panel is open).
+const QUESTS_HEADER: [f32; 4] = [0.035, 0.132, 0.039, 0.025];
 /// Condition line just below it.
 const CONDITION: [f32; 4] = [0.80, 0.160, 0.17, 0.028];
 
@@ -35,7 +45,33 @@ pub struct MapHeader {
 /// Whether `frame` shows the map screen: the "MAP" tab is outlined and the
 /// map panel has a title. Cheap (no OCR); run it every frame.
 pub fn is_map_screen(frame: &RgbImage) -> bool {
-    bright_share(frame, MAP_TAB_EDGE) >= MAP_TAB_MIN_BRIGHT && bright_text(frame, TITLE).is_some()
+    bright_share(frame, MAP_TAB_EDGE) >= MAP_TAB_MIN_BRIGHT
+        && bright_share(frame, MAP_TAB_RIGHT_EDGE) >= MAP_TAB_MIN_BRIGHT
+        && dark_share(frame, TITLE) >= TITLE_MIN_DARK
+        && bright_text(frame, TITLE).is_some()
+}
+
+/// Whether the quest panel covers the left of the map (markers must not
+/// be drawn over it). Only meaningful on the map screen.
+pub fn quest_panel_open(frame: &RgbImage) -> bool {
+    bright_share(frame, QUESTS_HEADER) >= 0.08
+}
+
+/// Share of near-black pixels in the fractional region.
+fn dark_share(frame: &RgbImage, fraction: [f32; 4]) -> f32 {
+    let area = region(frame, fraction);
+    let (mut dark, mut total) = (0u32, 0u32);
+    for row in area.y..area.bottom().min(frame.height()) {
+        for col in area.x..area.right().min(frame.width()) {
+            total += 1;
+            dark += u32::from(frame.get_pixel(col, row).0.iter().all(|&c| c <= 60));
+        }
+    }
+    if total == 0 {
+        0.0
+    } else {
+        dark as f32 / total as f32
+    }
 }
 
 fn region(frame: &RgbImage, fraction: [f32; 4]) -> Rect {

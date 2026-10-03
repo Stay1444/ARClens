@@ -1,0 +1,1355 @@
+{
+ "_source": "Game map labels as shipped by metaforge.app's map page (extracted with scripts/extract-map-labels.py)",
+ "maps": {
+  "dam": [
+   {
+    "text": "VICTORY RIDGE",
+    "lat": 1460.9987757550532,
+    "lng": 3265.6809680550614,
+    "layer": "region",
+    "anchor": "top-left"
+   },
+   {
+    "text": "SWAMP",
+    "lat": 2371.913607161741,
+    "lng": 2983.516658904651,
+    "layer": "region",
+    "anchor": "top-left"
+   },
+   {
+    "text": "THE DAM",
+    "lat": 2254.3425963150958,
+    "lng": 4048.4317608756164,
+    "layer": "region",
+    "anchor": "top-left"
+   },
+   {
+    "text": "RED LAKES",
+    "lat": 2530.607253649125,
+    "lng": 4837.199719805892,
+    "layer": "region",
+    "anchor": "top-left"
+   },
+   {
+    "text": "FORMICAI HILLS",
+    "lat": 3914.99190423607,
+    "lng": 2992.2612218165036,
+    "layer": "region",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Power Generation Complex",
+    "lat": 1702.8640420824204,
+    "lng": 4584.8065787400965,
+    "layer": "lootZone",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Hydroponic Dome Complex",
+    "lat": 1942.2460143671183,
+    "lng": 3576.4296342805205,
+    "layer": "lootZone",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Control Tower",
+    "lat": 2899.507142182874,
+    "lng": 4142.702118010619,
+    "layer": "lootZone",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Research & Administration",
+    "lat": 3078.458612500738,
+    "lng": 3913.969150253343,
+    "layer": "lootZone",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Testing Annex",
+    "lat": 3525.342427640792,
+    "lng": 4628.446489832667,
+    "layer": "lootZone",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Electrical Substation",
+    "lat": 3341.478506143249,
+    "lng": 3126.245735551378,
+    "layer": "lootZone",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Water Treatment Control",
+    "lat": 2759.39399442713,
+    "lng": 3114.8809890464963,
+    "layer": "lootZone",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Old Battleground",
+    "lat": 2277.5162740075066,
+    "lng": 2618.55071979033,
+    "layer": "lootZone",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Controlled Access Zone",
+    "lat": 1855.6872906336075,
+    "lng": 4298.320651415584,
+    "layer": "lootZone",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Pale Apartments",
+    "lat": 1611.31916706627,
+    "lng": 2661.4856136119342,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Ruby Residence",
+    "lat": 1350.027164709565,
+    "lng": 3118.168018970173,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Ben Welder's Sunroof",
+    "lat": 1769.9356667380669,
+    "lng": 2934.7598793641923,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "South Swamp Outpost",
+    "lat": 2777.0631627170874,
+    "lng": 2559.3771383364947,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Water Towers",
+    "lat": 3527.7467570783947,
+    "lng": 2877.8620712862985,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Scrap Yard",
+    "lat": 3793.1813165476055,
+    "lng": 3824.3063566799406,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Small Creek",
+    "lat": 3340.3274262869045,
+    "lng": 3953.7710479500574,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Floodgates",
+    "lat": 2473.514182791771,
+    "lng": 4136.004970879628,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Red Lakes Balcony",
+    "lat": 3182.9129395590444,
+    "lng": 4454.025738319694,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Electrical Tower",
+    "lat": 3470.528694453361,
+    "lng": 5041.6381430782485,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "East Broken Bridge",
+    "lat": 1930.3137429241588,
+    "lng": 5398.591993296268,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Pipeline Tower",
+    "lat": 1996.778390471317,
+    "lng": 4628.573030708308,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Pattern House",
+    "lat": 1194.1053655939606,
+    "lng": 4435.286710344547,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "West Broken Bridge",
+    "lat": 1063.900252775288,
+    "lng": 3948.9952206101407,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Wreckage",
+    "lat": 3731.0346943502964,
+    "lng": 4173.37156873244,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Formicai Outpost",
+    "lat": 4199.640834532396,
+    "lng": 3797.4081901260424,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Raider Outpost East",
+    "lat": 1598.8349429503892,
+    "lng": 5086.983246372455,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Generator Hall",
+    "lat": 1552.3145692651758,
+    "lng": 4456.385104292682,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "The Breach",
+    "lat": 2160.046608656797,
+    "lng": 4310.540280504562,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Primary Facility",
+    "lat": 2819.6491863171073,
+    "lng": 3833.265250021141,
+    "layer": "landmark",
+    "anchor": "top-left"
+   }
+  ],
+  "spaceport": [
+   {
+    "text": "ALBERI HILLS",
+    "lat": 1603.6165621584182,
+    "lng": 2557.399778487183,
+    "layer": "region",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "THE SPACEPORT",
+    "lat": 1780.1961496717795,
+    "lng": 3928.587013591681,
+    "layer": "region",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "EAST PLAINS",
+    "lat": 2635.6636817445087,
+    "lng": 5005.587094238788,
+    "layer": "region",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "LA CHIESA",
+    "lat": 3091.4773143713137,
+    "lng": 3839.4223070581643,
+    "layer": "region",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Departure Building",
+    "lat": 2163.474003251547,
+    "lng": 3405.5059205948933,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Launch Towers",
+    "lat": 2006.7528972485468,
+    "lng": 3877.122326296754,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Control Tower A6",
+    "lat": 2544.219700705516,
+    "lng": 4066.678547203903,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Container Storage",
+    "lat": 2689.7835200407926,
+    "lng": 4382.995525976657,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Vehicle Maintenance",
+    "lat": 2803.1791146848946,
+    "lng": 4031.0699547959393,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Rocket Assembly",
+    "lat": 2084.5594468439213,
+    "lng": 4524.830654040667,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Arrival Building",
+    "lat": 1646.7420707659558,
+    "lng": 3430.7873693243737,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "North Trench Tower",
+    "lat": 1373.7999402881117,
+    "lng": 4199.883907112115,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "South Trench Tower",
+    "lat": 1467.3828388298728,
+    "lng": 4119.13266922684,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Car Park",
+    "lat": 1527.2277631915083,
+    "lng": 3313.5421272177737,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Fuel Depot",
+    "lat": 1156.2182689729004,
+    "lng": 2988.507141139902,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Jiangsu Warehouse",
+    "lat": 1322.2567752438065,
+    "lng": 2771.4329959195497,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Water Towers",
+    "lat": 1790.3845418683497,
+    "lng": 2443.1194376797393,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "West Container Yard",
+    "lat": 1252.2656655004537,
+    "lng": 3844.195665844848,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Shipping Warehouse",
+    "lat": 1361.7118104741123,
+    "lng": 3694.3718957634464,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Fuel Processing",
+    "lat": 2439.909577588668,
+    "lng": 2806.5907011617087,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "West Hangar",
+    "lat": 1079.3870251580252,
+    "lng": 4185.925250260349,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "East Hangar",
+    "lat": 1311.9672720908495,
+    "lng": 4470.077805486443,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "The Trench",
+    "lat": 1564.047364340238,
+    "lng": 4241.946451928535,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Little Hangar",
+    "lat": 1649.7281418074797,
+    "lng": 4765.2182952854055,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Fuel Control",
+    "lat": 1895.8542278824382,
+    "lng": 4395.812450281873,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "East Container Yard",
+    "lat": 1974.303423992899,
+    "lng": 4728.466409012358,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "East Plains Warehouse",
+    "lat": 2119.247416728376,
+    "lng": 5057.940008442377,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Fuel Lines",
+    "lat": 2568.0692293161374,
+    "lng": 3377.965675427035,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Communications Tower",
+    "lat": 2847.4250902501453,
+    "lng": 5068.786069905346,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Service Buildings",
+    "lat": 3349.784327159003,
+    "lng": 5066.149160126077,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Security Checkpoint",
+    "lat": 3588.639004034255,
+    "lng": 4595.9761294778455,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Staff Parking",
+    "lat": 3425.759252462166,
+    "lng": 4272.091257147364,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Maintenance Hangar",
+    "lat": 3278.700408568867,
+    "lng": 3779.454428400878,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Electrical Substation",
+    "lat": 3742.0862546964704,
+    "lng": 4286.276958818325,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Fuel Storage",
+    "lat": 3297.400320859111,
+    "lng": 3187.64211087719,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   }
+  ],
+  "buried-city": [
+   {
+    "text": "OUTSKIRTS",
+    "lat": 3536.3189985846693,
+    "lng": 5985.540068993998,
+    "layer": "region",
+    "anchor": "center"
+   },
+   {
+    "text": "NEW DISTRICT",
+    "lat": 4243.867992517421,
+    "lng": 7466.844251644867,
+    "layer": "region",
+    "anchor": "center"
+   },
+   {
+    "text": "WEST VILLAGE",
+    "lat": 5237.9320022203865,
+    "lng": 6245.339937249749,
+    "layer": "region",
+    "anchor": "center"
+   },
+   {
+    "text": "OLD TOWN",
+    "lat": 5903.475083610266,
+    "lng": 7528.134017847351,
+    "layer": "region",
+    "anchor": "center"
+   },
+   {
+    "text": "Space Travel",
+    "lat": 4373.040688427197,
+    "lng": 7605.389962548436,
+    "layer": "lootZone",
+    "anchor": "center"
+   },
+   {
+    "text": "Research",
+    "lat": 4546.933088080552,
+    "lng": 7480.7310063871755,
+    "layer": "lootZone",
+    "anchor": "center"
+   },
+   {
+    "text": "Hospital",
+    "lat": 3674.315931502633,
+    "lng": 7222.225561021882,
+    "layer": "lootZone",
+    "anchor": "center"
+   },
+   {
+    "text": "Library",
+    "lat": 4016.276393287913,
+    "lng": 6733.803051594392,
+    "layer": "lootZone",
+    "anchor": "center"
+   },
+   {
+    "text": "Town Hall",
+    "lat": 5132.648703911842,
+    "lng": 7371.285790326211,
+    "layer": "lootZone",
+    "anchor": "center"
+   },
+   {
+    "text": "Plaza Rosa",
+    "lat": 6222.665175155006,
+    "lng": 7208.246824274074,
+    "layer": "lootZone",
+    "anchor": "center"
+   },
+   {
+    "text": "Grandioso Apartments",
+    "lat": 5747.29277107235,
+    "lng": 5963.214721666759,
+    "layer": "lootZone",
+    "anchor": "center"
+   },
+   {
+    "text": "Galleria",
+    "lat": 4083.787740314223,
+    "lng": 7851.044393256105,
+    "layer": "landmark",
+    "anchor": "center"
+   },
+   {
+    "text": "Market Ruins",
+    "lat": 3502.24297231467,
+    "lng": 7492.990320399705,
+    "layer": "landmark",
+    "anchor": "center"
+   },
+   {
+    "text": "Dune's End",
+    "lat": 3611.783279819635,
+    "lng": 7992.369066257262,
+    "layer": "landmark",
+    "anchor": "center"
+   },
+   {
+    "text": "Warehouse",
+    "lat": 4435.777400383816,
+    "lng": 5388.657156844936,
+    "layer": "landmark",
+    "anchor": "center"
+   },
+   {
+    "text": "Marano Station",
+    "lat": 4079.5143302214024,
+    "lng": 6066.142584896608,
+    "layer": "landmark",
+    "anchor": "center"
+   },
+   {
+    "text": "Piazza Roma",
+    "lat": 4775.292893218813,
+    "lng": 6443.4177848998415,
+    "layer": "landmark",
+    "anchor": "center"
+   },
+   {
+    "text": "Su Durante Warehouses",
+    "lat": 3076.87289829087,
+    "lng": 6387.562136550051,
+    "layer": "landmark",
+    "anchor": "center"
+   },
+   {
+    "text": "Gas Station",
+    "lat": 2873.7453529226445,
+    "lng": 7032.030297217877,
+    "layer": "landmark",
+    "anchor": "center"
+   },
+   {
+    "text": "Parking Garage",
+    "lat": 4121.903306434494,
+    "lng": 7368.367760879291,
+    "layer": "landmark",
+    "anchor": "center"
+   },
+   {
+    "text": "Marano Park",
+    "lat": 4614.5435574075245,
+    "lng": 7056.599528903971,
+    "layer": "landmark",
+    "anchor": "center"
+   },
+   {
+    "text": "Buried Properties",
+    "lat": 4855.3695631731825,
+    "lng": 8285.68197044854,
+    "layer": "landmark",
+    "anchor": "center"
+   },
+   {
+    "text": "Piazza Arbusto",
+    "lat": 5360.431428262338,
+    "lng": 8082.301672297865,
+    "layer": "landmark",
+    "anchor": "center"
+   },
+   {
+    "text": "Red Tower",
+    "lat": 6089.330199940445,
+    "lng": 7666.056448254508,
+    "layer": "landmark",
+    "anchor": "center"
+   },
+   {
+    "text": "Main Street",
+    "lat": 6001.657924735944,
+    "lng": 7000.997798766613,
+    "layer": "landmark",
+    "anchor": "center"
+   },
+   {
+    "text": "Santa Maria Houses",
+    "lat": 5759.444076198314,
+    "lng": 7137.457399274726,
+    "layer": "landmark",
+    "anchor": "center"
+   },
+   {
+    "text": "Corso da Vinci",
+    "lat": 5415.200025320439,
+    "lng": 7031.312402546611,
+    "layer": "landmark",
+    "anchor": "center"
+   },
+   {
+    "text": "Church Ruins",
+    "lat": 6513.290392449617,
+    "lng": 8517.963962759548,
+    "layer": "landmark",
+    "anchor": "center"
+   },
+   {
+    "text": "Abandoned Highway Camp",
+    "lat": 6079.635531405933,
+    "lng": 6103.38110143285,
+    "layer": "landmark",
+    "anchor": "center"
+   },
+   {
+    "text": "Maintenance Depot",
+    "lat": 5684.839101005633,
+    "lng": 5134.38731715545,
+    "layer": "landmark",
+    "anchor": "center"
+   }
+  ],
+  "blue-gate": [
+   {
+    "text": "GATE APPROACH",
+    "lat": 4857.3719142152195,
+    "lng": 6669.444814659152,
+    "layer": "region",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "THE FOREST",
+    "lat": 4257.388483792863,
+    "lng": 5095.312869205887,
+    "layer": "region",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "THE MOUNTAINS",
+    "lat": 3712.2453829337524,
+    "lng": 8689.742088805426,
+    "layer": "region",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "FARMLANDS",
+    "lat": 6117.276928738068,
+    "lng": 6830.636915972292,
+    "layer": "region",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Checkpoint",
+    "lat": 5144.411773330338,
+    "lng": 6966.975721861114,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Warehouse Complex",
+    "lat": 4649.815305704173,
+    "lng": 8280.043097883503,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Raider's Refuge",
+    "lat": 4020.4267551579564,
+    "lng": 5604.862202007283,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Village",
+    "lat": 3306.177857450296,
+    "lng": 6165.3799436543395,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Ancient Fort",
+    "lat": 7134.851234312637,
+    "lng": 7541.832452915954,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Pilgrim's Peak",
+    "lat": 3469.829861182594,
+    "lng": 9366.99138901257,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Security Wing",
+    "lat": 4113.304655183358,
+    "lng": 7355.404019808574,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Maintenance Wing",
+    "lat": 4731.299336372599,
+    "lng": 8360.370245675716,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Andorned Wreckage",
+    "lat": 4920.231634881162,
+    "lng": 5221.594269565306,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Reinforced Reception",
+    "lat": 3764.8155310485763,
+    "lng": 7334.0779591812,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Outer Gates",
+    "lat": 4611.967703831864,
+    "lng": 7428.565769533621,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Trapper's Glade",
+    "lat": 4487.573780801195,
+    "lng": 5523.732361857486,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Barren Clearing",
+    "lat": 3767.420882542966,
+    "lng": 4768.293992556547,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Highway Collapse",
+    "lat": 6183.7260287816,
+    "lng": 5767.02750232394,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Olive Grove",
+    "lat": 6350.673104213356,
+    "lng": 6642.2847453401055,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Ruined Homestead",
+    "lat": 6581.966007774761,
+    "lng": 7001.93089362123,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Broken Earth",
+    "lat": 6209.840397041942,
+    "lng": 7899.643124460289,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Maintenance Bunker",
+    "lat": 5901.551095173464,
+    "lng": 7669.215517381331,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Gate Control Room",
+    "lat": 4798.521041275229,
+    "lng": 7964.899452938231,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Abandoned Housing Project",
+    "lat": 4789.515759090838,
+    "lng": 9457.9300261457,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Headhouse",
+    "lat": 3930.604889049779,
+    "lng": 7946.940483352997,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Data Vault",
+    "lat": 3477.9351952168236,
+    "lng": 8290.939325329276,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Ridgeline",
+    "lat": 5392.018616501984,
+    "lng": 9148.307412360437,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Traffic Tunnel",
+    "lat": 3928.5791841081905,
+    "lng": 7925.979798829883,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   }
+  ],
+  "stella-montis": [
+   {
+    "text": "Loading Bay",
+    "lat": 2716.9101863200926,
+    "lng": 3358.3954094991636,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 3
+   },
+   {
+    "text": "Western Tunnel",
+    "lat": 1911.106763123773,
+    "lng": 3578.1318445132597,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Lobby Metro",
+    "lat": 1835.9861048643127,
+    "lng": 4514.575358794691,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Sandbox",
+    "lat": 2843.174129558024,
+    "lng": 4085.4389513517685,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Eastern Tunnel",
+    "lat": 3006.792772917976,
+    "lng": 5326.127887387211,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Seed Vault",
+    "lat": 4018.7421806091766,
+    "lng": 5162.294255369146,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Assembly Workshops",
+    "lat": 1503.339937931211,
+    "lng": 3055.8190023566567,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Assembly",
+    "lat": 1962.673208666628,
+    "lng": 2982.107666025327,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Lobby",
+    "lat": 2111.80926268902,
+    "lng": 4568.506245890029,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Communications",
+    "lat": 2825.9786096278413,
+    "lng": 4682.305309853306,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Cultural Archives",
+    "lat": 2992.5314338631892,
+    "lng": 5395.184344005395,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Atrium",
+    "lat": 3213.9787814353144,
+    "lng": 4520.356700251775,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Business Center",
+    "lat": 2387.19017357484,
+    "lng": 5226.967078618991,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Medical Research",
+    "lat": 2960.50632870036,
+    "lng": 2500.574205440942,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Robotic Sandbox B",
+    "lat": 3458.6971116431764,
+    "lng": 4058.4586210718276,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Robotic Sandbox A",
+    "lat": 2478.4253879298144,
+    "lng": 4065.9927637021674,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Control Room",
+    "lat": 3080.091344197656,
+    "lng": 4026.79386687603,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Logistics Admin",
+    "lat": 2631.152739778948,
+    "lng": 2938.481974550511,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Collapsed Tunnel",
+    "lat": 1736.8846444866267,
+    "lng": 3514.177489557748,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Viewing Deck",
+    "lat": 3112.8637626537593,
+    "lng": 2095.9966079365086,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Cargo Dock A",
+    "lat": 2772.6040781810902,
+    "lng": 3153.059853375977,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Cargo Dock B",
+    "lat": 2969.3727525307518,
+    "lng": 3563.162052736319,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Central Corridor",
+    "lat": 2142.9361007281386,
+    "lng": 3375.103696861601,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Assembly Line",
+    "lat": 1728.4739646874134,
+    "lng": 2619.5571554043895,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Security Bridge",
+    "lat": 1852.508864797215,
+    "lng": 4621.731357197052,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Cafeteria",
+    "lat": 3045.08520373704,
+    "lng": 4202.748398850569,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Auditorium",
+    "lat": 2543.057785814705,
+    "lng": 5105.262558225534,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Business Lounge",
+    "lat": 2617.3546159401926,
+    "lng": 5413.834895645343,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   },
+   {
+    "text": "Storage Room",
+    "lat": 2387.554991458084,
+    "lng": 6072.625086718495,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 2
+   }
+  ],
+  "riven-tides": [
+   {
+    "text": "HOTEL COMPLEX",
+    "lat": 6416.676551529689,
+    "lng": 4305.171352750506,
+    "layer": "region",
+    "anchor": "top-left"
+   },
+   {
+    "text": "SEABED",
+    "lat": 4217.372645742883,
+    "lng": 5541.779958217947,
+    "layer": "region",
+    "anchor": "top-left"
+   },
+   {
+    "text": "HARBOR",
+    "lat": 4976.9963015810445,
+    "lng": 8895.422722271527,
+    "layer": "region",
+    "anchor": "top-left"
+   },
+   {
+    "text": "MULATIERRA HILL",
+    "lat": 6288.0,
+    "lng": 6398.000000000001,
+    "layer": "region",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Hotel Panorama Azzurro",
+    "lat": 6211.836503716246,
+    "lng": 4844.479499010458,
+    "layer": "lootZone",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Port Authority Building",
+    "lat": 4350.866083863701,
+    "lng": 6562.273872626136,
+    "layer": "lootZone",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Stacking Yard",
+    "lat": 5331.0499716102995,
+    "lng": 8799.271660750992,
+    "layer": "lootZone",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Customs House",
+    "lat": 7204.863430799783,
+    "lng": 7233.94271929951,
+    "layer": "lootZone",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Seabed",
+    "lat": 4048.893429074171,
+    "lng": 5891.613700846314,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Wavebreaker",
+    "lat": 3764.0000000000005,
+    "lng": 8571.0,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Wreckage",
+    "lat": 4580.000000000001,
+    "lng": 7518.000000000001,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Azzurro Beach",
+    "lat": 4815.397179880388,
+    "lng": 4794.183976444792,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Wharf",
+    "lat": 5009.487396430979,
+    "lng": 5794.604875213153,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Beach Bar",
+    "lat": 5689.188961396169,
+    "lng": 4832.97640443376,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Poolside",
+    "lat": 5991.7920361409815,
+    "lng": 4146.738930192972,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Tennis Court",
+    "lat": 7337.092596035019,
+    "lng": 4601.389276694408,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Dried Riverbed",
+    "lat": 7375.12372777569,
+    "lng": 5952.424884028356,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Special Handling Tunnel",
+    "lat": 7042.783540618013,
+    "lng": 7701.8070606838755,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Marano Road",
+    "lat": 7670.5126640284825,
+    "lng": 9055.904893698367,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Transfer Depot",
+    "lat": 6314.73454901194,
+    "lng": 9436.595754157126,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Railyard",
+    "lat": 6342.265762009197,
+    "lng": 8270.642359779979,
+    "layer": "landmark",
+    "anchor": "top-left"
+   },
+   {
+    "text": "Weighing Checkpoint",
+    "lat": 6670.058672366268,
+    "lng": 8353.311844929476,
+    "layer": "landmark",
+    "anchor": "top-left"
+   }
+  ]
+ }
+}

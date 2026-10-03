@@ -61,8 +61,8 @@ green CI.
 - [x] MetaForge `game-map-data` provider (attributed, cached for a day,
       offline fallback). Tolerant of shape drift: one bad record is dropped,
       not the response.
-- [ ] Check the provider against a live response; confirm the category
-      names and the `y = -lat` orientation.
+- [x] Provider checked against a live response (2026-10-03): categories as
+      listed in data-sources.md, `y = lat`.
 - [x] **Map** tab in the companion app: map picker, marker search, category
       and subcategory toggles with icons and counts, show/hide all, and an
       icon plot with place names and hover tooltips
@@ -147,8 +147,15 @@ green CI.
         re-reads nothing), matched to the source's named markers
         (`arclens_data::anchors`), robust fit. No calibration tool needed
         if MetaForge's label markers carry the in-game names;
-  - [ ] verify against real MetaForge data: do its label markers carry the
-        in-game names (`instanceName`), and do positions line up?
+  - [x] label table: the game's place names from MetaForge's map page
+        (one-off extraction, maintainer's decision), with per-layer anchor
+        (text centre or top-left). Fit in frame pixels; labels agree within
+        0–3 px on Dam and Buried City, game icons land within ~12 px
+        (2560×1440);
+  - [x] map-screen check hardened (both ends of the MAP tab outline, dark
+        panel behind the title): the raid compass plus bright foliage
+        fooled it (field report). Quest panel detected; markers are
+        clipped right of it;
 - [x] Debounce repeated `Hover` events for the same item (≤ 8 px jitter).
 - [x] Session cache of name + value crops → reading, so re-hovers skip OCR.
       (A cross-session cache is possible but fingerprints are fragile; not

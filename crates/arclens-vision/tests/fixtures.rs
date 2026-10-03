@@ -116,7 +116,8 @@ fn finds_every_name_line_and_nothing_else() {
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
 
-/// The map screen is told apart from inventory, raid and trader screens.
+/// The map screen is told apart from inventory, raid and trader screens,
+/// and the quest panel is seen when open (it is on every map fixture).
 #[test]
 fn recognises_the_map_screen() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
@@ -130,6 +131,13 @@ fn recognises_the_map_screen() {
                 "{}",
                 path.display()
             );
+            if expected {
+                assert!(
+                    arclens_vision::quest_panel_open(&frame),
+                    "{}",
+                    path.display()
+                );
+            }
         }
     }
 }

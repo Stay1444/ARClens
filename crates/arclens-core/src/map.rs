@@ -3,8 +3,8 @@
 //! Two coordinate spaces exist:
 //!
 //! * **Map space** ([`MapPoint`]): the marker source's own units, with y
-//!   pointing down. For MetaForge these are pixels of its Leaflet map image
-//!   (`x = lng`, `y = -lat`). Markers of one map share one space.
+//!   pointing down. For MetaForge these are its map's units (`x = lng`,
+//!   `y = lat`). Markers of one map share one space.
 //! * **Screen space**: pixels on the player's monitor. Only the overlay
 //!   renderer deals with this, via a [`Transform`] fitted to the in-game
 //!   map view.

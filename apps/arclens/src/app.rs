@@ -67,10 +67,10 @@ pub struct App {
     /// the plot's cached marker layer. Rebuilt on change, not per frame.
     map_summary: crate::views::map::MapSummary,
     map_plot: iced::widget::canvas::Cache,
+    /// The open in-game map's view, as last read from the screen.
+    game_view: GameMapView,
     /// The in-game map last recognised; kept across map close and reopen.
     last_map: Option<&'static str>,
-    /// Labels last read on the open in-game map.
-    map_labels: Vec<arclens_data::anchors::ScreenLabel>,
     /// Set while the in-game map is open.
     map_screen: Option<MapScreen>,
     /// Item currently detected under the cursor in game, and where.
@@ -97,6 +97,17 @@ struct Settings {
     /// Server region for the event schedule (`None`: not chosen yet).
     #[serde(default)]
     region: Option<String>,
+}
+
+/// The open in-game map's view, as last read from the screen.
+#[derive(Debug, Clone, Default)]
+struct GameMapView {
+    /// Place names read on screen.
+    labels: Vec<arclens_data::anchors::ScreenLabel>,
+    /// Size (pixels) of the frame they were read from.
+    frame: (f32, f32),
+    /// The quest panel covers the map's left.
+    quest_panel_open: bool,
 }
 
 /// When to capture the screen for item and map detection.
@@ -207,7 +218,7 @@ impl App {
             marker_query: String::new(),
             expanded_categories: std::collections::BTreeSet::new(),
             map_screen: None,
-            map_labels: Vec::new(),
+            game_view: GameMapView::default(),
             last_map: None,
             map_summary: crate::views::map::MapSummary::default(),
             map_plot: iced::widget::canvas::Cache::new(),
@@ -406,6 +417,15 @@ impl App {
             overlay_link::Event::Failed(error) => {
                 self.status.push(format!("Overlay link failed: {error}"));
             }
+            overlay_link::Event::Incompatible(error) => {
+                let note = format!(
+                    "Overlay is out of date ({error}): rebuild it with \
+                     `cargo build --release -p arclens-overlay`"
+                );
+                if !self.status.contains(&note) {
+                    self.status.push(note);
+                }
+            }
         }
         Task::none()
     }
@@ -491,12 +511,16 @@ impl App {
             vision::Event::MapClosed => {
                 tracing::info!("map closed");
                 self.map_screen = None;
-                self.map_labels.clear();
+                self.game_view = GameMapView::default();
                 self.send(ToOverlay::HideMapPanel);
                 self.send(ToOverlay::ClearMarkers);
             }
-            vision::Event::MapLabels(labels) => {
-                self.map_labels = labels;
+            vision::Event::MapLabels(labels, frame, quests_open) => {
+                self.game_view = GameMapView {
+                    labels,
+                    frame,
+                    quest_panel_open: quests_open,
+                };
                 self.push_map_markers();
             }
             vision::Event::Unavailable(reason) => {
@@ -603,7 +627,7 @@ impl App {
         if was_capturing && !self.capturing() {
             self.hover = None;
             self.map_screen = None;
-            self.map_labels.clear();
+            self.game_view = GameMapView::default();
             self.send(ToOverlay::ClearHover);
             self.send(ToOverlay::HideMapPanel);
             self.send(ToOverlay::ClearMarkers);
@@ -718,16 +742,27 @@ impl App {
         let Some(Load::Ready(markers)) = self.markers.get(map) else {
             return;
         };
-        let Some((transform, agree)) =
-            arclens_data::anchors::locate_view(&self.map_labels, markers)
-        else {
+        let Some((transform, agree)) = arclens_data::anchors::locate_view(
+            &self.game_view.labels,
+            self.game_view.frame,
+            &arclens_data::labels::labels_for(map),
+        ) else {
             self.send(ToOverlay::ClearMarkers);
             return;
         };
-        tracing::debug!(labels = self.map_labels.len(), agree, "map view located");
+        tracing::debug!(
+            labels = self.game_view.labels.len(),
+            agree,
+            "map view located"
+        );
         let in_view = |p: arclens_core::MapPoint| {
             let (x, y) = transform.apply((p.x, p.y));
-            (MAP_VIEWPORT[0]..=MAP_VIEWPORT[2]).contains(&x)
+            let left = if self.game_view.quest_panel_open {
+                MAP_VIEWPORT_LEFT_WITH_QUESTS
+            } else {
+                MAP_VIEWPORT[0]
+            };
+            (left..=MAP_VIEWPORT[2]).contains(&x)
                 && (MAP_VIEWPORT[1]..=MAP_VIEWPORT[3]).contains(&y)
         };
         let enabled = markers.iter().enumerate().filter(|(_, m)| {
@@ -1315,6 +1350,8 @@ fn tab_button(label: &str, active: bool, on_press: Message) -> Element<'_, Messa
 /// The in-game map viewport, `[left, top, right, bottom]` as screen
 /// fractions: markers outside it would sit on the game's side panels.
 const MAP_VIEWPORT: [f32; 4] = [0.02, 0.075, 0.77, 0.90];
+/// The viewport's left edge while the quest panel is open.
+const MAP_VIEWPORT_LEFT_WITH_QUESTS: f32 = 0.275;
 
 /// The marker filter as the overlay's map panel lists it.
 fn panel_categories(

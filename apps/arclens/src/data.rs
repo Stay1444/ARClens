@@ -146,7 +146,16 @@ const MAP_DATA_MAX_AGE: Duration = Duration::from_secs(24 * 3600);
 /// else fetched; a stale cache is the offline fallback.
 pub async fn load_markers(paths: Paths, map: String) -> Result<Vec<arclens_core::Marker>, String> {
     use arclens_data::metaforge;
-    let parse = |bytes: &[u8]| metaforge::parse_map_markers(bytes, &map).map_err(|e| e.to_string());
+    // The game's place names come along: they locate the in-game view and
+    // name places on the app's map.
+    let parse = |bytes: &[u8]| {
+        metaforge::parse_map_markers(bytes, &map)
+            .map(|mut markers| {
+                markers.extend(arclens_data::labels::map_labels(&map));
+                markers
+            })
+            .map_err(|e| e.to_string())
+    };
     if let Some(dir) = std::env::var_os(MAP_DATA_DIR_ENV) {
         let file = std::path::Path::new(&dir).join(format!("{map}.json"));
         let bytes = tokio::fs::read(&file)

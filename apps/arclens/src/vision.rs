@@ -72,9 +72,10 @@ pub enum Event {
     MapOpen(MapHeader),
     /// The map screen closed.
     MapClosed,
-    /// Place names read on the open map: text and centre, normalised to
-    /// the frame. Sent when the view changed.
-    MapLabels(Vec<arclens_data::anchors::ScreenLabel>),
+    /// Place names read on the open map (boxes in frame pixels), the frame
+    /// size, and whether the quest panel covers the map's left. Sent when
+    /// the view changed.
+    MapLabels(Vec<arclens_data::anchors::ScreenLabel>, (f32, f32), bool),
     /// Vision isn't running; why.
     Unavailable(String),
 }
@@ -283,19 +284,25 @@ fn watch_labels(
         }
     };
     #[allow(clippy::cast_precision_loss, reason = "pixel coordinates")]
-    let (w, h) = (frame.width() as f32, frame.height() as f32);
+    let size = (frame.width() as f32, frame.height() as f32);
     #[allow(clippy::cast_precision_loss, reason = "pixel coordinates")]
     let labels = labels
         .into_iter()
         .map(|l| arclens_data::anchors::ScreenLabel {
             text: l.text,
-            center: (
-                (l.rect.x as f32 + l.rect.width as f32 / 2.0) / w,
-                (l.rect.y as f32 + l.rect.height as f32 / 2.0) / h,
+            rect: (
+                l.rect.x as f32,
+                l.rect.y as f32,
+                l.rect.width as f32,
+                l.rect.height as f32,
             ),
         })
         .collect();
-    send(Event::MapLabels(labels))
+    send(Event::MapLabels(
+        labels,
+        size,
+        arclens_vision::quest_panel_open(frame),
+    ))
 }
 
 /// Coarse fingerprint of the map viewport: changes when the view pans or

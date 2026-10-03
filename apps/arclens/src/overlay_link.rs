@@ -28,6 +28,9 @@ pub enum Event {
     Message(ToApp),
     Disconnected,
     Failed(String),
+    /// An overlay of another protocol version connected (usually a stale
+    /// build of `arclens-overlay`).
+    Incompatible(String),
 }
 
 pub fn subscription() -> Subscription<Event> {
@@ -77,6 +80,7 @@ async fn serve(output: &mut mpsc::Sender<Event>) -> Result<(), arclens_ipc::Erro
                     Ok(Some(ToApp::Hello(hello))) => {
                         if let Err(error) = arclens_ipc::check_version(&hello) {
                             tracing::warn!(%error, "dropping incompatible overlay");
+                            let _ = output.send(Event::Incompatible(error.to_string())).await;
                             break;
                         }
                     }

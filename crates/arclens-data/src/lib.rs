@@ -10,6 +10,7 @@ pub mod download;
 mod error;
 mod icons;
 pub mod images;
+pub mod labels;
 pub mod metaforge;
 mod name_match;
 pub mod raidtheory;

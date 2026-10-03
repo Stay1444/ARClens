@@ -33,7 +33,7 @@ pub use analyzer::{Analyzer, Hover, MapLabel};
 pub use footer::{FooterInfo, footer, footer_cells, parse_value, value_cells};
 pub use geometry::Rect;
 pub use hovered_side::{Side, hovered_side, item_side};
-pub use map_header::{MapHeader, is_map_screen, read_map_header};
+pub use map_header::{MapHeader, is_map_screen, quest_panel_open, read_map_header};
 pub use map_labels::{LabelParams, find_map_labels};
 pub use panel::{PanelParams, find_panels};
 pub use read::{NameReader, RECOGNITION_MODEL_URL};

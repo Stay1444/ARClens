@@ -22,7 +22,8 @@ markers and event timers. Primary target: **KDE Plasma 6 on Wayland
    `docs/research/data-sources.md`, with their caching and terms.
    Attribution goes in the README's "Data and attribution" section, not in
    the app or overlay UI (maintainer's call). No scraping of sites without
-   an API. No Embark private API.
+   an API, except the one-off map-label extraction the maintainer approved
+   (see data-sources.md). No Embark private API.
 3. **No `unsafe`** without a justified, isolated exception (see
    `docs/guidelines/code-quality.md`).
 4. Keep `arclens-core` pure: no I/O, async or UI dependencies.

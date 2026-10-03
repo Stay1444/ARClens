@@ -96,9 +96,19 @@ _Last researched: 2026-10-03. Re-verify before relying on anything marked
     front-end JavaScript chunk as `{lat, lng, text}` (118 entries across
     maps, e.g. "Pattern House", "Pipeline Tower", region names in
     capitals), in the same coordinate space as the markers. They are not in
-    any API. Using them would mean extracting data from MetaForge's site
-    bundle, i.e. scraping: **not done** without MetaForge's permission
-    (their terms ask to be contacted for anything beyond the public API).
+    any API.
+  - **Maintainer's decision (2026-10-03):** use them. They are the game's
+    own place names and positions ("they pulled it from the game, it's not
+    theirs"). They are extracted **once, offline**, from a HAR of the map
+    page with `scripts/extract-map-labels.py` into
+    `crates/arclens-data/data/map-labels.json` (178 labels, 6 maps); the app
+    never fetches MetaForge's bundle.
+  - Anchor point (**verified** against the game): on layers with
+    `center:!0` (Spaceport, Buried City, Blue Gate, Stella Montis) a label's
+    position is the text centre; otherwise (Dam, Riven Tides) its top-left
+    corner. With the right anchor, OCR'd labels fit within 0–3 px (Dam: 8
+    labels at mid zoom; Buried City: 10), and the game's own hatch and
+    elevator icons land within ~12 px of MetaForge's markers (2560×1440).
 - `game-map-data?tableID=arc_map_data&mapID=dam` returns:
 
   ```json
@@ -110,11 +120,9 @@ _Last researched: 2026-10-03. Re-verify before relying on anything marked
     `Transform` into ARClens map space (`arclens_core::Transform`).
   - `eventConditionMask` appears to filter markers by map condition
     (**unverified**).
-  - ARClens imports them as `x = lng`, `y = -lat` (Leaflet `CRS.Simple`
-    latitude grows upwards). **Unverified** until checked against a live
-    response and the map image. Category names (`arc`, `containers`,
-    `labels`, …) are also unverified; the app shows whatever the response
-    contains (2026-10-03).
+  - ARClens imports them as `x = lng`, `y = lat`: `lat` grows *down* the
+    map (**verified** 2026-10-03 on Dam: Victory Ridge, lat 1461, is at the
+    top of the in-game map; Formicai Hills, lat 3915, at the bottom).
 
 ## ardb.app
 
