@@ -106,7 +106,7 @@ mod tests {
     #[test]
     fn empty_query_returns_nothing() {
         let items = vec![named("Battery")];
-        assert!(ItemSearch::default().search(&items, "  ", 5).is_empty());
+        assert_eq!(ItemSearch::default().search(&items, "  ", 5).len(), 0);
     }
 
     #[test]

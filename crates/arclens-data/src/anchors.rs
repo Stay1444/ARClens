@@ -209,6 +209,6 @@ mod tests {
         let mut known = places();
         known.push(place("The Breach", 50.0, 50.0));
         let labels = vec![label("The Breach", (400.0, 400.0))];
-        assert!(match_labels(&labels, &known).is_empty());
+        assert_eq!(match_labels(&labels, &known).len(), 0);
     }
 }

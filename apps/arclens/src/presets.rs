@@ -206,7 +206,7 @@ mod tests {
         let saved = presets.active().unwrap().clone();
         assert_eq!(saved.id, "my-quest-run");
         assert_eq!(saved.conditions, ["Hurricane"]);
-        assert!(saved.maps.is_empty());
+        assert_eq!(saved.maps.len(), 0);
         assert_eq!(saved.show, ["quests"]);
         assert!(
             presets
@@ -228,7 +228,7 @@ mod tests {
         filter.toggle_category("arc");
         presets.update_active(&filter, &kinds);
         assert!(presets.is_customised("everything"));
-        assert!(presets.active().unwrap().show.is_empty());
+        assert_eq!(presets.active().unwrap().show.len(), 0);
         presets.remove("everything");
         assert_eq!(presets.active().unwrap().show, ["*"]);
         assert!(Presets::is_builtin("everything"));

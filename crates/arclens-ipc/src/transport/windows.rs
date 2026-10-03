@@ -47,8 +47,12 @@ impl Address {
         }
     }
 
-    #[allow(clippy::unused_async, reason = "same signature as the Unix backend")]
-    pub async fn bind(&self) -> std::io::Result<Listener> {
+    /// Same shape as the Unix backend's `bind`; nothing here waits.
+    pub fn bind(&self) -> std::future::Ready<std::io::Result<Listener>> {
+        std::future::ready(self.bind_now())
+    }
+
+    fn bind_now(&self) -> std::io::Result<Listener> {
         // A live instance answers (or is busy with its overlay). Pipes
         // vanish with their owner, so nothing is left behind to clean up.
         let in_use = || {

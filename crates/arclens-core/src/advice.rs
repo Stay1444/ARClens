@@ -306,7 +306,7 @@ mod tests {
         progress.stations.insert("weapon_bench".into(), 2);
         let advice = advise_in(&gear, Situation::default(), Some(&progress), |_| None);
         assert_eq!(advice.verdict, Verdict::Sell);
-        assert!(advice.needs.is_empty());
+        assert_eq!(advice.needs.len(), 0);
     }
 
     #[test]

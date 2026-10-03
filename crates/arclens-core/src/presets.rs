@@ -283,7 +283,7 @@ mod tests {
             book.pick(&all[..1], "dam", Some("Hurricane")).unwrap().id,
             "everything"
         );
-        assert!(book.choices.is_empty());
+        assert_eq!(book.choices.len(), 0);
     }
 
     #[test]

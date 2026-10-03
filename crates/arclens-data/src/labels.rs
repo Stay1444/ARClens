@@ -97,7 +97,7 @@ mod tests {
         for (map, _) in crate::metaforge::MAPS {
             assert!(map_labels(map).len() >= 15, "{map}");
         }
-        assert!(map_labels("nowhere").is_empty());
+        assert_eq!(map_labels("nowhere").len(), 0);
     }
 
     #[test]

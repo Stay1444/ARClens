@@ -200,7 +200,7 @@ mod tests {
             })
             .collect();
         let layout = layout(&markers, 0..markers.len());
-        assert!(layout.areas.is_empty());
+        assert_eq!(layout.areas.len(), 0);
         assert_eq!(layout.singles.len(), 20);
     }
 
