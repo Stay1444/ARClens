@@ -68,11 +68,24 @@ pub fn name_lines(frame: &RgbImage, panel: Rect) -> Vec<Rect> {
         let Some((left, right)) = ink_extent((y0, y1)) else {
             return false;
         };
+        // Pixels touching ink are a blend of ink and background, neither
+        // cream nor chip colour; they are a larger share of the band at
+        // lower resolutions (thinner strokes), so they are skipped.
+        let near_ink = |x: u32, y: u32| {
+            let ink = |x: u32, y: u32| {
+                x < frame.width() && y < frame.height() && is_ink(frame.get_pixel(x, y).0)
+            };
+            ink(x, y)
+                || ink(x + 1, y)
+                || ink(x, y + 1)
+                || (x > 0 && ink(x - 1, y))
+                || (y > 0 && ink(x, y - 1))
+        };
         let (mut cream, mut other) = (0u32, 0u32);
         for y in y0..y1 {
             for x in left..right {
                 let p = frame.get_pixel(x, y).0;
-                if is_ink(p) {
+                if near_ink(x, y) {
                     continue;
                 }
                 if is_cream(p) {

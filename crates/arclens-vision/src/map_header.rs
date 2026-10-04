@@ -120,6 +120,14 @@ pub fn read_map_header(reader: &NameReader, frame: &RgbImage) -> anyhow::Result<
     Ok(Some(MapHeader { title, condition }))
 }
 
+/// Least bright pixels that make a line of text rather than a stray
+/// highlight: 40 at 1440p, scaled with the frame's area (glyph area goes
+/// with the square of the UI scale).
+pub(crate) fn min_text_pixels(frame: &RgbImage) -> u32 {
+    let scale = frame.height() as f32 / 1440.0;
+    ((40.0 * scale * scale).round() as u32).max(4)
+}
+
 /// Tight box around bright (white-ish) text inside the fractional `region`.
 pub(crate) fn bright_text(frame: &RgbImage, fraction: [f32; 4]) -> Option<Rect> {
     let region = region(frame, fraction);
@@ -138,6 +146,6 @@ pub(crate) fn bright_text(frame: &RgbImage, fraction: [f32; 4]) -> Option<Rect> 
         }
     }
     // Text, not a stray highlight: enough pixels, and wider than tall.
-    (count >= 40 && right > left + 2 * (bottom - top))
+    (count >= min_text_pixels(frame) && right > left + 2 * (bottom - top))
         .then(|| Rect::new(left, top, right - left + 1, bottom - top + 1))
 }

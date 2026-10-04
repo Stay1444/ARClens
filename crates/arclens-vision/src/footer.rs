@@ -8,7 +8,6 @@
 //! whether the player is in a raid.
 
 use crate::Rect;
-use crate::text::is_ink;
 use image::RgbImage;
 
 /// Footer bar colour, measured (203,191,174); same family as the header tab.
@@ -44,15 +43,24 @@ pub fn footer(frame: &RgbImage, panel: Rect) -> Option<Rect> {
     (height * 1000 >= frame.height() * 25).then(|| Rect::new(panel.x, start, panel.width, height))
 }
 
+/// Footer text: dark on the beige bar (≈ 200). Looser than the name's
+/// near-black, so thin strokes still count in small frames (1280×720),
+/// where they blur towards the bar colour.
+fn is_ink([r, g, b]: [u8; 3]) -> bool {
+    r.max(g).max(b) <= 120
+}
+
 /// Groups of ink inside the footer, left to right: one per cell.
 pub fn footer_cells(frame: &RgbImage, footer: Rect) -> Vec<Rect> {
     // Stay clear of the panel's edges and the cell divider's anti-aliasing.
     let inset = footer.width / 25;
+    // 2 px of a 1440p footer (≈ 63 px tall).
+    let inset_y = (footer.height / 30).max(1);
     let footer = Rect::new(
         footer.x + inset,
-        footer.y + 2,
+        footer.y + inset_y,
         footer.width.saturating_sub(2 * inset),
-        footer.height.saturating_sub(4),
+        footer.height.saturating_sub(2 * inset_y),
     );
     let column_ink = |x: u32| (footer.y..footer.bottom()).any(|y| is_ink(frame.get_pixel(x, y).0));
     // Cells are far apart (half the panel); glyphs and the icon are close.
@@ -119,6 +127,8 @@ pub fn value_cells(frame: &RgbImage, footer: Rect) -> Vec<Rect> {
     let tallest = cells.iter().map(|c| c.height).max().unwrap_or(0);
     cells
         .into_iter()
-        .filter(|c| c.height * 100 >= tallest * 85)
+        // A pixel of slack: in small frames (720p) a cell is ~12 px tall
+        // and blur moves its edges by one.
+        .filter(|c| (c.height + 1) * 100 >= tallest * 85)
         .collect()
 }

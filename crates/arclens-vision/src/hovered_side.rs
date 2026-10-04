@@ -3,6 +3,7 @@
 //! so our card should go on the *other* side.
 
 use crate::Rect;
+use crate::panel::is_cream;
 use image::RgbImage;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,8 +49,26 @@ pub fn hovered_side(frame: &RgbImage, panel: Rect) -> Option<Side> {
         }
         n
     };
-    let left = count(panel.x.saturating_sub(strip), panel.x.saturating_sub(2));
-    let right = count(panel.right() + 2, panel.right() + strip);
+    // `find_panels` snaps the panel to its sampling grid, so a few columns
+    // of the panel's own cream (which is bright enough to count) may lie
+    // outside `panel`: the strips start where the cream ends.
+    let cream_column = |x: u32| {
+        let rows = panel.y..panel.bottom().min(frame.height());
+        let total = rows.len();
+        let cream = rows.filter(|&y| is_cream(frame.get_pixel(x, y).0)).count();
+        cream * 2 > total
+    };
+    let edge_left = (0..panel.x)
+        .rev()
+        .take(strip as usize)
+        .find(|&x| !cream_column(x))
+        .map_or(0, |x| x + 1);
+    let edge_right = (panel.right()..frame.width())
+        .take(strip as usize)
+        .find(|&x| !cream_column(x))
+        .unwrap_or(panel.right());
+    let left = count(edge_left.saturating_sub(strip), edge_left.saturating_sub(2));
+    let right = count(edge_right + 2, edge_right + strip);
     // A slot outline is two tall bright lines: at least ~a slot's height.
     let min = panel.height / 8;
     match (left, right) {

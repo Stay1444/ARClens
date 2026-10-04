@@ -12,7 +12,10 @@ use image::RgbImage;
 /// (see `tests/fixtures/`).
 #[derive(Debug, Clone, Copy)]
 pub struct PanelParams {
-    /// Sample every `step`-th pixel in both axes.
+    /// Sample every `step`-th pixel in both axes of a 1440-px-tall frame;
+    /// scaled with the frame height (at least 1), so the grid keeps the
+    /// same share of the UI at every resolution and the gap between a
+    /// tooltip and the hovered slot's outline stays at least one cell.
     pub step: u32,
     /// Minimum panel size as a fraction of the frame's width / height.
     pub min_width_frac: f32,
@@ -46,7 +49,7 @@ pub(crate) fn is_cream([r, g, b]: [u8; 3]) -> bool {
 
 /// All cream panels in `frame`, largest first.
 pub fn find_panels(frame: &RgbImage, params: &PanelParams) -> Vec<Rect> {
-    let step = params.step.max(1);
+    let step = ((params.step as f32 * frame.height() as f32 / 1440.0).round() as u32).max(1);
     let (gw, gh) = (frame.width() / step, frame.height() / step);
     if gw == 0 || gh == 0 {
         return Vec::new();
@@ -110,17 +113,24 @@ pub fn find_panels(frame: &RgbImage, params: &PanelParams) -> Vec<Rect> {
             gw,
             label,
         };
-        let parts = split_by_left_edge(&member, component);
-        let was_split = parts.len() > 1;
-        for part in parts {
-            let Some(mut body) = trim_to_body(&member, part) else {
-                continue;
-            };
-            // After a split the right edge is shared with the other panel
-            // (cream meets cream), so it is unknowable from colour alone; use
-            // the tooltip's fixed width instead.
+        // Parts tall enough to be panels: specks of cream joined to a panel
+        // (the project pages' header) also start a part, but don't make
+        // it share its right edge with anything.
+        let bodies: Vec<Rect> = split_by_left_edge(&member, component)
+            .into_iter()
+            .filter_map(|part| trim_to_body(&member, part))
+            .filter(|body| body.height >= min_h)
+            .collect();
+        let was_split = bodies.len() > 1;
+        for mut body in bodies {
+            // After a split, a part wider than any one panel is a tooltip
+            // merged with the panel beside it: its right edge is the other
+            // panel's (cream meets cream), unknowable from colour alone, so
+            // use the tooltip's fixed width instead. A narrower part is one
+            // panel (the purchase panel above a tooltip overlapping it).
             let tooltip_w = (TOOLTIP_WIDTH_PER_HEIGHT * gh as f32).round() as u32;
-            if was_split && body.width > tooltip_w {
+            let widest = (MAX_PANEL_WIDTH_PER_HEIGHT * gh as f32).round() as u32;
+            if was_split && body.width > widest {
                 body.width = tooltip_w;
             }
             let fill = cream_fraction(&member, body);
@@ -142,6 +152,10 @@ pub fn find_panels(frame: &RgbImage, params: &PanelParams) -> Vec<Rect> {
 /// Tooltip width ÷ frame height. Every tooltip measured 504–516 px wide at
 /// 1440p (≈ 0.353 H, independent of content).
 const TOOLTIP_WIDTH_PER_HEIGHT: f32 = 0.353;
+/// Widest single panel ÷ frame height: the trader's purchase panel, 0.427 H
+/// (x 0.73–0.97 W at 16:9). A tooltip merged with it is wider still: it
+/// sticks out left of it by at least a split's jump.
+const MAX_PANEL_WIDTH_PER_HEIGHT: f32 = 0.45;
 
 /// Membership test for one labelled component on the grid.
 struct Member<'a> {
@@ -172,16 +186,17 @@ fn cream_fraction(m: &Member<'_>, r: Rect) -> f32 {
 /// component; it shows up as a run of rows whose left edge is far from the
 /// rest. Returns row ranges, each with its own left edge.
 fn split_by_left_edge(m: &Member<'_>, c: Rect) -> Vec<Rect> {
-    /// A jump of more than this many grid cells (≈ 2.5 % of a 2560 px frame
-    /// at step 4) starts a new part.
-    const JUMP: u32 = 16;
+    /// A left-edge jump of more than this share of the grid width starts a
+    /// new part (16 cells of a 2560 px frame at step 4).
+    const JUMP: f32 = 0.025;
+    let jump = ((JUMP * m.gw as f32).round() as u32).max(1);
     let mut parts: Vec<(u32, u32, u32)> = Vec::new(); // (y0, y1, left)
     for y in c.y..c.bottom() {
         let Some(left) = (c.x..c.right()).find(|&x| m.at(x, y)) else {
             continue;
         };
         match parts.last_mut() {
-            Some((_, y1, l)) if left.abs_diff(*l) <= JUMP && y <= *y1 + 1 => {
+            Some((_, y1, l)) if left.abs_diff(*l) <= jump && y <= *y1 + 1 => {
                 *y1 = y + 1;
                 *l = (*l).min(left);
             }

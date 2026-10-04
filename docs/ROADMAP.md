@@ -221,9 +221,16 @@ green CI.
       map at three zooms plus three recorded pans (Dam, Buried City, Blue
       Gate), workshop, quests, logbook, projects and inventory (33 frames
       in `crates/arclens-vision/tests/fixtures/`, 2026-10-03/04).
-- [ ] Fixtures at 1080p and other aspect ratios, and of an unbuilt
-      (level 0) workshop tile: every screen region so far is measured at
-      2560×1440 only.
+- [x] Detectors hold at lower resolutions (2026-10-04,
+      `crates/arclens-vision/tests/resolutions.rs`): every 1440p fixture
+      downscaled to 1080p gives the same screens, panels, name lines,
+      sides, footers and boxes; at 720p too, except map labels (~9 px
+      text) and the overview's station-header box. Grid step and pixel
+      thresholds now scale with the frame. OCR at 1080p: 15 of 18
+      tooltip names the same, every footer value the same.
+- [ ] Real captures at 1080p and other aspect ratios (16:10, 21:9), and
+      of an unbuilt (level 0) workshop tile: downscaling stands in for
+      the first, not the others.
 - [x] `arclens-vision` offline detectors with precision/recall tests:
   - [x] screen classifier (2026-10-04, `arclens_vision::classify`):
         main menu, map, inventory (stash and in-raid backpack), workshop,

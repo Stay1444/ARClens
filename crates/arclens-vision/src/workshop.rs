@@ -5,7 +5,7 @@
 //! Region measured on screenshots of Gunsmith (2560×1440), Explosives
 //! Station and Utility Station (2000×1125), 2026-10-03 field reports.
 
-use crate::map_header::region;
+use crate::map_header::{min_text_pixels, region};
 use crate::{NameReader, Rect};
 use image::RgbImage;
 
@@ -100,7 +100,7 @@ pub fn station_header_box(frame: &RgbImage) -> Option<Rect> {
         }
     }
     // Text, not a stray highlight: enough pixels, and wider than tall.
-    (count >= 40 && end > start + 2 * (low - top))
+    (count >= min_text_pixels(frame) && end > start + 2 * (low - top))
         .then(|| Rect::new(start, top, end - start + 1, low - top + 1))
 }
 

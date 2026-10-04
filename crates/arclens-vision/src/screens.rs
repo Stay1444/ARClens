@@ -112,8 +112,14 @@ const TRADE_PANEL: [f32; 4] = [0.80, 0.2, 0.15, 0.25];
 const MIN_CREAM: f32 = 0.8;
 
 /// Whether `frame` shows the main menu. Cheap; run it every frame.
+///
+/// A trader's TRADES tab also has a yellow button there (BUY) and its back
+/// button's chevron sits where the PLAY tab's left end is, bright enough
+/// to pass for an outline in a downscaled frame (1280×720), so the
+/// trader's cream purchase panel rules the main menu out.
 pub fn is_main_menu(frame: &RgbImage) -> bool {
     yellow_share(frame, PLAY_BUTTON) >= MIN_YELLOW
+        && cream_share(frame, TRADE_PANEL) < MIN_CREAM
         && bright_share(frame, PLAY_TAB_LEFT) >= MIN_OUTLINE
         && bright_share(frame, PLAY_TAB_RIGHT) >= MIN_OUTLINE
 }
