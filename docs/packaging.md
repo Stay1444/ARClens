@@ -22,7 +22,9 @@ the app starts the overlay from its own directory.
    release, the notes above the generated list of changes.
 
 A manual run (Actions → Release → Run workflow) builds all three and keeps
-them as workflow artifacts, without a release.
+them as workflow artifacts, without a release. Give it a `tag` (`v0.2.0`)
+and it publishes the release too, creating the tag on the commit it built
+(for when pushing tags isn't possible).
 
 ## Building locally
 
