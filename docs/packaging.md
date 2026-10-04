@@ -40,8 +40,12 @@ flatpak run io.github.Stay1444.ARClens
   network for game data. Screen capture and global shortcuts use portals,
   which need no extra permissions.
 - Cargo downloads crates during the build (network allowed for that
-  module). Fine for our bundles; **Flathub** would need vendored sources
-  (`flatpak-cargo-generator`) and a review of the permissions.
+  module). Fine for our bundles. **Flathub** builds offline:
+  `packaging/flathub/io.github.Stay1444.ARClens.yml` takes every crate from
+  `packaging/flathub/cargo-sources.json` (generated from `Cargo.lock` by
+  `packaging/flathub/update-sources.sh`, which needs `uv`; the Flathub CI
+  workflow fails when it is stale and can build the manifest on demand).
+  Submitting still needs a licence and a review of the permissions.
 - Config, cache and state live in `~/.var/app/io.github.Stay1444.ARClens/`
   instead of `~/.config/arclens` etc.
 

@@ -1,0 +1,36 @@
+name: Flathub
+
+# The Flathub manifest builds offline from packaging/flathub/cargo-sources.json.
+# `sources` checks that file still matches Cargo.lock; `build` (manual only,
+# it takes a while) builds the manifest with no network, as Flathub would.
+on:
+  push:
+    paths: [ "Cargo.lock", "packaging/flathub/**" ]
+  workflow_dispatch:
+
+jobs:
+  sources:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v6
+    - name: Regenerate cargo-sources.json
+      run: packaging/flathub/update-sources.sh
+    - name: It must be unchanged
+      run: |
+        git diff --exit-code packaging/flathub/cargo-sources.json \
+          || { echo "::error::Run packaging/flathub/update-sources.sh and commit the result"; exit 1; }
+
+  build:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
+      options: --privileged
+    steps:
+    - uses: actions/checkout@v4
+    - uses: flathub-infra/flatpak-github-actions/flatpak-builder@master
+      with:
+        bundle: ARClens-flathub-x86_64.flatpak
+        manifest-path: packaging/flathub/io.github.Stay1444.ARClens.yml
+        cache-key: flathub-builder-${{ github.sha }}

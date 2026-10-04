@@ -1,0 +1,55 @@
+# Flathub variant of the Flatpak build: no network during the build. Every
+# crate comes from cargo-sources.json (regenerate it with
+# update-sources.sh whenever Cargo.lock changes). Submitting to Flathub
+# also needs a licence in the repo and a Flathub account (maintainer).
+#   flatpak-builder --user --install --force-clean build-dir \
+#     packaging/flathub/io.github.Stay1444.ARClens.yml
+id: io.github.Stay1444.ARClens
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  # libclang, for the PipeWire bindings (bindgen).
+  - org.freedesktop.Sdk.Extension.llvm20
+command: arclens
+finish-args:
+  # The overlay is a wlr-layer-shell surface: Wayland only.
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  # wgpu (Vulkan) rendering.
+  - --device=dri
+  # Game data, map markers, event schedule and icons (at run time only).
+  - --share=network
+  # Screen capture and global shortcuts go through portals, which a
+  # sandboxed app reaches without extra permissions.
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/llvm20/bin
+  prepend-ld-library-path: /usr/lib/sdk/llvm20/lib
+  env:
+    CARGO_HOME: /run/build/arclens/cargo
+    CARGO_NET_OFFLINE: 'true'
+    LIBCLANG_PATH: /usr/lib/sdk/llvm20/lib
+    CARGO_TERM_COLOR: always
+modules:
+  - name: arclens
+    buildsystem: simple
+    build-commands:
+      # The SDK's default CFLAGS add -O2, which aws-lc-sys (TLS) rejects for
+      # its jitterentropy source; let cc-rs pick flags itself.
+      - env -u CFLAGS -u CXXFLAGS -u CFLAGS_x86_64_unknown_linux_gnu -u CXXFLAGS_x86_64_unknown_linux_gnu
+        cargo build --release --locked --offline -p arclens -p arclens-overlay
+      - install -Dm755 target/release/arclens /app/bin/arclens
+      - install -Dm755 target/release/arclens-overlay /app/bin/arclens-overlay
+      - install -Dm644 packaging/io.github.Stay1444.ARClens.desktop /app/share/applications/io.github.Stay1444.ARClens.desktop
+      - install -Dm644 packaging/icons/io.github.Stay1444.ARClens.svg /app/share/icons/hicolor/scalable/apps/io.github.Stay1444.ARClens.svg
+      - install -Dm644 packaging/io.github.Stay1444.ARClens.metainfo.xml /app/share/metainfo/io.github.Stay1444.ARClens.metainfo.xml
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - target
+          - target-wt
+          - .git
+      - cargo-sources.json
