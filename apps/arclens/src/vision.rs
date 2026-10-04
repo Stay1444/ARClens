@@ -21,6 +21,12 @@ use std::time::{Duration, Instant};
 const FAST_INTERVAL: Duration = Duration::from_millis(100);
 /// How long to stay fast after the last tooltip was seen.
 const FAST_FOR: Duration = Duration::from_secs(3);
+/// No game screen we read (menus, map, inventory, workshop, …) and no
+/// tooltip for this long: the game is probably not in front, or in a raid
+/// with nothing open. Capture slows to `AWAY_INTERVAL` until one shows.
+/// (Wayland has no portable "is the game focused" signal.)
+const AWAY_AFTER: Duration = Duration::from_secs(20);
+const AWAY_INTERVAL: Duration = Duration::from_secs(1);
 /// How often the map header is re-read while the map is open (its clock
 /// ticks every second; the map name and condition rarely change).
 const MAP_REREAD: Duration = Duration::from_secs(5);
@@ -231,6 +237,44 @@ impl StationWatch {
     }
 }
 
+/// How often to capture outside the map screen.
+#[derive(Debug)]
+struct Pace {
+    /// Fast until then (tooltip activity).
+    fast_until: Instant,
+    /// When a game screen we read, or a tooltip, was last on screen.
+    seen_game_at: Instant,
+}
+
+impl Pace {
+    fn new() -> Self {
+        let now = Instant::now();
+        Self {
+            fast_until: now,
+            seen_game_at: now,
+        }
+    }
+
+    /// The interval after a frame: fast for a moment after tooltip
+    /// activity, so the next hover is picked up sooner; idle otherwise;
+    /// slower still while no game screen has shown for a while.
+    fn next(&mut self, tooltip_activity: bool, game_screen: bool, now: Instant) -> Duration {
+        if tooltip_activity {
+            self.fast_until = now + FAST_FOR;
+        }
+        if game_screen {
+            self.seen_game_at = now;
+        }
+        if now < self.fast_until {
+            FAST_INTERVAL
+        } else if now.duration_since(self.seen_game_at) > AWAY_AFTER {
+            AWAY_INTERVAL
+        } else {
+            arclens_capture::IDLE_INTERVAL
+        }
+    }
+}
+
 /// Place names read on one map frame.
 #[derive(Debug, Clone)]
 pub struct MapLabels {
@@ -422,7 +466,7 @@ fn run(output: mpsc::Sender<Event>) {
     }
 
     let mut last: Option<Hover> = None;
-    let mut fast_until = Instant::now();
+    let mut pace = Pace::new();
     // When the map header was last read, while the map is open.
     let mut map_watch = MapWatch::default();
     let mut map_view = MapView::default();
@@ -470,16 +514,12 @@ fn run(output: mpsc::Sender<Event>) {
                 None
             }
         };
-        // Sample faster for a moment after something changed on screen, so
-        // the next hover is picked up sooner; idle otherwise.
-        if hover.is_some() || last.is_some() {
-            fast_until = Instant::now() + FAST_FOR;
-        }
-        source.set_interval(if Instant::now() < fast_until {
-            FAST_INTERVAL
-        } else {
-            arclens_capture::IDLE_INTERVAL
-        });
+        let game_screen = arclens_vision::classify(&frame) != arclens_vision::Screen::Unknown;
+        source.set_interval(pace.next(
+            hover.is_some() || last.is_some(),
+            game_screen || hover.is_some(),
+            Instant::now(),
+        ));
 
         // Only report changes.
         let event = match (&last, &hover) {
@@ -818,5 +858,26 @@ impl FrameSource for Replay {
         let value = std::env::var("ARCLENS_REPLAY_CURSOR").ok()?;
         let (x, y) = value.split_once(',')?;
         Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn capture_slows_down_when_no_game_screen_shows() {
+        let start = Instant::now();
+        let mut pace = Pace::new();
+        assert_eq!(pace.next(true, true, start), FAST_INTERVAL);
+        let later = start + FAST_FOR + Duration::from_secs(1);
+        assert_eq!(
+            pace.next(false, false, later),
+            arclens_capture::IDLE_INTERVAL
+        );
+        let away = start + AWAY_AFTER + Duration::from_secs(1);
+        assert_eq!(pace.next(false, false, away), AWAY_INTERVAL);
+        // A game screen brings it back at once.
+        assert_eq!(pace.next(false, true, away), arclens_capture::IDLE_INTERVAL);
     }
 }

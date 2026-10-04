@@ -154,9 +154,9 @@ green CI.
       same one.
 - [ ] Map image behind the plot, once its alignment with MetaForge
       coordinates is known; pan/zoom.
-- [ ] **Manual calibration.** The user opens the in-game map and clicks two
-      landmarks; `Transform::from_two_points` gives map→screen. Markers then
-      render while the view doesn't move. This is the stepping stone to M3.
+- (Dropped 2026-10-04: manual calibration. Superseded by the automatic
+  place-name fit plus motion tracking, which needs no clicks and follows
+  pans and zooms.)
 - [x] Event timers: a MetaForge `events-schedule` provider (cached for
       30 min, offline fallback, attributed) and an **Events** tab in the
       app: active now, next per map, schedule per condition in local time
@@ -196,16 +196,19 @@ green CI.
       while loading or when missing.
 - (Dropped 2026-10-03: conditions in the overlay. The maintainer wants them
   in the app only; the in-game panel is just the marker filter.)
-- [ ] Optional: tail `PioneerGame.log` for the current map. Never persist
-      its contents.
+- (Dropped 2026-10-04: tailing `PioneerGame.log`. The map is read from the
+  screen already, and the README promises ARClens reads none of the game's
+  files or logs.)
 
 ## M3: Vision (see `docs/research/game-state-detection.md`)
 
-- [ ] **Collect fixtures** (see `docs/vision/capture-guide.md`). A stash hover
-      video is in; findings: `docs/vision/findings-2026-10-03-stash-video.md`. Screenshots and short recordings at 1080p and
-      1440p of the inventory (with tooltips), the map screen at several
-      zooms and pans on each map, and the HUD. Store them under
-      `crates/arclens-vision/tests/fixtures/` (git LFS if large).
+- [x] **Collect fixtures** at 1440p: stash, raid and trader hovers, the
+      map at three zooms plus three recorded pans (Dam, Buried City, Blue
+      Gate), workshop, quests, logbook, projects and inventory (33 frames
+      in `crates/arclens-vision/tests/fixtures/`, 2026-10-03/04).
+- [ ] Fixtures at 1080p and other aspect ratios, and of an unbuilt
+      (level 0) workshop tile: every screen region so far is measured at
+      2560×1440 only.
 - [x] `arclens-vision` offline detectors with precision/recall tests:
   - [x] screen classifier (2026-10-04, `arclens_vision::classify`):
         main menu, map, inventory (stash and in-raid backpack), workshop,
@@ -280,8 +283,11 @@ green CI.
       when it exits; also Always / Off. Stopping now really ends the
       portal session and the PipeWire thread (each toggle used to leak a
       screencast session, reported 2026-10-03).
-- [ ] Pause while the game isn't focused (no portable focus signal on
-      Wayland; a KWin script could provide one).
+- [x] Slow down while the game isn't in front (2026-10-04): Wayland has no
+      portable focus signal, so the screen classifier stands in for one.
+      After 20 s with no game screen we read (menus, map, inventory,
+      workshop, quests) and no tooltip, capture drops to 1 fps until one
+      shows again.
 - [x] Wire the hover detector to the overlay (`ShowHover`).
 - [x] Map open → `ShowMarkers` with the live transform (map →
       normalised screen, protocol v6), markers inside the viewport only,
