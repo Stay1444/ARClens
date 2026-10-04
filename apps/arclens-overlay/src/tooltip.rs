@@ -53,7 +53,8 @@ pub fn hovered<'a>(
         .map(Hovered::Area)
 }
 
-fn inside(polygon: &[Point], p: Point) -> bool {
+/// Whether `p` is inside `polygon` (even-odd rule).
+pub fn inside(polygon: &[Point], p: Point) -> bool {
     let mut odd = false;
     let mut j = polygon.len() - 1;
     for (i, a) in polygon.iter().enumerate() {

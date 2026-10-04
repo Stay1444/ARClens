@@ -31,7 +31,7 @@ flate2 = "1.1"
 fluent-bundle = "0.16"
 fluent-syntax = "0.12"
 futures = "0.3"
-iced = { version = "0.14", default-features = false, features = ["wgpu", "wayland", "x11", "canvas", "tokio", "image-without-codecs", "svg"] }
+iced = { version = "0.14", default-features = false, features = ["wgpu", "wayland", "x11", "canvas", "tokio", "image-without-codecs", "svg", "advanced"] }
 # Decoders for iced's image widget: item icons are PNG only.
 image = { version = "0.25", default-features = false, features = ["png", "webp"] }
 iced_layershell = "0.19"

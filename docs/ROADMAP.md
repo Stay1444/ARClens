@@ -204,6 +204,9 @@ green CI.
       compositor's cursor position was useless (field report on KDE).
       Verified end to end by replaying a real map capture
       (`docs/assets/overlay-tooltip.jpg`); not yet re-checked in game.
+- [x] Markers and areas fade near the pointer (to 25 % right under it,
+      solid from 90 px), so the game's own map shows where the player
+      points (2026-10-04). Verified on a replayed capture.
 - [x] Region ids confirmed from MetaForge's front end (2026-10-04):
       `brazil` and `east-asia`, not `south-america` / `asia` (those got
       Europe's schedule). Saved ids migrate; before the player picks a

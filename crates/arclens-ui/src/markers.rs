@@ -195,17 +195,19 @@ pub fn badge<'a, M: 'a>(category: &str, subcategory: Option<&str>, size: f32) ->
     .into()
 }
 
-/// A marker kind's glyph on its category colour, `size` px across.
+/// A marker kind's glyph on its category colour, `size` px across, at
+/// `alpha` opacity (1: solid).
 pub fn draw_badge(
     frame: &mut Frame,
     category: &str,
     subcategory: Option<&str>,
     at: Point,
     size: f32,
+    alpha: f32,
 ) {
     frame.fill(
         &Path::circle(at, size / 2.0),
-        crate::palette::marker(category),
+        crate::palette::with_alpha(crate::palette::marker(category), alpha),
     );
     let inner = size * 0.62;
     frame.draw_svg(
@@ -213,17 +215,19 @@ pub fn draw_badge(
             Point::new(at.x - inner / 2.0, at.y - inner / 2.0),
             Size::new(inner, inner),
         ),
-        &handle(glyph(category, subcategory)),
+        iced::advanced::svg::Svg::new(handle(glyph(category, subcategory))).opacity(alpha),
     );
 }
 
 /// A dense group: its outline (padded so edge markers sit inside), shaded
-/// in the kind's colour, with one badge and the count at the centre.
+/// in the kind's colour, with one badge and the count at the centre; all
+/// at `alpha` opacity.
 pub fn draw_area(
     frame: &mut Frame,
     area: &arclens_core::MarkerArea,
     to_screen: impl Fn(arclens_core::MapPoint) -> Point,
     icon: f32,
+    alpha: f32,
 ) {
     const PAD: f32 = 9.0;
     let color = crate::palette::marker(&area.category);
@@ -253,11 +257,11 @@ pub fn draw_area(
             .fold(PAD, f32::max);
         Path::circle(center, radius)
     };
-    frame.fill(&shape, crate::palette::with_alpha(color, 0.18));
+    frame.fill(&shape, crate::palette::with_alpha(color, 0.18 * alpha));
     frame.stroke(
         &shape,
         Stroke::default()
-            .with_color(crate::palette::with_alpha(color, 0.7))
+            .with_color(crate::palette::with_alpha(color, 0.7 * alpha))
             .with_width(1.5),
     );
     draw_badge(
@@ -266,11 +270,12 @@ pub fn draw_area(
         area.subcategory.as_deref(),
         center,
         icon,
+        alpha,
     );
     frame.fill_text(canvas::Text {
         content: format!("×{}", area.count),
         position: Point::new(center.x + icon / 2.0 + 3.0, center.y),
-        color: crate::palette::TEXT,
+        color: crate::palette::with_alpha(crate::palette::TEXT, alpha),
         size: 11.0.into(),
         font: iced::Font {
             weight: iced::font::Weight::Bold,

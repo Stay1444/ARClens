@@ -114,8 +114,12 @@ pub struct Overlay {
     clip: Option<arclens_ipc::NormRect>,
     /// The pointer over the map, normalised, for marker tooltips.
     pointer: Option<(f32, f32)>,
-    /// Drawn markers, rebuilt only when they or the surface change.
+    /// Drawn markers, rebuilt only when they or the surface change, or the
+    /// pointer moves to another [`view::FADE_CELL`] (markers near it are
+    /// drawn apart, faded).
     marker_cache: iced::widget::canvas::Cache,
+    /// The pointer's cell `marker_cache` was drawn for.
+    fade_cell: std::cell::Cell<Option<(i32, i32)>>,
     /// Map-screen panel (conditions + marker filter), the clickable part.
     panel: map_panel::PanelState,
     /// Quick item search, shown while interactive.

@@ -604,7 +604,7 @@ impl Plot<'_> {
     fn draw_markers(&self, frame: &mut Frame, fit: &Fit) {
         // Areas first, under the single markers.
         for area in &self.summary.layout.areas {
-            draw_area(frame, area, |p| fit.map_point(p), ICON);
+            draw_area(frame, area, |p| fit.map_point(p), ICON, 1.0);
         }
         let visible: Vec<&Marker> = self
             .summary
@@ -621,6 +621,7 @@ impl Plot<'_> {
                 marker.subcategory.as_deref(),
                 at,
                 ICON,
+                1.0,
             );
             if self.searching {
                 // Ring the matches so they stand out.

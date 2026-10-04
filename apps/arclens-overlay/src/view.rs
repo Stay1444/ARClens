@@ -198,42 +198,100 @@ impl canvas::Program<Message> for MarkerLayer<'_> {
                     height: c.height * bounds.height,
                 }
             });
-        // Cached: redrawn only when the markers, the view or the surface
-        // change.
+        let to_frame = |nx: f32, ny: f32| Point::new(nx * bounds.width, ny * bounds.height);
+        let screen_at = |p: arclens_core::MapPoint| {
+            let (nx, ny) = transform.apply((p.x, p.y));
+            to_frame(nx, ny)
+        };
+        let pointer = self.state.pointer.map(|(x, y)| to_frame(x, y));
+        // Markers near the pointer are drawn apart, faded, every frame; the
+        // rest come from the cache, rebuilt when the pointer changes cell.
+        #[allow(clippy::cast_possible_truncation, reason = "screen cells")]
+        let cell = pointer.map(|p| {
+            (
+                (p.x / FADE_CELL).floor() as i32,
+                (p.y / FADE_CELL).floor() as i32,
+            )
+        });
+        if self.state.fade_cell.get() != cell {
+            self.state.fade_cell.set(cell);
+            self.state.marker_cache.clear();
+        }
+        #[allow(clippy::cast_precision_loss, reason = "screen cells")]
+        let cell_center = cell.map(|(cx, cy)| {
+            Point::new((cx as f32 + 0.5) * FADE_CELL, (cy as f32 + 0.5) * FADE_CELL)
+        });
+        // Within this of the cell's centre, a marker may be near the pointer.
+        let near_cell =
+            |at: Point| cell_center.is_some_and(|c| c.distance(at) < FADE_RADIUS + FADE_CELL);
+        let area_distance = |area: &arclens_core::MarkerArea, p: Point| {
+            let outline: Vec<Point> = area.hull.iter().map(|&q| screen_at(q)).collect();
+            if outline.len() >= 3 && crate::tooltip::inside(&outline, p) {
+                0.0
+            } else {
+                screen_at(area.center).distance(p)
+            }
+        };
+        // Only what lies in the viewport (by centre: a badge on the edge may
+        // overhang a little). `Frame::with_clip` drew nothing here under
+        // iced 0.14, so no clipping.
         let geometry = self
             .state
             .marker_cache
             .draw(renderer, bounds.size(), |frame| {
-                // Only what lies in the viewport (by centre: a badge on the
-                // edge may overhang a little). `Frame::with_clip` drew
-                // nothing here under iced 0.14, so no clipping.
-                let to_frame = |nx: f32, ny: f32| Point::new(nx * bounds.width, ny * bounds.height);
                 for area in &self.state.areas {
-                    let (cx, cy) = transform.apply((area.center.x, area.center.y));
-                    if !clip.contains(to_frame(cx, cy)) {
-                        continue;
+                    let center = screen_at(area.center);
+                    let near = cell_center
+                        .is_some_and(|c| area_distance(area, c) < FADE_RADIUS + FADE_CELL);
+                    if clip.contains(center) && !near && !near_cell(center) {
+                        arclens_ui::markers::draw_area(frame, area, screen_at, BADGE, 1.0);
                     }
-                    arclens_ui::markers::draw_area(
-                        frame,
-                        area,
-                        |p| {
-                            let (nx, ny) = transform.apply((p.x, p.y));
-                            to_frame(nx, ny)
-                        },
-                        BADGE,
-                    );
                 }
                 for marker in &self.state.markers {
-                    // The transform targets the screen normalised to 0..=1.
-                    let (nx, ny) = transform.apply((marker.position.x, marker.position.y));
-                    let at = to_frame(nx, ny);
-                    if clip.contains(at) {
-                        draw_badge(frame, marker, at);
+                    let at = screen_at(marker.position);
+                    if clip.contains(at) && !near_cell(at) {
+                        draw_badge(frame, marker, at, 1.0);
                     }
                 }
             });
-        vec![geometry]
+        let mut layers = vec![geometry];
+        if let Some(p) = pointer {
+            let mut frame = Frame::new(renderer, bounds.size());
+            for area in &self.state.areas {
+                let center = screen_at(area.center);
+                let near =
+                    cell_center.is_some_and(|c| area_distance(area, c) < FADE_RADIUS + FADE_CELL);
+                if clip.contains(center) && (near || near_cell(center)) {
+                    let alpha = fade(area_distance(area, p));
+                    arclens_ui::markers::draw_area(&mut frame, area, screen_at, BADGE, alpha);
+                }
+            }
+            for marker in &self.state.markers {
+                let at = screen_at(marker.position);
+                if clip.contains(at) && near_cell(at) {
+                    draw_badge(&mut frame, marker, at, fade(at.distance(p)));
+                }
+            }
+            layers.push(frame.into_geometry());
+        }
+        layers
     }
+}
+
+/// Markers within this of the pointer (logical pixels) fade, so the
+/// game's own map shows where the player points.
+const FADE_RADIUS: f32 = 90.0;
+/// Opacity right under the pointer.
+const FADE_MIN: f32 = 0.25;
+/// The pointer moves within cells this big before the cached markers
+/// are redrawn.
+pub const FADE_CELL: f32 = 48.0;
+
+/// Opacity of something `distance` from the pointer: `FADE_MIN` at it,
+/// easing up to solid at `FADE_RADIUS`.
+fn fade(distance: f32) -> f32 {
+    let k = (distance / FADE_RADIUS).clamp(0.0, 1.0);
+    FADE_MIN + (1.0 - FADE_MIN) * k * k * (3.0 - 2.0 * k)
 }
 
 /// Marker diameter on the in-game map, logical pixels.
@@ -241,15 +299,15 @@ const BADGE: f32 = 22.0;
 
 /// The marker's glyph on its category colour, with a dark rim so it reads
 /// on the bright parts of the map.
-fn draw_badge(frame: &mut Frame, marker: &arclens_core::Marker, at: Point) {
+fn draw_badge(frame: &mut Frame, marker: &arclens_core::Marker, at: Point, alpha: f32) {
     use arclens_ui::markers::{glyph, handle};
     frame.fill(
         &Path::circle(at, BADGE / 2.0 + 1.5),
-        Color::from_rgba8(0, 0, 0, 0.6),
+        Color::from_rgba8(0, 0, 0, 0.6 * alpha),
     );
     frame.fill(
         &Path::circle(at, BADGE / 2.0),
-        arclens_ui::palette::marker(&marker.category),
+        arclens_ui::palette::with_alpha(arclens_ui::palette::marker(&marker.category), alpha),
     );
     let inner = BADGE * 0.62;
     frame.draw_svg(
@@ -257,7 +315,11 @@ fn draw_badge(frame: &mut Frame, marker: &arclens_core::Marker, at: Point) {
             Point::new(at.x - inner / 2.0, at.y - inner / 2.0),
             iced::Size::new(inner, inner),
         ),
-        &handle(glyph(&marker.category, marker.subcategory.as_deref())),
+        iced::advanced::svg::Svg::new(handle(glyph(
+            &marker.category,
+            marker.subcategory.as_deref(),
+        )))
+        .opacity(alpha),
     );
 }
 
@@ -297,6 +359,16 @@ mod tests {
     use arclens_ipc::NormRect;
 
     const SCREEN: iced::Size = iced::Size::new(2000.0, 1000.0);
+
+    #[test]
+    fn markers_fade_near_the_pointer_only() {
+        assert!((fade(0.0) - FADE_MIN).abs() < 1e-6);
+        assert!((fade(FADE_RADIUS) - 1.0).abs() < 1e-6);
+        assert!((fade(FADE_RADIUS * 3.0) - 1.0).abs() < 1e-6);
+        let half = fade(FADE_RADIUS / 2.0);
+        assert!(half > FADE_MIN && half < 1.0);
+        assert!(fade(30.0) < fade(60.0));
+    }
 
     #[test]
     fn places_card_right_of_tooltip_when_it_fits() {
