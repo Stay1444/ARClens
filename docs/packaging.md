@@ -50,7 +50,8 @@ flatpak run io.github.Stay1444.ARClens
   `packaging/flathub/cargo-sources.json` (generated from `Cargo.lock` by
   `packaging/flathub/update-sources.sh`, which needs `uv`; the Flathub CI
   workflow fails when it is stale and can build the manifest on demand).
-  Submitting still needs a licence and a review of the permissions.
+  Submitting still needs a review of the permissions (licence:
+  GPL-3.0-or-later since 2026-10-04).
 - Config, cache and state live in `~/.var/app/io.github.Stay1444.ARClens/`
   instead of `~/.config/arclens` etc.
 
@@ -61,7 +62,5 @@ flatpak run io.github.Stay1444.ARClens
 
 ## Open points
 
-- No licence file yet: the AppStream data omits `project_license`. Pick a
-  licence before publishing widely.
 - Not yet verified on a real desktop (2026-10-03): the Flatpak's portal
   screen capture and global shortcuts, and the AppImage on Fedora 43.

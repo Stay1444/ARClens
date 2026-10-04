@@ -324,6 +324,11 @@ cargo test --workspace
 
 ## Licence
 
-No licence has been chosen yet, so for now all rights are reserved by the
-author. A licence will be added before ARClens is published widely (see
-[docs/packaging.md](docs/packaging.md)).
+ARClens is free software under the
+[GNU General Public License, version 3 or later](LICENSE)
+(`GPL-3.0-or-later`): you may use, study, share and change it, and
+versions you distribute must stay under the same licence with their
+source available.
+
+Game data, fonts and icons that ARClens downloads or ships keep their own
+licences; see [Data and attribution](#data-and-attribution).

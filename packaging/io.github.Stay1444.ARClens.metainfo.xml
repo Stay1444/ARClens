@@ -2,6 +2,7 @@
 <component type="desktop-application">
   <id>io.github.Stay1444.ARClens</id>
   <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
   <name>ARClens</name>
   <summary>Companion app and in-game overlay for ARC Raiders</summary>
   <description>

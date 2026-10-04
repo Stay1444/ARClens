@@ -49,6 +49,7 @@ modules:
       - install -Dm644 packaging/io.github.Stay1444.ARClens.desktop /app/share/applications/io.github.Stay1444.ARClens.desktop
       - install -Dm644 packaging/icons/io.github.Stay1444.ARClens.svg /app/share/icons/hicolor/scalable/apps/io.github.Stay1444.ARClens.svg
       - install -Dm644 packaging/io.github.Stay1444.ARClens.metainfo.xml /app/share/metainfo/io.github.Stay1444.ARClens.metainfo.xml
+      - install -Dm644 LICENSE /app/share/licenses/io.github.Stay1444.ARClens/LICENSE
     sources:
       - type: dir
         path: ../..

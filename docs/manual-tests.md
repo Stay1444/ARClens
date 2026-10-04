@@ -43,8 +43,8 @@ Send back: which of the dialogs and the overlay worked in each package.
 
 ## 4. Flathub / COPR (optional)
 
-Needs a licence in the repo first (the maintainer's choice), then the
-maintainer's Flathub and Fedora accounts. `packaging/flathub/` already
+The licence is in place (GPL-3.0-or-later); this needs the maintainer's
+Flathub and Fedora accounts. `packaging/flathub/` already
 builds offline in CI.
 
 ## 5. Screenshots for fixtures

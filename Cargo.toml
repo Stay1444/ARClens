@@ -9,6 +9,7 @@ publish = false
 edition = "2024"
 rust-version = "1.88"
 repository = "https://github.com/Stay1444/ARClens"
+license = "GPL-3.0-or-later"
 
 [workspace.dependencies]
 # Internal

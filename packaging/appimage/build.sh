@@ -19,6 +19,7 @@ rm -rf "$appdir"
 mkdir -p "$appdir/usr/bin"
 # Both binaries side by side: the app starts the overlay from its own dir.
 install -m755 target/release/arclens target/release/arclens-overlay "$appdir/usr/bin/"
+install -Dm644 LICENSE "$appdir/usr/share/licenses/arclens/LICENSE"
 
 tool="$work/linuxdeploy-x86_64.AppImage"
 if [ ! -x "$tool" ]; then
