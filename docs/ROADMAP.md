@@ -197,12 +197,13 @@ green CI.
       the shipped default (`~/.config/arclens/presets.json`).
 - [x] **Marker tooltips in game** (2026-10-03): pointing at a marker or
       area on the in-game map shows its icon, name and a line of info
-      (area count, "not all are there every raid"). The pointer comes from
-      the capture, never the game: PipeWire cursor metadata on Linux, the
-      OS cursor position on Windows (protocol v11, `Pointer`;
-      `docs/assets/overlay-tooltip.jpg`). Verified headlessly with a
-      replayed cursor. **Not working on KDE yet** (field report): see
-      "Marker tooltips need the compositor's pointer" in map-tracking.md.
+      (area count, "not all are there every raid"). The pointer is the
+      game's own arrow found in the captured frame
+      (`arclens_vision::find_cursor`, 2026-10-04): the game hides the
+      system pointer and pins it at the window's centre, so the
+      compositor's cursor position was useless (field report on KDE).
+      Verified end to end by replaying a real map capture
+      (`docs/assets/overlay-tooltip.jpg`); not yet re-checked in game.
 - [x] Region ids confirmed from MetaForge's front end (2026-10-04):
       `brazil` and `east-asia`, not `south-america` / `asia` (those got
       Europe's schedule). Saved ids migrate; before the player picks a

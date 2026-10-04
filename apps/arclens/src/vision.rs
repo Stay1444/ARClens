@@ -82,6 +82,8 @@ struct MapView {
     sent: Sent,
     /// The pointer last sent, normalised.
     pointer: Option<(f32, f32)>,
+    /// When the game's cursor was last found.
+    pointer_seen: Option<Instant>,
 }
 
 /// What the app was last told about the map's motion.
@@ -383,11 +385,6 @@ trait FrameSource: Send {
     fn monitor(&self) -> Option<arclens_ipc::MonitorRect> {
         None
     }
-
-    /// Where the pointer is, in frame pixels, if known.
-    fn cursor(&self) -> Option<(f32, f32)> {
-        None
-    }
 }
 
 pub fn subscription() -> Subscription<Event> {
@@ -488,7 +485,7 @@ fn run(output: mpsc::Sender<Event>) {
         if map_watch.is_open() {
             // Only frames that do show the map.
             if map_watch.missing_since.is_none() {
-                report_pointer(source.cursor(), &frame, &mut map_view, &mut out);
+                report_pointer(&frame, &mut map_view, &mut out);
             }
             if map_watch.missing_since.is_none()
                 && let Some(labels) = &labels
@@ -661,16 +658,33 @@ fn follow_map(
     true
 }
 
+/// How long the last cursor position stands when the arrow isn't found
+/// (over white text or snow, it can't be told apart).
+const POINTER_HOLD: Duration = Duration::from_secs(1);
+
 /// Sends the pointer's position when it moved by a pixel or more.
-fn report_pointer(
-    cursor: Option<(f32, f32)>,
-    frame: &RgbImage,
-    view: &mut MapView,
-    out: &mut Outbox,
-) {
+///
+/// The game hides the system pointer (pinned at the window's centre) and
+/// draws its own arrow, so the position comes from the frame, not from
+/// the capture's cursor metadata.
+fn report_pointer(frame: &RgbImage, view: &mut MapView, out: &mut Outbox) {
     #[allow(clippy::cast_precision_loss, reason = "pixel sizes")]
     let size = (frame.width() as f32, frame.height() as f32);
-    let now = cursor.map(|(x, y)| (x / size.0, y / size.1));
+    #[allow(clippy::cast_precision_loss, reason = "pixel coordinates")]
+    let found = arclens_vision::find_cursor(frame).map(|(x, y)| (x as f32, y as f32));
+    let now = match found {
+        Some((x, y)) => {
+            view.pointer_seen = Some(Instant::now());
+            Some((x / size.0, y / size.1))
+        }
+        None if view
+            .pointer_seen
+            .is_some_and(|at| at.elapsed() < POINTER_HOLD) =>
+        {
+            view.pointer
+        }
+        None => None,
+    };
     let moved = match (view.pointer, now) {
         (Some(a), Some(b)) => {
             (a.0 - b.0).abs() * size.0 >= 1.0 || (a.1 - b.1).abs() * size.1 >= 1.0
@@ -761,10 +775,6 @@ impl FrameSource for Live {
         self.0.set_interval(interval);
     }
 
-    fn cursor(&self) -> Option<(f32, f32)> {
-        self.0.cursor()
-    }
-
     fn monitor(&self) -> Option<arclens_ipc::MonitorRect> {
         self.0
             .monitor
@@ -853,13 +863,6 @@ impl FrameSource for Replay {
         self.next += 1;
         tracing::debug!(frame = %path.display(), "replay");
         image::open(path).ok().map(image::DynamicImage::into_rgb8)
-    }
-
-    /// `ARCLENS_REPLAY_CURSOR=x,y` (frame pixels): a pointer for testing.
-    fn cursor(&self) -> Option<(f32, f32)> {
-        let value = std::env::var("ARCLENS_REPLAY_CURSOR").ok()?;
-        let (x, y) = value.split_once(',')?;
-        Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
     }
 }
 

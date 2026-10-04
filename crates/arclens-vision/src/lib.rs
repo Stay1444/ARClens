@@ -20,6 +20,7 @@
 )]
 
 mod analyzer;
+mod cursor;
 mod footer;
 mod geometry;
 mod hovered_side;
@@ -35,6 +36,7 @@ mod workshop;
 mod workshop_overview;
 
 pub use analyzer::{Analyzer, Hover, MapLabel};
+pub use cursor::find_cursor;
 pub use footer::{FooterInfo, footer, footer_cells, parse_value, value_cells};
 pub use geometry::Rect;
 pub use hovered_side::{Side, hovered_side, item_side};

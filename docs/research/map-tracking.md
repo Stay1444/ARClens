@@ -152,7 +152,18 @@ while the cursor is hidden (`Cursors::isCursorHidden()`) or its geometry
 misses the output; otherwise it sends `id = 0` and no position. KWin does
 queue cursor-only buffers when just the pointer moves.
 
-Two candidate causes, not yet told apart (**unverified**):
+**Resolved 2026-10-04:** the second cause. The maintainer reports the game
+hides the system pointer and keeps it centred on the window (as games
+usually do), drawing its own arrow. So the pointer is now found in the
+frame instead: `arclens_vision::find_cursor` looks for the game's arrow
+(white, tip top-left, ~19 × 27 px at 1440p, rows widening one pixel each
+along a straight left edge, neutral rather than the cream of the map
+icons). On the Dam, Buried City and Blue Gate recordings it finds the
+arrow in 256 of 261 map frames with no false hits; the misses have the
+arrow over white label text or snow, and the app keeps the last position
+for a second. The capture's cursor metadata is no longer used.
+
+The two candidates, as first written:
 - a restore token saved before metadata was requested brings back a
   session without it. Fixed by storing tokens under a new name, so the
   portal asks once more;
