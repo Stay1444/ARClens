@@ -103,6 +103,7 @@ pub struct App {
         arclens_ipc::NormRect,
         Situation,
         arclens_ipc::ItemSide,
+        Vec<arclens_ipc::NormRect>,
     )>,
     status: Vec<String>,
 }
@@ -619,13 +620,18 @@ impl App {
                     return Task::none();
                 };
                 tracing::info!(text = %hover.name, item = %item.id, confidence, "hovered item");
-                let [x, y, width, height] = hover.panel_normalized();
-                let anchor = arclens_ipc::NormRect {
+                let norm = |[x, y, width, height]: [f32; 4]| arclens_ipc::NormRect {
                     x,
                     y,
                     width,
                     height,
                 };
+                let anchor = norm(hover.panel_normalized());
+                let avoid = hover
+                    .others
+                    .iter()
+                    .map(|&rect| norm(hover.normalize(rect)))
+                    .collect();
                 let load = self.icons.request(item);
                 let situation = hover.footer.map_or_else(Situation::default, |f| Situation {
                     place: if f.in_raid {
@@ -639,7 +645,7 @@ impl App {
                     arclens_vision::Side::Left => arclens_ipc::ItemSide::Left,
                     arclens_vision::Side::Right => arclens_ipc::ItemSide::Right,
                 };
-                self.hover = Some((item.id.clone(), anchor, situation, side));
+                self.hover = Some((item.id.clone(), anchor, situation, side, avoid));
                 self.push_hover_to_overlay();
                 // The icon arrives later; `IconLoaded` resends the card.
                 if let Some(load) = load {
@@ -995,7 +1001,7 @@ impl App {
     }
 
     fn push_hover_to_overlay(&self) {
-        let (Load::Ready(catalog), Some((id, anchor, situation, side))) =
+        let (Load::Ready(catalog), Some((id, anchor, situation, side, avoid))) =
             (&self.catalog, &self.hover)
         else {
             return;
@@ -1008,6 +1014,7 @@ impl App {
                 recycle_names: recycle_names(item, catalog, situation.place),
                 anchor: *anchor,
                 item_side: *side,
+                avoid: avoid.clone(),
             });
         }
     }

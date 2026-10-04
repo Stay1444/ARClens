@@ -93,12 +93,18 @@ const CARD: iced::Size = iced::Size::new(360.0, 420.0);
 
 /// The detected-hover card, placed beside the game's tooltip.
 fn hover_layer(state: &Overlay) -> Element<'_, Message> {
-    let Some((shown, anchor, item_side)) = &state.hover else {
+    let Some(hovered) = &state.hover else {
         return Space::new().width(Length::Fill).height(Length::Fill).into();
     };
-    let (anchor, item_side) = (*anchor, *item_side);
+    let shown = &hovered.shown;
     iced::widget::responsive(move |screen| {
-        let at = place(anchor, item_side, screen, CARD);
+        let at = place(
+            hovered.anchor,
+            hovered.item_side,
+            &hovered.avoid,
+            screen,
+            CARD,
+        );
         container(item_card(&ItemCard {
             item: &shown.item,
             advice: shown.advice.clone(),
@@ -116,32 +122,48 @@ fn hover_layer(state: &Overlay) -> Element<'_, Message> {
     .into()
 }
 
-/// Top-left corner for a `card` next to the game tooltip `anchor`: to its
-/// right if it fits, otherwise to its left; top-aligned, clamped on screen.
+/// Top-left corner for a `card` next to the game tooltip `anchor`: beside
+/// it, away from the hovered item, top-aligned and clamped on screen. The
+/// other side is used if the card doesn't fit or would cover a panel in
+/// `avoid` (e.g. the trader's purchase panel); if every side covers one,
+/// the first that fits wins.
 pub fn place(
     anchor: arclens_ipc::NormRect,
     item_side: arclens_ipc::ItemSide,
+    avoid: &[arclens_ipc::NormRect],
     screen: iced::Size,
     card: iced::Size,
 ) -> Point {
     let left = anchor.x * screen.width;
     let right = (anchor.x + anchor.width) * screen.width;
     let top = anchor.y * screen.height;
+    let y = top.clamp(0.0, (screen.height - card.height).max(0.0));
 
-    // Beside the tooltip, away from the hovered item; the other side only
-    // if the card doesn't fit there.
     let at_right = right + GAP;
     let at_left = left - GAP - card.width;
-    let fits_right = at_right + card.width <= screen.width;
-    let fits_left = at_left >= 0.0;
-    let x = if item_side == arclens_ipc::ItemSide::Right && fits_left {
-        at_left
-    } else if fits_right {
-        at_right
-    } else {
-        at_left.max(0.0)
+    let fits = |x: f32| x >= 0.0 && x + card.width <= screen.width;
+    let covers = |x: f32| {
+        let rect = iced::Rectangle::new(Point::new(x, y), card);
+        avoid.iter().any(|a| {
+            rect.intersects(&iced::Rectangle {
+                x: a.x * screen.width,
+                y: a.y * screen.height,
+                width: a.width * screen.width,
+                height: a.height * screen.height,
+            })
+        })
     };
-    let y = top.clamp(0.0, (screen.height - card.height).max(0.0));
+    let sides = if item_side == arclens_ipc::ItemSide::Right {
+        [at_left, at_right]
+    } else {
+        [at_right, at_left]
+    };
+    let x = sides
+        .iter()
+        .copied()
+        .find(|&x| fits(x) && !covers(x))
+        .or_else(|| sides.iter().copied().find(|&x| fits(x)))
+        .unwrap_or(at_left.max(0.0));
     Point::new(x, y)
 }
 
@@ -284,7 +306,7 @@ mod tests {
             height: 0.4,
         };
         assert_eq!(
-            place(anchor, arclens_ipc::ItemSide::Left, SCREEN, CARD),
+            place(anchor, arclens_ipc::ItemSide::Left, &[], SCREEN, CARD),
             Point::new(800.0 + GAP, 300.0)
         );
     }
@@ -298,7 +320,7 @@ mod tests {
             height: 0.4,
         };
         assert_eq!(
-            place(anchor, arclens_ipc::ItemSide::Left, SCREEN, CARD),
+            place(anchor, arclens_ipc::ItemSide::Left, &[], SCREEN, CARD),
             Point::new(1400.0 - GAP - 360.0, 100.0)
         );
     }
@@ -312,12 +334,41 @@ mod tests {
             width: 0.21,
             height: 0.37,
         };
-        let at = place(anchor, arclens_ipc::ItemSide::Right, SCREEN, CARD);
+        let at = place(anchor, arclens_ipc::ItemSide::Right, &[], SCREEN, CARD);
         assert!((at.x - (1160.0 - GAP - 360.0)).abs() < 1e-3);
         // No room on the left: the right side after all.
         let tight = NormRect { x: 0.1, ..anchor };
-        let at = place(tight, arclens_ipc::ItemSide::Right, SCREEN, CARD);
+        let at = place(tight, arclens_ipc::ItemSide::Right, &[], SCREEN, CARD);
         assert!((at.x - (0.31 * 2000.0 + GAP)).abs() < 1e-3);
+    }
+
+    #[test]
+    fn does_not_cover_the_trader_purchase_panel() {
+        // Tooltip in the middle, room on both sides; the purchase panel
+        // sits right of it.
+        let anchor = NormRect {
+            x: 0.4,
+            y: 0.2,
+            width: 0.15,
+            height: 0.3,
+        };
+        let purchase = NormRect {
+            x: 0.58,
+            y: 0.1,
+            width: 0.25,
+            height: 0.7,
+        };
+        let at = place(
+            anchor,
+            arclens_ipc::ItemSide::Left,
+            &[purchase],
+            SCREEN,
+            CARD,
+        );
+        assert!((at.x - (800.0 - GAP - 360.0)).abs() < 1e-3, "{at:?}");
+        // Without it, the usual side.
+        let at = place(anchor, arclens_ipc::ItemSide::Left, &[], SCREEN, CARD);
+        assert!((at.x - (1100.0 + GAP)).abs() < 1e-3, "{at:?}");
     }
 
     #[test]
@@ -329,7 +380,8 @@ mod tests {
             height: 0.1,
         };
         assert!(
-            (place(anchor, arclens_ipc::ItemSide::Left, SCREEN, CARD).y - (1000.0 - 420.0)).abs()
+            (place(anchor, arclens_ipc::ItemSide::Left, &[], SCREEN, CARD).y - (1000.0 - 420.0))
+                .abs()
                 < 1e-3
         );
     }

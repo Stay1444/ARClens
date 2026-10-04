@@ -218,8 +218,11 @@ green CI.
   - [x] app vision worker + replay frame source; overlay draws the card
         beside the game tooltip (`ShowHover`, protocol v2), verified
         headlessly on stash and trader frames;
-  - [ ] avoid covering other panels when placing (trader purchase panel); pick the OCR engine (`ocrs` vs
-        Tesseract) by benchmarking on crops from the stash video;
+  - [x] avoid covering other panels when placing (2026-10-04): the other
+        cream panels found with the tooltip (the trader's purchase panel)
+        travel in `ShowHover.avoid`, and the card takes the side that
+        clears them. OCR engine: `ocrs` (pure Rust, no system library; reads
+        every fixture name), Tesseract not needed;
   - [x] read the tooltip footer: real sell value in the menu, raid detection
         (no value cell) → salvage outputs and SALVAGE wording in raid;
   - [x] map screen: read map name, raid time and condition from the right

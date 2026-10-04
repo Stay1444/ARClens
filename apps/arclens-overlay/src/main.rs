@@ -56,6 +56,16 @@ pub fn requested_monitor() -> Option<MonitorRect> {
     args.next().as_deref().and_then(MonitorRect::from_arg)
 }
 
+/// The detected-hover card: the item, the game's tooltip it goes beside,
+/// the side of the tooltip the item is on, and panels not to cover.
+#[derive(Debug)]
+pub struct Hovered {
+    shown: ShownItem,
+    anchor: arclens_ipc::NormRect,
+    item_side: arclens_ipc::ItemSide,
+    avoid: Vec<arclens_ipc::NormRect>,
+}
+
 /// The item card currently on screen.
 #[derive(Debug)]
 pub struct ShownItem {
@@ -96,7 +106,7 @@ pub struct Overlay {
     item: Option<ShownItem>,
     /// Item detected under the cursor in game, with the game tooltip's
     /// position. Shown whether or not `visible` is set.
-    hover: Option<(ShownItem, arclens_ipc::NormRect, arclens_ipc::ItemSide)>,
+    hover: Option<Hovered>,
     markers: Vec<Marker>,
     areas: Vec<arclens_core::MarkerArea>,
     transform: Option<Transform>,
@@ -346,10 +356,16 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
             recycle_names,
             anchor,
             item_side,
+            avoid,
         } => {
             tracing::debug!(item = %item.name, "hover");
             let shown = ShownItem::new(item, advice, icon.as_deref(), recycle_names);
-            state.hover = Some((shown, anchor, item_side));
+            state.hover = Some(Hovered {
+                shown,
+                anchor,
+                item_side,
+                avoid,
+            });
         }
         ToOverlay::ClearHover => state.hover = None,
         ToOverlay::ClearMarkers => {

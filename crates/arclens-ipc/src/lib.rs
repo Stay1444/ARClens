@@ -68,6 +68,10 @@ pub enum ToOverlay {
         /// on the other side so it doesn't cover it.
         #[serde(default)]
         item_side: ItemSide,
+        /// Other game panels the card shouldn't cover (normalised), e.g.
+        /// the trader's purchase panel.
+        #[serde(default)]
+        avoid: Vec<NormRect>,
     },
     /// The in-game tooltip is gone.
     ClearHover,

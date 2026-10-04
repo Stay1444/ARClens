@@ -22,6 +22,9 @@ pub struct Hover {
     pub item_side: crate::Side,
     /// What the tooltip footer says (value, raid or not), if it was found.
     pub footer: Option<FooterInfo>,
+    /// Other cream panels on screen (the trader's purchase panel): a card
+    /// placed beside the tooltip shouldn't cover them.
+    pub others: Vec<Rect>,
 }
 
 impl Hover {
@@ -37,12 +40,17 @@ impl Hover {
 
     /// `panel` as `[x, y, width, height]` fractions of the frame.
     pub fn panel_normalized(&self) -> [f32; 4] {
+        self.normalize(self.panel)
+    }
+
+    /// `rect` (frame pixels) as `[x, y, width, height]` fractions.
+    pub fn normalize(&self, rect: Rect) -> [f32; 4] {
         let (w, h) = (self.frame_width as f32, self.frame_height as f32);
         [
-            self.panel.x as f32 / w,
-            self.panel.y as f32 / h,
-            self.panel.width as f32 / w,
-            self.panel.height as f32 / h,
+            rect.x as f32 / w,
+            rect.y as f32 / h,
+            rect.width as f32 / w,
+            rect.height as f32 / h,
         ]
     }
 }
@@ -145,9 +153,11 @@ impl Analyzer {
             .filter(|(_, lines)| !lines.is_empty())
             .collect();
         candidates.sort_by_key(|(panel, _)| panel.area());
-        let Some((panel, lines)) = candidates.into_iter().next() else {
+        let mut candidates = candidates.into_iter();
+        let Some((panel, lines)) = candidates.next() else {
             return Ok(None);
         };
+        let others: Vec<Rect> = candidates.map(|(panel, _)| panel).collect();
 
         let cells = footer(frame, panel).map(|f| value_cells(frame, f));
         // Two copies of an item can differ in value (durability), so the
@@ -180,6 +190,7 @@ impl Analyzer {
             frame_height: frame.height(),
             item_side: crate::item_side(frame, panel),
             footer,
+            others,
         }))
     }
 
@@ -259,6 +270,7 @@ mod tests {
                 sell_value: value,
                 in_raid: false,
             }),
+            others: Vec::new(),
         }
     }
 
