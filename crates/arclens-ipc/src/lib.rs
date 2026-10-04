@@ -132,13 +132,23 @@ pub struct OverlaySettings {
     /// Where the pinned item card sits.
     #[serde(default)]
     pub corner: Corner,
+    /// How opaque card and panel backgrounds are (0.5–1).
+    #[serde(default = "OverlaySettings::default_opacity")]
+    pub opacity: f32,
 }
 
 impl OverlaySettings {
     /// Scales the app offers.
     pub const SCALES: [f32; 5] = [0.8, 0.9, 1.0, 1.25, 1.5];
 
+    /// Opacities the app offers.
+    pub const OPACITIES: [f32; 4] = [0.6, 0.75, 0.9, 1.0];
+
     const fn default_scale() -> f32 {
+        1.0
+    }
+
+    const fn default_opacity() -> f32 {
         1.0
     }
 
@@ -157,6 +167,7 @@ impl Default for OverlaySettings {
         Self {
             scale: Self::default_scale(),
             corner: Corner::default(),
+            opacity: Self::default_opacity(),
         }
     }
 }

@@ -8,14 +8,13 @@ use arclens_data::{Catalog, DiskCache};
 use std::sync::Arc;
 use std::time::Duration;
 
-/// Upstream data changes with game patches, not hourly.
-const MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
-
 /// Returns the cached catalog if fresh; otherwise downloads the dataset,
 /// rebuilds and caches it. A stale cache is still returned if the refresh
 /// fails, so the app keeps working offline.
-pub async fn load(paths: Paths) -> Result<Arc<Catalog>, String> {
-    load_inner(paths)
+/// `max_age`: how old the cache may be (the user's refresh interval;
+/// zero forces a refresh).
+pub async fn load(paths: Paths, max_age: Duration) -> Result<Arc<Catalog>, String> {
+    load_inner(paths, max_age)
         .await
         .map(Arc::new)
         .map_err(|e| format!("{e:#}"))
@@ -25,7 +24,7 @@ pub async fn load(paths: Paths) -> Result<Arc<Catalog>, String> {
 /// and network entirely (offline development, testing dataset changes).
 pub const DATA_DIR_ENV: &str = "ARCLENS_RAIDTHEORY_DIR";
 
-async fn load_inner(paths: Paths) -> anyhow::Result<Catalog> {
+async fn load_inner(paths: Paths, max_age: Duration) -> anyhow::Result<Catalog> {
     if let Some(dir) = std::env::var_os(DATA_DIR_ENV) {
         tracing::info!(dir = %std::path::Path::new(&dir).display(), "loading dataset from {DATA_DIR_ENV}");
         return Ok(tokio::task::spawn_blocking(move || RaidTheoryDir::new(dir).load()).await??);
@@ -43,7 +42,7 @@ async fn load_inner(paths: Paths) -> anyhow::Result<Catalog> {
     };
 
     if let Some(catalog) = &cached
-        && !catalog.is_stale(MAX_AGE)
+        && !catalog.is_stale(max_age)
     {
         tracing::info!(items = catalog.items.len(), "using cached catalog");
         return Ok(cached.unwrap_or_else(|| unreachable!()));
@@ -139,12 +138,14 @@ pub async fn load_events(
 /// Load `<map>.json` files (saved `game-map-data` responses) from this
 /// directory instead of fetching (offline dev).
 pub const MAP_DATA_DIR_ENV: &str = "ARCLENS_MAP_DATA_DIR";
-/// Markers change rarely; refetch them once a day.
-const MAP_DATA_MAX_AGE: Duration = Duration::from_secs(24 * 3600);
 
 /// Markers of one map (MetaForge id): from the cache while it is fresh,
 /// else fetched; a stale cache is the offline fallback.
-pub async fn load_markers(paths: Paths, map: String) -> Result<Vec<arclens_core::Marker>, String> {
+pub async fn load_markers(
+    paths: Paths,
+    map: String,
+    max_age: Duration,
+) -> Result<Vec<arclens_core::Marker>, String> {
     use arclens_data::metaforge;
     // The game's place names come along: they locate the in-game view and
     // name places on the app's map.
@@ -167,7 +168,7 @@ pub async fn load_markers(paths: Paths, map: String) -> Result<Vec<arclens_core:
     let fresh = tokio::fs::metadata(&cache)
         .await
         .and_then(|m| m.modified())
-        .is_ok_and(|t| t.elapsed().is_ok_and(|age| age < MAP_DATA_MAX_AGE));
+        .is_ok_and(|t| t.elapsed().is_ok_and(|age| age < max_age));
     if fresh && let Ok(bytes) = tokio::fs::read(&cache).await {
         return parse(&bytes);
     }

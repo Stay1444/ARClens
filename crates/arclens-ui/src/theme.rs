@@ -71,6 +71,22 @@ pub const INK: Color = Color::from_rgb(0.071, 0.075, 0.090);
 pub const ACCENT: Color = Color::from_rgb(0.976, 0.769, 0.090);
 pub const RADIUS: f32 = 6.0;
 
+/// How opaque the overlay's card and panel backgrounds are (user setting,
+/// 0.5–1). Set once per settings change; read when drawing.
+static SURFACE_ALPHA: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0x3f80_0000);
+
+pub fn set_surface_alpha(alpha: f32) {
+    SURFACE_ALPHA.store(
+        alpha.clamp(0.5, 1.0).to_bits(),
+        std::sync::atomic::Ordering::Relaxed,
+    );
+}
+
+/// `alpha` scaled by the user's background opacity.
+pub fn surface_alpha(alpha: f32) -> f32 {
+    alpha * f32::from_bits(SURFACE_ALPHA.load(std::sync::atomic::Ordering::Relaxed))
+}
+
 /// A page or section heading: condensed capitals.
 pub fn heading<'a, M: 'a>(label: &str, size: f32) -> Element<'a, M> {
     text(label.to_uppercase())

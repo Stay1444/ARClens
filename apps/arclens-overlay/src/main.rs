@@ -297,6 +297,8 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
         ToOverlay::Configure { settings } => {
             tracing::info!(?settings, "overlay settings");
             state.settings = settings;
+            arclens_ui::theme::set_surface_alpha(settings.opacity);
+            state.marker_cache.clear();
             state.update_screen();
             return shell::input_task(state);
         }

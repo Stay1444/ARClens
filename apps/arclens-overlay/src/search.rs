@@ -139,7 +139,7 @@ pub fn view(state: &SearchState, screen: iced::Size) -> Element<'_, Message> {
         .padding([12, 14])
         .width(Length::Fill)
         .style(|_| container::Style {
-            background: Some(with_alpha(theme::PANEL, 0.94).into()),
+            background: Some(with_alpha(theme::PANEL, theme::surface_alpha(0.94)).into()),
             border: Border {
                 radius: iced::border::Radius::default().bottom(RADIUS),
                 width: 1.0,

@@ -98,7 +98,7 @@ pub fn item_card<'a, Message: 'a>(card: &ItemCard<'a>) -> Element<'a, Message> {
     container(column![head, body.padding(14)])
         .width(width)
         .style(move |_| container::Style {
-            background: Some(with_alpha(theme::PANEL, 0.97).into()),
+            background: Some(with_alpha(theme::PANEL, theme::surface_alpha(0.97)).into()),
             border: Border {
                 color: with_alpha(rarity_color, 0.7),
                 width: 2.0,

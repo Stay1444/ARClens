@@ -177,7 +177,7 @@ fn card<'a>(
         .padding([8, 12])
         .width(Length::Fill)
         .style(|_| container::Style {
-            background: Some(with_alpha(theme::PANEL, 0.94).into()),
+            background: Some(with_alpha(theme::PANEL, theme::surface_alpha(0.94)).into()),
             border: Border {
                 radius: iced::border::Radius::default().bottom(RADIUS),
                 width: 1.0,

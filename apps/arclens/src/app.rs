@@ -120,7 +120,7 @@ pub enum Tab {
 }
 
 /// Settings saved in the config directory.
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct Settings {
     /// Server region for the event schedule (`None`: not chosen yet).
     #[serde(default)]
@@ -128,6 +128,29 @@ struct Settings {
     /// How the overlay looks.
     #[serde(default)]
     overlay: arclens_ipc::OverlaySettings,
+    /// How often game data and map markers are refetched, in hours.
+    #[serde(default = "default_refresh_hours")]
+    refresh_hours: u32,
+}
+
+const fn default_refresh_hours() -> u32 {
+    24
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            region: None,
+            overlay: arclens_ipc::OverlaySettings::default(),
+            refresh_hours: default_refresh_hours(),
+        }
+    }
+}
+
+impl Settings {
+    fn max_age(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(u64::from(self.refresh_hours) * 3600)
+    }
 }
 
 /// The open in-game map's view: where the last label read put it, and how
@@ -232,6 +255,10 @@ pub enum Message {
     SetRegion(String),
     SetOverlayScale(f32),
     SetOverlayCorner(arclens_ipc::Corner),
+    SetOverlayOpacity(f32),
+    SetRefreshHours(u32),
+    /// Refetch game data and markers now.
+    RefreshData,
     EventIconLoaded(
         String,
         Option<(iced::widget::image::Handle, std::path::PathBuf)>,
@@ -321,7 +348,10 @@ impl App {
             status: Vec::new(),
         };
         let tasks = Task::batch([
-            Task::perform(data::load(paths.clone()), Message::CatalogLoaded),
+            Task::perform(
+                data::load(paths.clone(), settings.max_age()),
+                Message::CatalogLoaded,
+            ),
             Task::perform(
                 data::load_events(paths, settings.region),
                 Message::EventsLoaded,
@@ -442,8 +472,12 @@ impl App {
             }
             Message::FilterEventsMap(map) => self.event_map_filter = map,
             Message::SetRegion(region) => return self.set_region(region),
-            Message::SetOverlayScale(_) | Message::SetOverlayCorner(_) => {
-                self.set_overlay_setting(&message);
+            Message::RefreshData => return self.refresh_data(),
+            Message::SetOverlayScale(_)
+            | Message::SetOverlayCorner(_)
+            | Message::SetOverlayOpacity(_)
+            | Message::SetRefreshHours(_) => {
+                self.set_setting(&message);
             }
             Message::SetStationLevel(station, level) => {
                 self.progress
@@ -1080,6 +1114,23 @@ impl App {
     }
 
     /// Starts loading the selected map's markers, unless already loaded.
+    /// Refetches game data and the open map's markers, ignoring the cache.
+    fn refresh_data(&mut self) -> Task<Message> {
+        self.status.push("Refreshing game data…".to_owned());
+        self.markers.remove(&self.map);
+        let map = self.map.clone();
+        Task::batch([
+            Task::perform(
+                data::load(self.paths.clone(), std::time::Duration::ZERO),
+                Message::CatalogLoaded,
+            ),
+            Task::perform(
+                data::load_markers(self.paths.clone(), map.clone(), std::time::Duration::ZERO),
+                move |result| Message::MarkersLoaded(map.clone(), result),
+            ),
+        ])
+    }
+
     fn load_map_markers(&mut self) -> Task<Message> {
         if matches!(
             self.markers.get(&self.map),
@@ -1090,7 +1141,7 @@ impl App {
         self.markers.insert(self.map.clone(), Load::Loading);
         let map = self.map.clone();
         Task::perform(
-            data::load_markers(self.paths.clone(), map.clone()),
+            data::load_markers(self.paths.clone(), map.clone(), self.settings.max_age()),
             move |result| Message::MarkersLoaded(map.clone(), result),
         )
     }
@@ -1401,11 +1452,13 @@ impl App {
         self.request_event_icons()
     }
 
-    /// Saves an overlay setting and applies it.
-    fn set_overlay_setting(&mut self, message: &Message) {
+    /// Saves a setting and applies it.
+    fn set_setting(&mut self, message: &Message) {
         match *message {
             Message::SetOverlayScale(scale) => self.settings.overlay.scale = scale,
             Message::SetOverlayCorner(corner) => self.settings.overlay.corner = corner,
+            Message::SetOverlayOpacity(opacity) => self.settings.overlay.opacity = opacity,
+            Message::SetRefreshHours(hours) => self.settings.refresh_hours = hours,
             _ => return,
         }
         crate::store::save(&self.paths.settings(), &self.settings);
@@ -1464,9 +1517,11 @@ impl App {
             Tab::Events => self.view_events(),
             Tab::Map => self.view_map(),
             Tab::Progress => self.view_progress(),
-            Tab::Settings => {
-                crate::views::settings::view(self.settings.overlay, self.settings.region.as_deref())
-            }
+            Tab::Settings => crate::views::settings::view(&crate::views::settings::SettingsView {
+                overlay: self.settings.overlay,
+                region: self.settings.region.as_deref(),
+                refresh_hours: self.settings.refresh_hours,
+            }),
             Tab::Items => self.view_catalog_or_status(),
         };
         column![self.view_top_bar(), body, self.view_footer()].into()

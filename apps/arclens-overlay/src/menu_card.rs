@@ -196,7 +196,9 @@ pub fn view<'a>(
         })
         .width(Length::Fill)
         .style(|_| container::Style {
-            background: Some(with_alpha(palette::SURFACE, 0.94).into()),
+            background: Some(
+                with_alpha(palette::SURFACE, arclens_ui::theme::surface_alpha(0.94)).into(),
+            ),
             border: Border {
                 radius: iced::border::Radius::default().bottom(6.0),
                 ..Border::default()

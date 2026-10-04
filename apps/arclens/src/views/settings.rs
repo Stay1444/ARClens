@@ -8,7 +8,46 @@ use arclens_ui::theme::{self, size, space};
 use iced::widget::{Space, column, container, row, scrollable, text};
 use iced::{Alignment, Border, Element, Length};
 
-pub fn view(overlay: OverlaySettings, region: Option<&str>) -> Element<'_, Message> {
+/// What the Settings tab shows.
+pub struct SettingsView<'a> {
+    pub overlay: OverlaySettings,
+    pub region: Option<&'a str>,
+    pub refresh_hours: u32,
+}
+
+/// Refresh intervals offered, in hours, with their labels.
+const REFRESH: [(u32, &str); 4] = [
+    (6, "6 hours"),
+    (24, "Daily"),
+    (72, "3 days"),
+    (168, "Weekly"),
+];
+
+pub fn view<'a>(page: &SettingsView<'a>) -> Element<'a, Message> {
+    let (overlay, region) = (page.overlay, page.region);
+    let opacities = OverlaySettings::OPACITIES
+        .iter()
+        .fold(row![].spacing(8), |r, &opacity| {
+            r.push(pill(
+                opacity_label(opacity),
+                (overlay.opacity - opacity).abs() < 0.01,
+                Message::SetOverlayOpacity(opacity),
+            ))
+        });
+    let refresh = REFRESH
+        .iter()
+        .fold(row![].spacing(8), |r, &(hours, label)| {
+            r.push(pill(
+                label,
+                page.refresh_hours == hours,
+                Message::SetRefreshHours(hours),
+            ))
+        })
+        .push(Space::new().width(12))
+        .push(theme::secondary_button(
+            "Refresh now",
+            Some(Message::RefreshData),
+        ));
     let scales = OverlaySettings::SCALES
         .iter()
         .fold(row![].spacing(8), |r, &scale| {
@@ -46,6 +85,17 @@ pub fn view(overlay: OverlaySettings, region: Option<&str>) -> Element<'_, Messa
             .into(),
         ),
         section(
+            "Overlay background",
+            "How much of the game shows through the overlay's cards and panels.",
+            opacities.wrap().vertical_spacing(8).into(),
+        ),
+        section(
+            "Game data",
+            "How often item data and map markers are fetched again. Data changes \
+             with game patches; the cache keeps working offline.",
+            refresh.wrap().vertical_spacing(8).into(),
+        ),
+        section(
             "Server region",
             "Map condition times differ per region.",
             region_pills(region),
@@ -64,6 +114,15 @@ fn section<'a>(title: &'a str, help: &'a str, body: Element<'a, Message>) -> Ele
         None,
         column![text(help).size(size::BODY).color(palette::TEXT_MUTED), body,].spacing(space::GAP),
     )
+}
+
+/// "75 %" style label for one of [`OverlaySettings::OPACITIES`].
+fn opacity_label(opacity: f32) -> &'static str {
+    const LABELS: [&str; 4] = ["60 %", "75 %", "90 %", "Solid"];
+    OverlaySettings::OPACITIES
+        .iter()
+        .position(|&o| (o - opacity).abs() < 0.01)
+        .map_or("custom", |i| LABELS[i])
 }
 
 /// "125 %" style label for one of [`OverlaySettings::SCALES`].

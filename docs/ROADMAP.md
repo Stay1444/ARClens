@@ -42,7 +42,10 @@ green CI.
       on connect and on change (`Configure`, protocol v13). The overlay
       already opens on the captured monitor. Verified headlessly at 125 %;
       **unverified** on Windows, where iced reports sizes after the scale.
-- [ ] More settings: data refresh interval, overlay opacity.
+- [x] More settings (2026-10-04): overlay background opacity (60 %–solid,
+      sent in `Configure`; older overlays ignore the new field), how often
+      game data and map markers are refetched (6 h to weekly), and a
+      "Refresh now" button.
 - [x] Test on KDE Plasma 6 Wayland over ARC Raiders with
       `PROTON_ENABLE_WAYLAND=1` (works, 2026-10-03).
 - [ ] Same test with Proton via XWayland (the default). Record the results in

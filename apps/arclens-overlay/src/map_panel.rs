@@ -127,7 +127,7 @@ pub fn view(state: &PanelState, screen: Size) -> Option<Element<'_, Message>> {
         .width(Length::Fill)
         .height(Length::Fill)
         .style(move |_| container::Style {
-            background: Some(with_alpha(theme::PANEL, alpha).into()),
+            background: Some(with_alpha(theme::PANEL, theme::surface_alpha(alpha)).into()),
             border: Border {
                 radius: iced::border::Radius::default().bottom(RADIUS),
                 ..Border::default()
