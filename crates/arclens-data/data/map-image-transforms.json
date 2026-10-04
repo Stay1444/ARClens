@@ -1,0 +1,100 @@
+{
+  "_doc": "MetaForge map space (x = lng, y = lat) -> pixel space of RaidTheory/arcraiders-data map images at max zoom: image_px = scale * map + (tx, ty). Uniform scale, no rotation, no y flip. Tiled maps: 512 px tiles, {z}/{x}/{y}.webp with x = column, y = row; full image is 1000 * 2^z px square (z0-1 under v2/low, z2-3 under v2/high; edge tiles are cropped). At zoom z divide scale, tx, ty by 2^(3-z). Residuals are in max-zoom image px. See docs/research/map-images.md (2026-10-04).",
+  "dam": {
+    "source": "raidtheory",
+    "tiles": "images/maps/dam-battleground/v2/high/{z}/{x}/{y}.webp",
+    "low_tiles": "images/maps/dam-battleground/v2/low/{z}/{x}/{y}.webp",
+    "tile_size": 512,
+    "min_zoom": 0,
+    "max_zoom": 3,
+    "size": [8000, 8000],
+    "scale": 1.28133,
+    "tx": -1091.6,
+    "ty": 507.5,
+    "verified": "in-game recording: 38 frames with ground-truth map->frame transforms, each registered to the tiles with SIFT + RANSAC similarity (rotation 0.00 deg); markers checked on overlay",
+    "residual_px": { "rms": 2.8, "p95": 5.3, "max": 10.0 }
+  },
+  "buried-city": {
+    "source": "raidtheory",
+    "tiles": "images/maps/buried-city/v2/high/{z}/{x}/{y}.webp",
+    "low_tiles": "images/maps/buried-city/v2/low/{z}/{x}/{y}.webp",
+    "tile_size": 512,
+    "min_zoom": 0,
+    "max_zoom": 3,
+    "size": [8000, 8000],
+    "scale": 1.4165,
+    "tx": -6129.6,
+    "ty": -2851.2,
+    "verified": "in-game recording: 42 frames (two zoom sessions) registered with SIFT + RANSAC; the two sessions' ground truths disagree by ~22 px in y, the fit splits the difference; labels checked on overlay",
+    "residual_px": { "rms": 11.6, "p95": 13.4, "max": 22.6 }
+  },
+  "blue-gate": {
+    "source": "raidtheory",
+    "tiles": "images/maps/blue-gate/v2/high/{z}/{x}/{y}.webp",
+    "low_tiles": "images/maps/blue-gate/v2/low/{z}/{x}/{y}.webp",
+    "tile_size": 512,
+    "min_zoom": 0,
+    "max_zoom": 3,
+    "size": [8000, 8000],
+    "scale": 0.7513,
+    "tx": -1460.3,
+    "ty": 303.0,
+    "verified": "in-game recording: 36 frames registered with SIFT + RANSAC; labels checked on overlay",
+    "residual_px": { "rms": 3.2, "p95": 5.9, "max": 14.0 }
+  },
+  "spaceport": {
+    "source": "raidtheory",
+    "tiles": "images/maps/the-spaceport/v2/high/{z}/{x}/{y}.webp",
+    "low_tiles": "images/maps/the-spaceport/v2/low/{z}/{x}/{y}.webp",
+    "tile_size": 512,
+    "min_zoom": 0,
+    "max_zoom": 3,
+    "size": [8000, 8000],
+    "scale": 1.56668,
+    "tx": -2204.8,
+    "ty": 258.7,
+    "verified": "UNVERIFIED estimate: 13 centre-anchored place labels matched by eye to the buildings they name; no in-game recording",
+    "residual_px": { "rms": 41, "max": 83 }
+  },
+  "riven-tides": {
+    "source": "raidtheory",
+    "tiles": "images/maps/riven-tides/v2/high/{z}/{x}/{y}.webp",
+    "low_tiles": "images/maps/riven-tides/v2/low/{z}/{x}/{y}.webp",
+    "tile_size": 512,
+    "min_zoom": 0,
+    "max_zoom": 3,
+    "size": [8000, 8000],
+    "scale": 0.89341,
+    "tx": -2357.3,
+    "ty": -746.1,
+    "verified": "UNVERIFIED estimate: the 4 loot-zone labels (top-left anchored) fitted to the centroids of the loot-zone outlines baked into the image; no in-game recording",
+    "residual_px": { "rms": 62, "max": 80 }
+  },
+  "stella-montis": {
+    "source": "raidtheory",
+    "layers": [
+      {
+        "name": "upper",
+        "zlayers": 1,
+        "image": "images/maps/stella_montis_upper.png",
+        "size": [4096, 3072],
+        "scale": 1.06814,
+        "tx": -2766.8,
+        "ty": -1430.0,
+        "verified": "the image is an in-game map screenshot with the game's labels: 9 centre-anchored label texts located and fitted, 2 held-out labels (Sandbox, Seed Vault) land on their text",
+        "residual_px": { "rms": 12.0, "max": 18.9 }
+      },
+      {
+        "name": "lower",
+        "zlayers": 2,
+        "image": "images/maps/stella_montis_lower.png",
+        "size": [5120, 3072],
+        "scale": 1.07661,
+        "tx": -1925.3,
+        "ty": -1133.1,
+        "verified": "the image is an in-game map screenshot with the game's labels: 14 centre-anchored label texts located and fitted, 5 held-out labels (Lobby, Auditorium, Cultural Archives, Cafeteria, Atrium) land on their text",
+        "residual_px": { "rms": 7.8, "max": 11.7 }
+      }
+    ]
+  }
+}
