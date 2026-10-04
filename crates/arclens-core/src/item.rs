@@ -44,6 +44,11 @@ pub struct ItemQuantity {
 }
 
 impl Item {
+    /// Its name, then its [`Item::aliases`].
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        std::iter::once(self.name.as_str()).chain(self.aliases.iter().map(String::as_str))
+    }
+
     /// Blueprints unlock crafting once learned (the data's `type`).
     pub fn is_blueprint(&self) -> bool {
         self.category
@@ -59,7 +64,12 @@ impl Item {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Item {
     pub id: ItemId,
+    /// In the catalogue's language.
     pub name: String,
+    /// Its name in the other languages ARClens speaks, for matching what
+    /// the game shows (the game's language can differ from ours).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<String>,
     #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]

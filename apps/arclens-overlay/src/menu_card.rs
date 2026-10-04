@@ -5,7 +5,9 @@
 //! Countdowns run on the overlay's own clock.
 
 use crate::Message;
+use arclens_i18n::t;
 use arclens_ipc::{CardEvent, MenuCard, ProgressLine};
+use arclens_ui::names;
 use arclens_ui::palette::{self, with_alpha};
 use iced::widget::{Space, column, container, image, progress_bar, row, text};
 use iced::{Alignment, Border, Color, Element, Font, Length, Size, font};
@@ -60,12 +62,13 @@ enum Page {
 }
 
 impl Page {
-    const fn title(self) -> &'static str {
+    fn title(self) -> String {
         match self {
-            Self::Now => "CONDITIONS NOW",
-            Self::Next => "COMING UP",
-            Self::Progress => "YOUR PROGRESS",
+            Self::Now => t!("overlay-card-now"),
+            Self::Next => t!("overlay-card-next"),
+            Self::Progress => t!("overlay-card-progress"),
         }
+        .to_uppercase()
     }
 }
 
@@ -182,8 +185,22 @@ pub fn view<'a>(
     });
 
     let body: Element<'a, Message> = match page {
-        Page::Now => conditions(&card.active, icons, now_ms, "ends in", NOW, alpha),
-        Page::Next => conditions(&card.upcoming, icons, now_ms, "starts in", NEXT, alpha),
+        Page::Now => conditions(
+            &card.active,
+            icons,
+            now_ms,
+            &t!("overlay-card-ends-in"),
+            NOW,
+            alpha,
+        ),
+        Page::Next => conditions(
+            &card.upcoming,
+            icons,
+            now_ms,
+            &t!("overlay-card-starts-in"),
+            NEXT,
+            alpha,
+        ),
         Page::Progress => progress(&card.progress, alpha),
     };
     // Slides in from the right as it fades in.
@@ -219,7 +236,7 @@ fn conditions<'a>(
     events: &'a [CardEvent],
     icons: &'a Icons,
     now_ms: i64,
-    when: &'a str,
+    when: &str,
     accent: Color,
     alpha: f32,
 ) -> Element<'a, Message> {
@@ -233,17 +250,17 @@ fn conditions<'a>(
                 .height(36)
                 .opacity(alpha)
                 .into(),
-            None => initials(&event.name, accent, alpha),
+            None => initials(&names::condition(&event.name), accent, alpha),
         };
         list = list.push(
             row![
                 icon,
                 column![
-                    text(&event.name)
+                    text(names::condition(&event.name))
                         .size(16)
                         .font(BOLD)
                         .color(with_alpha(palette::TEXT, alpha)),
-                    text(&event.map)
+                    text(names::map(&event.map))
                         .size(12)
                         .color(with_alpha(palette::TEXT_MUTED, alpha)),
                 ]
@@ -254,7 +271,7 @@ fn conditions<'a>(
                         .size(18)
                         .font(BOLD)
                         .color(with_alpha(accent, alpha)),
-                    text(when)
+                    text(when.to_owned())
                         .size(10)
                         .color(with_alpha(palette::TEXT_MUTED, alpha)),
                 ]
@@ -266,7 +283,7 @@ fn conditions<'a>(
     }
     if !any {
         list = list.push(
-            text("No schedule yet")
+            text(t!("overlay-card-no-schedule"))
                 .size(13)
                 .color(with_alpha(palette::TEXT_MUTED, alpha)),
         );

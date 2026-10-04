@@ -7,10 +7,16 @@ use arclens_core::Item;
 /// character, so a loose threshold would confidently pick the wrong tier.
 const MIN_SIMILARITY: f64 = 0.9;
 
-/// Uppercases, drops a leading trader quantity ("x25", "×25"), and collapses
-/// whitespace.
+/// Uppercases, drops accents ("ESCÁNER" → "ESCANER": OCR may or may not
+/// keep them), drops a leading trader quantity ("x25", "×25"), and
+/// collapses whitespace.
 pub fn normalize_name(text: &str) -> String {
-    let upper = text.trim().to_uppercase();
+    let upper: String = text
+        .trim()
+        .to_uppercase()
+        .chars()
+        .map(fold_accent)
+        .collect();
     let mut words: Vec<&str> = upper.split_whitespace().collect();
     if let Some(first) = words.first()
         && let Some(rest) = first.strip_prefix('X').or_else(|| first.strip_prefix('×'))
@@ -22,8 +28,23 @@ pub fn normalize_name(text: &str) -> String {
     words.join(" ")
 }
 
-/// The catalogue item whose name best matches recognised `text`, with a
-/// confidence in `0.0..=1.0`. `None` when nothing is close enough.
+/// Spanish (and other Latin) accented capitals to their plain letter.
+fn fold_accent(c: char) -> char {
+    match c {
+        'Á' | 'À' | 'Â' | 'Ä' => 'A',
+        'É' | 'È' | 'Ê' | 'Ë' => 'E',
+        'Í' | 'Ì' | 'Î' | 'Ï' => 'I',
+        'Ó' | 'Ò' | 'Ô' | 'Ö' => 'O',
+        'Ú' | 'Ù' | 'Û' | 'Ü' => 'U',
+        'Ñ' => 'N',
+        'Ç' => 'C',
+        c => c,
+    }
+}
+
+/// The catalogue item whose name (in any language it has, see
+/// [`Item::aliases`]) best matches recognised `text`, with a confidence in
+/// `0.0..=1.0`. `None` when nothing is close enough.
 pub fn match_name<'a>(text: &str, items: &'a [Item]) -> Option<(&'a Item, f64)> {
     let wanted = normalize_name(text);
     if wanted.is_empty() {
@@ -31,16 +52,39 @@ pub fn match_name<'a>(text: &str, items: &'a [Item]) -> Option<(&'a Item, f64)> 
     }
     let mut best: Option<(&Item, f64)> = None;
     for item in items {
-        let name = normalize_name(&item.name);
-        if name == wanted {
-            return Some((item, 1.0));
-        }
-        let score = strsim::normalized_levenshtein(&name, &wanted);
-        if best.is_none_or(|(_, s)| score > s) {
-            best = Some((item, score));
+        for name in item.names() {
+            let name = normalize_name(name);
+            if name == wanted {
+                return Some((item, 1.0));
+            }
+            let score = strsim::normalized_levenshtein(&name, &wanted);
+            if best.is_none_or(|(_, s)| score > s) {
+                best = Some((item, score));
+            }
         }
     }
     best.filter(|&(_, score)| score >= MIN_SIMILARITY)
+}
+
+/// The best of `candidates` for recognised `text` by any of its names
+/// (normalised like item names), if at least `min` similar.
+pub fn best_named<'a, T, N>(text: &str, candidates: &'a [T], names: N, min: f64) -> Option<&'a T>
+where
+    N: Fn(&'a T) -> Vec<&'a str>,
+{
+    let wanted = normalize_name(text);
+    candidates
+        .iter()
+        .filter_map(|c| {
+            names(c)
+                .into_iter()
+                .map(|n| strsim::normalized_levenshtein(&wanted, &normalize_name(n)))
+                .max_by(f64::total_cmp)
+                .map(|score| (c, score))
+        })
+        .filter(|&(_, score)| score >= min)
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(c, _)| c)
 }
 
 #[cfg(test)]
@@ -52,6 +96,7 @@ mod tests {
         Item {
             id: ItemId::new(name.to_lowercase().replace(' ', "_")),
             name: name.to_owned(),
+            aliases: Vec::new(),
             description: None,
             rarity: None,
             category: None,

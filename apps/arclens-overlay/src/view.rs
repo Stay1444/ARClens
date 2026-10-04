@@ -1,6 +1,7 @@
 //! Rendering. Everything outside the drawn widgets stays fully transparent.
 
 use crate::{Message, Overlay};
+use arclens_i18n::t;
 use arclens_ui::{CardSize, ItemCard, item_card};
 use iced::widget::canvas::{self, Canvas, Frame, Geometry, Path};
 use iced::widget::{Space, column, container, stack, text};
@@ -262,14 +263,14 @@ fn draw_badge(frame: &mut Frame, marker: &arclens_core::Marker, at: Point) {
 
 fn status_badge(state: &Overlay) -> Element<'_, Message> {
     let mode = if state.interactive {
-        "interactive"
+        t!("top-interactive")
     } else {
-        "click-through"
+        t!("top-click-through")
     };
     let hint = if state.item.is_none() {
-        " · pick an item in the app"
+        format!(" · {}", t!("overlay-pick-hint"))
     } else {
-        ""
+        String::new()
     };
     container(
         text(format!("ARCLENS · {mode}{hint}").to_uppercase())

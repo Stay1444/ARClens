@@ -301,16 +301,29 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
     }
 }
 
+/// The app's settings and language.
+fn configure(
+    state: &mut Overlay,
+    settings: arclens_ipc::OverlaySettings,
+    lang: Option<&str>,
+) -> Task<Message> {
+    tracing::info!(?settings, ?lang, "overlay settings");
+    arclens_i18n::set(
+        lang.and_then(arclens_i18n::Lang::from_tag)
+            .unwrap_or_default(),
+    );
+    state.settings = settings;
+    arclens_ui::theme::set_surface_alpha(settings.opacity);
+    state.marker_cache.clear();
+    state.update_screen();
+    shell::input_task(state)
+}
+
 fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
     match msg {
         ToOverlay::Hello(_) => {}
-        ToOverlay::Configure { settings } => {
-            tracing::info!(?settings, "overlay settings");
-            state.settings = settings;
-            arclens_ui::theme::set_surface_alpha(settings.opacity);
-            state.marker_cache.clear();
-            state.update_screen();
-            return shell::input_task(state);
+        ToOverlay::Configure { settings, lang } => {
+            return configure(state, settings, lang.as_deref());
         }
         ToOverlay::SetVisible { visible } => {
             tracing::info!(visible, "overlay visibility changed");

@@ -4,6 +4,8 @@
 use crate::app::Message;
 use crate::event_icons::EventIcons;
 use arclens_core::{ScheduledEvent, agenda, countdown};
+use arclens_i18n::t;
+use arclens_ui::names;
 use arclens_ui::palette::{self, with_alpha};
 use arclens_ui::theme::{self, size, space};
 use iced::widget::{Space, column, container, row, scrollable, text};
@@ -53,7 +55,7 @@ pub fn view<'a>(page: &EventsView<'a>) -> Element<'a, Message> {
             r.push(card(
                 e,
                 icons,
-                format!("Ends in {}", countdown(e.end_ms - now_ms)),
+                t!("events-ends-in", time = countdown(e.end_ms - now_ms)),
                 ACTIVE,
             ))
         });
@@ -69,7 +71,7 @@ pub fn view<'a>(page: &EventsView<'a>) -> Element<'a, Message> {
         r.push(card(
             e,
             icons,
-            format!("Starts in {}", countdown(e.start_ms - now_ms)),
+            t!("events-starts-in", time = countdown(e.start_ms - now_ms)),
             UPCOMING,
         ))
     });
@@ -87,33 +89,30 @@ pub fn view<'a>(page: &EventsView<'a>) -> Element<'a, Message> {
 
     let content = column![
         row![
-            container(theme::heading("Events", size::TITLE)).width(Length::Fill),
+            container(theme::heading(&t!("events-title"), size::TITLE)).width(Length::Fill),
             region_pills(page.region),
         ]
         .align_y(Alignment::Center),
         region_notice(page.region, page.served_region),
         map_pills(events, map_filter),
         section(
-            "Active now",
+            &t!("events-active-now"),
             active.wrap().vertical_spacing(space::GAP).into(),
             agenda.active.is_empty()
         ),
         section(
-            "Next on each map",
+            &t!("events-next-per-map"),
             upcoming.wrap().vertical_spacing(space::GAP).into(),
             next.is_empty()
         ),
         section(
-            "Schedule",
+            &t!("events-schedule"),
             schedule.wrap().vertical_spacing(space::GAP).into(),
             agenda.upcoming.is_empty() && agenda.active.is_empty()
         ),
-        text(
-            "Times in your local time zone. Some sites shift the rotation per server \
-             region; if times look off for you, tell us."
-        )
-        .size(size::SMALL)
-        .color(palette::TEXT_MUTED),
+        text(t!("events-footnote"))
+            .size(size::SMALL)
+            .color(palette::TEXT_MUTED),
     ]
     .spacing(space::SECTION)
     .padding(theme::PAGE_PADDING)
@@ -125,9 +124,9 @@ pub fn view<'a>(page: &EventsView<'a>) -> Element<'a, Message> {
 pub(crate) fn region_pills<'a>(chosen: Option<&str>) -> Element<'a, Message> {
     arclens_data::metaforge::REGIONS
         .iter()
-        .fold(row![].spacing(6), |r, &(id, name)| {
+        .fold(row![].spacing(6), |r, &(id, _)| {
             r.push(pill(
-                name,
+                &names::region(id),
                 chosen == Some(id),
                 Message::SetRegion(id.to_owned()),
             ))
@@ -138,22 +137,18 @@ pub(crate) fn region_pills<'a>(chosen: Option<&str>) -> Element<'a, Message> {
 /// First launch: ask for the region. Later: say so if the schedule came
 /// back for another region than chosen.
 fn region_notice<'a>(chosen: Option<&str>, served: Option<&str>) -> Element<'a, Message> {
-    let name = |id: &str| {
-        arclens_data::metaforge::REGIONS
-            .iter()
-            .find(|r| r.0 == id)
-            .map_or_else(|| id.to_owned(), |r| r.1.to_owned())
-    };
     let note = match (chosen, served) {
-        (None, served) => format!(
-            "Which servers do you play on? Condition times differ by region; pick yours \
-             above. Showing {} for now.",
-            served.map_or_else(|| "the default schedule".to_owned(), name)
+        (None, served) => t!(
+            "events-pick-region",
+            showing = served.map_or_else(
+                || t!("events-default-schedule"),
+                |id| t!("events-region-schedule", region = names::region(id))
+            )
         ),
-        (Some(chosen), Some(served)) if chosen != served => format!(
-            "MetaForge returned the {} schedule, not {}: times may be off.",
-            name(served),
-            name(chosen)
+        (Some(chosen), Some(served)) if chosen != served => t!(
+            "events-other-region",
+            served = names::region(served),
+            chosen = names::region(chosen)
         ),
         _ => return Space::new().into(),
     };
@@ -171,9 +166,9 @@ fn region_notice<'a>(chosen: Option<&str>, served: Option<&str>) -> Element<'a, 
         .into()
 }
 
-fn section<'a>(title: &'a str, body: Element<'a, Message>, empty: bool) -> Element<'a, Message> {
+fn section<'a>(title: &str, body: Element<'a, Message>, empty: bool) -> Element<'a, Message> {
     let body = if empty {
-        text("Nothing here right now.")
+        text(t!("events-nothing"))
             .size(size::BODY)
             .color(palette::TEXT_MUTED)
             .into()
@@ -188,14 +183,14 @@ fn map_pills<'a>(events: &'a [ScheduledEvent], selected: Option<&'a str>) -> Ele
     maps.sort_unstable();
     maps.dedup();
     let all = pill(
-        "All maps",
+        &t!("events-all-maps"),
         selected.is_none(),
         Message::FilterEventsMap(None),
     );
     maps.into_iter()
         .fold(row![all].spacing(6), |r, map| {
             r.push(pill(
-                map,
+                &names::map(map),
                 selected == Some(map),
                 Message::FilterEventsMap(Some(map.to_owned())),
             ))
@@ -204,7 +199,7 @@ fn map_pills<'a>(events: &'a [ScheduledEvent], selected: Option<&'a str>) -> Ele
         .into()
 }
 
-pub(crate) fn pill(label: &str, active: bool, on_press: Message) -> Element<'_, Message> {
+pub(crate) fn pill<'a>(label: &str, active: bool, on_press: Message) -> Element<'a, Message> {
     theme::chip(label, active, on_press)
 }
 
@@ -218,10 +213,10 @@ pub(crate) fn card<'a>(
         row![
             event_icon(&event.name, icons, 48.0),
             column![
-                text(event.name.clone())
+                text(names::condition(&event.name))
                     .size(size::BODY + 1.0)
                     .font(theme::STRONG),
-                text(event.map.clone())
+                text(names::map(&event.map))
                     .size(size::SMALL)
                     .color(palette::TEXT_MUTED),
                 text(when)
@@ -249,7 +244,7 @@ fn event_icon<'a>(name: &str, icons: &'a EventIcons, size: f32) -> Element<'a, M
             .height(size)
             .into();
     }
-    let initials: String = name
+    let initials: String = names::condition(name)
         .split_whitespace()
         .filter_map(|w| w.chars().next())
         .take(2)
@@ -280,7 +275,7 @@ fn schedule_card<'a>(
     icons: &'a EventIcons,
     now_ms: i64,
 ) -> Element<'a, Message> {
-    let mut maps: Vec<&str> = list.iter().map(|e| e.map.as_str()).collect();
+    let mut maps: Vec<String> = list.iter().map(|e| names::map(&e.map)).collect();
     maps.sort_unstable();
     maps.dedup();
 
@@ -289,7 +284,10 @@ fn schedule_card<'a>(
         .take(PER_CONDITION)
         .fold(column![].spacing(6), |col, e| {
             let (when, accent) = if e.is_active(now_ms) {
-                (format!("ends in {}", countdown(e.end_ms - now_ms)), ACTIVE)
+                (
+                    t!("events-ends-in-short", time = countdown(e.end_ms - now_ms)),
+                    ACTIVE,
+                )
             } else {
                 (countdown(e.start_ms - now_ms), UPCOMING)
             };
@@ -305,7 +303,7 @@ fn schedule_card<'a>(
                     ]
                     // The map only when the condition runs on several.
                     .push((maps.len() > 1).then(|| {
-                        text(e.map.clone())
+                        text(names::map(&e.map))
                             .size(size::TINY)
                             .color(palette::TEXT_MUTED)
                     }))
@@ -324,7 +322,9 @@ fn schedule_card<'a>(
             row![
                 event_icon(name, icons, 40.0),
                 column![
-                    text(name.to_owned()).size(size::H2).font(theme::DISPLAY),
+                    text(names::condition(name))
+                        .size(size::H2)
+                        .font(theme::DISPLAY),
                     text(maps.join(", "))
                         .size(size::TINY)
                         .color(palette::TEXT_MUTED),
@@ -367,6 +367,20 @@ fn local_time(ms: i64) -> String {
     if at.date() == today {
         at.strftime("%H:%M").to_string()
     } else {
-        at.strftime("%a %H:%M").to_string()
+        format!("{} {}", weekday(at.weekday()), at.strftime("%H:%M"))
+    }
+}
+
+/// Short weekday name in the interface language.
+fn weekday(day: jiff::civil::Weekday) -> String {
+    use jiff::civil::Weekday;
+    match day {
+        Weekday::Monday => t!("weekday-mon"),
+        Weekday::Tuesday => t!("weekday-tue"),
+        Weekday::Wednesday => t!("weekday-wed"),
+        Weekday::Thursday => t!("weekday-thu"),
+        Weekday::Friday => t!("weekday-fri"),
+        Weekday::Saturday => t!("weekday-sat"),
+        Weekday::Sunday => t!("weekday-sun"),
     }
 }

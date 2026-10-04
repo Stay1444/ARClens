@@ -181,6 +181,7 @@ mod tests {
         Item {
             id: ItemId::new(id),
             name: id.to_owned(),
+            aliases: Vec::new(),
             description: None,
             rarity: None,
             category: None,

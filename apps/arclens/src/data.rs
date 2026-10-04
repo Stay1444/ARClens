@@ -12,9 +12,14 @@ use std::time::Duration;
 /// rebuilds and caches it. A stale cache is still returned if the refresh
 /// fails, so the app keeps working offline.
 /// `max_age`: how old the cache may be (the user's refresh interval;
-/// zero forces a refresh).
-pub async fn load(paths: Paths, max_age: Duration) -> Result<Arc<Catalog>, String> {
-    load_inner(paths, max_age)
+/// zero forces a refresh). `lang`: the dataset language of names and
+/// descriptions (`en`, `es`); each has its own cache.
+pub async fn load(
+    paths: Paths,
+    max_age: Duration,
+    lang: &'static str,
+) -> Result<Arc<Catalog>, String> {
+    load_inner(paths, max_age, lang)
         .await
         .map(Arc::new)
         .map_err(|e| format!("{e:#}"))
@@ -24,13 +29,20 @@ pub async fn load(paths: Paths, max_age: Duration) -> Result<Arc<Catalog>, Strin
 /// and network entirely (offline development, testing dataset changes).
 pub const DATA_DIR_ENV: &str = "ARCLENS_RAIDTHEORY_DIR";
 
-async fn load_inner(paths: Paths, max_age: Duration) -> anyhow::Result<Catalog> {
+async fn load_inner(
+    paths: Paths,
+    max_age: Duration,
+    lang: &'static str,
+) -> anyhow::Result<Catalog> {
     if let Some(dir) = std::env::var_os(DATA_DIR_ENV) {
         tracing::info!(dir = %std::path::Path::new(&dir).display(), "loading dataset from {DATA_DIR_ENV}");
-        return Ok(tokio::task::spawn_blocking(move || RaidTheoryDir::new(dir).load()).await??);
+        return Ok(tokio::task::spawn_blocking(move || {
+            RaidTheoryDir::new(dir).in_language(lang).load()
+        })
+        .await??);
     }
 
-    let cache = DiskCache::new(paths.catalog_cache());
+    let cache = DiskCache::new(paths.catalog_cache(lang));
     let cached = {
         let cache = cache.clone();
         tokio::task::spawn_blocking(move || cache.load())
@@ -48,7 +60,27 @@ async fn load_inner(paths: Paths, max_age: Duration) -> anyhow::Result<Catalog> 
         return Ok(cached.unwrap_or_else(|| unreachable!()));
     }
 
-    match refresh(&paths, &cache).await {
+    // Another language was loaded before: rebuild from the dataset already
+    // on disk rather than downloading it again.
+    let dir = paths.raidtheory_dir();
+    if cached.is_none() && max_age > Duration::ZERO && dir.join("items").is_dir() {
+        let cache = cache.clone();
+        let built = tokio::task::spawn_blocking(move || -> anyhow::Result<Catalog> {
+            let catalog = RaidTheoryDir::new(dir).in_language(lang).load()?;
+            cache.store(&catalog)?;
+            Ok(catalog)
+        })
+        .await?;
+        match built {
+            Ok(catalog) => {
+                tracing::info!(lang, "catalog built from the downloaded dataset");
+                return Ok(catalog);
+            }
+            Err(error) => tracing::warn!(error = format!("{error:#}"), "rebuild failed"),
+        }
+    }
+
+    match refresh(&paths, &cache, lang).await {
         Ok(catalog) => Ok(catalog),
         Err(error) => match cached {
             Some(stale) => {
@@ -72,7 +104,7 @@ pub fn http_client() -> reqwest::Client {
         .unwrap_or_default()
 }
 
-async fn refresh(paths: &Paths, cache: &DiskCache) -> anyhow::Result<Catalog> {
+async fn refresh(paths: &Paths, cache: &DiskCache, lang: &'static str) -> anyhow::Result<Catalog> {
     let client = http_client();
     let dir = paths.raidtheory_dir();
     download_raidtheory(&client, &dir)
@@ -81,7 +113,7 @@ async fn refresh(paths: &Paths, cache: &DiskCache) -> anyhow::Result<Catalog> {
 
     let cache = cache.clone();
     tokio::task::spawn_blocking(move || {
-        let catalog = RaidTheoryDir::new(dir).load()?;
+        let catalog = RaidTheoryDir::new(dir).in_language(lang).load()?;
         cache.store(&catalog)?;
         tracing::info!(items = catalog.items.len(), "catalog refreshed");
         Ok(catalog)

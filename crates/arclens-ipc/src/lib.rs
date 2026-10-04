@@ -118,6 +118,10 @@ pub enum ToOverlay {
     /// The user's overlay settings; sent on connect and on every change.
     Configure {
         settings: OverlaySettings,
+        /// Interface language, a BCP 47 tag (`en`, `es-ES`); older apps
+        /// send none: English.
+        #[serde(default)]
+        lang: Option<String>,
     },
     /// Items matching the overlay's quick search for `query`, best first.
     /// The overlay drops results for a query it no longer shows.

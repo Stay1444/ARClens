@@ -14,6 +14,7 @@ arclens-capture = { workspace = true }
 arclens-data = { workspace = true }
 arclens-hotkeys = { workspace = true }
 arclens-ipc = { workspace = true }
+arclens-i18n = { workspace = true }
 arclens-ui = { workspace = true }
 arclens-vision = { workspace = true }
 directories = { workspace = true }

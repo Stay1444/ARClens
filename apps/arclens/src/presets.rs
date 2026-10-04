@@ -158,6 +158,34 @@ impl Presets {
         arclens_data::presets::builtin().iter().any(|p| p.id == id)
     }
 
+    /// What to call `preset`: a built-in's name in the interface language
+    /// (unless the player renamed it), else the name it was saved with.
+    pub fn display_name(preset: &Preset) -> String {
+        Self::builtin_text(preset, &preset.name, "").unwrap_or_else(|| preset.name.clone())
+    }
+
+    /// `preset`'s description, translated like [`Self::display_name`].
+    pub fn display_description(preset: &Preset) -> String {
+        Self::builtin_text(preset, &preset.description, "-desc")
+            .unwrap_or_else(|| preset.description.clone())
+    }
+
+    /// The message for a built-in's text, if `preset` still has the
+    /// built-in's English `text`.
+    fn builtin_text(preset: &Preset, text: &str, suffix: &str) -> Option<String> {
+        let builtin = arclens_data::presets::builtin()
+            .iter()
+            .find(|p| p.id == preset.id)?;
+        let original = if suffix.is_empty() {
+            &builtin.name
+        } else {
+            &builtin.description
+        };
+        (original == text)
+            .then(|| arclens_i18n::try_tr(&format!("preset-{}{suffix}", preset.id)))
+            .flatten()
+    }
+
     /// The player has their own version of `id` (their preset, or an
     /// edited built-in).
     pub fn is_customised(&self, id: &str) -> bool {

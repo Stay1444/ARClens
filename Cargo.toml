@@ -16,6 +16,7 @@ arclens-capture = { path = "crates/arclens-capture" }
 arclens-core = { path = "crates/arclens-core" }
 arclens-data = { path = "crates/arclens-data" }
 arclens-hotkeys = { path = "crates/arclens-hotkeys" }
+arclens-i18n = { path = "crates/arclens-i18n" }
 arclens-ipc = { path = "crates/arclens-ipc" }
 arclens-ui = { path = "crates/arclens-ui" }
 arclens-vision = { path = "crates/arclens-vision" }
@@ -27,6 +28,8 @@ ashpd = { version = "0.13", default-features = false, features = ["tokio", "glob
 criterion = { version = "0.7", default-features = false, features = ["cargo_bench_support"] }
 directories = "6.0"
 flate2 = "1.1"
+fluent-bundle = "0.16"
+fluent-syntax = "0.12"
 futures = "0.3"
 iced = { version = "0.14", default-features = false, features = ["wgpu", "wayland", "x11", "canvas", "tokio", "image-without-codecs", "svg"] }
 # Decoders for iced's image widget: item icons are PNG only.
@@ -38,12 +41,14 @@ rustfft = "6.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 strsim = "0.11"
+sys-locale = "0.3"
 tar = "0.4"
 tempfile = "3.27"
 thiserror = "2.0"
 tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time", "fs", "process"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+unic-langid = "0.9"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

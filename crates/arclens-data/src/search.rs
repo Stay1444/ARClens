@@ -1,4 +1,5 @@
-//! Fuzzy item search used by the overlay's quick-lookup box.
+//! Fuzzy item search used by the overlay's quick-lookup box. Matches an
+//! item's name in any language it has ([`Item::aliases`]).
 
 use arclens_core::Item;
 use nucleo_matcher::pattern::{AtomKind, CaseMatching, Normalization, Pattern};
@@ -42,9 +43,13 @@ impl ItemSearch {
         let mut scored: Vec<(u32, &Item)> = items
             .iter()
             .filter_map(|item| {
-                let haystack = Utf32Str::new(&item.name, &mut buf);
-                pattern
-                    .score(haystack, &mut self.matcher)
+                // Its best score over its names in every language.
+                item.names()
+                    .filter_map(|name| {
+                        let haystack = Utf32Str::new(name, &mut buf);
+                        pattern.score(haystack, &mut self.matcher)
+                    })
+                    .max()
                     .map(|s| (s, item))
             })
             .collect();
@@ -72,6 +77,7 @@ mod tests {
         Item {
             id: ItemId::new(name.to_lowercase().replace(' ', "-")),
             name: name.to_owned(),
+            aliases: Vec::new(),
             description: None,
             rarity: None,
             category: None,

@@ -4,6 +4,7 @@
 
 use crate::Message;
 use arclens_core::{ItemId, Rarity};
+use arclens_i18n::t;
 use arclens_ipc::{SearchHit, ToApp};
 use arclens_ui::palette::{self, with_alpha};
 use arclens_ui::theme::{self, CREAM, DISPLAY, DISPLAY_SEMI, INK, RADIUS, STRONG};
@@ -85,7 +86,7 @@ impl SearchState {
 
 /// The search panel on a `screen`-sized surface.
 pub fn view(state: &SearchState, screen: iced::Size) -> Element<'_, Message> {
-    let input = text_input("Search items…", &state.query)
+    let input = text_input(&t!("items-search"), &state.query)
         .id(INPUT_ID)
         .on_input(|q| Message::Search(SearchMessage::Query(q)))
         .on_submit(Message::Search(SearchMessage::Submit))
@@ -96,13 +97,13 @@ pub fn view(state: &SearchState, screen: iced::Size) -> Element<'_, Message> {
     let mut body = column![input].spacing(6);
     if state.query.trim().is_empty() {
         body = body.push(
-            text("Type an item name · Enter shows the top result")
+            text(t!("overlay-search-hint"))
                 .size(theme::size::SMALL)
                 .color(palette::TEXT_MUTED),
         );
     } else if state.hits.is_empty() {
         body = body.push(
-            text("No matches")
+            text(t!("overlay-search-none"))
                 .size(theme::size::SMALL)
                 .color(palette::TEXT_MUTED),
         );
@@ -113,7 +114,7 @@ pub fn view(state: &SearchState, screen: iced::Size) -> Element<'_, Message> {
 
     let header = container(
         row![
-            text("QUICK SEARCH")
+            text(t!("overlay-search-title").to_uppercase())
                 .size(theme::size::H2)
                 .font(DISPLAY)
                 .color(INK)
@@ -169,7 +170,7 @@ fn hit_row(hit: &Hit) -> Element<'_, Message> {
                 .font(STRONG)
                 .color(palette::TEXT)
                 .width(Length::Fill),
-            text(palette::rarity_label(hit.rarity).to_uppercase())
+            text(palette::rarity_label(hit.rarity))
                 .size(theme::size::SMALL)
                 .font(DISPLAY_SEMI)
                 .color(color),

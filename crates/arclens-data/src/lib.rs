@@ -23,7 +23,7 @@ pub use catalog::Catalog;
 pub use error::Error;
 pub use icons::IconCache;
 pub use images::ImageCache;
-pub use name_match::{match_name, normalize_name};
+pub use name_match::{best_named, match_name, normalize_name};
 pub use search::ItemSearch;
 
 /// Key for matching map-condition names across sources: lowercase letters

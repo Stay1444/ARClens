@@ -1,7 +1,7 @@
 {
   "id": "acoustic_guitar",
-  "name": { "de": "Akustikgitarre", "en": "Acoustic Guitar" },
-  "description": { "en": "A playable acoustic guitar used to attract ARC's attention, and impress other Raiders." },
+  "name": { "de": "Akustikgitarre", "en": "Acoustic Guitar", "es": "Guitarra acústica" },
+  "description": { "en": "A playable acoustic guitar used to attract ARC's attention, and impress other Raiders.", "es": "Una guitarra acústica que se puede tocar." },
   "type": "Quick Use",
   "rarity": "Legendary",
   "value": 7000,

@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 arclens-core = { workspace = true }
+arclens-i18n = { workspace = true }
 iced = { workspace = true }
 image = { workspace = true }
 

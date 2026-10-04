@@ -62,6 +62,7 @@ mod tests {
         let item = Item {
             id: ItemId::new("battery"),
             name: "Battery".into(),
+            aliases: Vec::new(),
             description: None,
             rarity: None,
             category: None,

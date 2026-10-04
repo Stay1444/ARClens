@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 /// Everything fetched from a [`crate::Provider`], plus where and when it came from.
 /// Bump when the catalogue's content or meaning changes (new fields filled by
 /// the loader), so caches written by older versions are rebuilt.
-pub const SCHEMA_VERSION: u32 = 5;
+pub const SCHEMA_VERSION: u32 = 6;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Catalog {
@@ -17,6 +17,9 @@ pub struct Catalog {
     pub schema: u32,
     /// Name of the provider that produced this snapshot (for attribution).
     pub source: String,
+    /// Language of its names and descriptions (`en`, `es`).
+    #[serde(default = "english")]
+    pub lang: String,
     pub fetched_at: SystemTime,
     pub items: Vec<Item>,
     #[serde(default)]
@@ -36,11 +39,16 @@ pub struct Catalog {
     index: HashMap<ItemId, usize>,
 }
 
+fn english() -> String {
+    "en".to_owned()
+}
+
 impl Catalog {
     pub fn new(source: impl Into<String>, items: Vec<Item>, markers: Vec<Marker>) -> Self {
         let mut catalog = Self {
             schema: SCHEMA_VERSION,
             source: source.into(),
+            lang: english(),
             fetched_at: SystemTime::now(),
             items,
             markers,
@@ -52,6 +60,12 @@ impl Catalog {
         };
         catalog.reindex();
         catalog
+    }
+
+    #[must_use]
+    pub fn in_language(mut self, lang: &str) -> Self {
+        lang.clone_into(&mut self.lang);
+        self
     }
 
     #[must_use]

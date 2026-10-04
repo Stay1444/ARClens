@@ -68,9 +68,14 @@ first, with Windows support too.
   before them are done).
   ![Progress: workshop](docs/assets/progress.png)
   ![Progress: quests](docs/assets/progress-quests.png)
-- **Settings**: overlay size (80–150 %), background opacity, which corner
-  the pinned card uses, how often data is refreshed, and server region.
+- **Settings**: language (English or Spanish; follows the system by
+  default), overlay size (80–150 %), background opacity, which corner the
+  pinned card uses, how often data is refreshed, and server region.
   ![Settings tab](docs/assets/settings.png)
+- **Languages**: English and Spanish (Spain) for the app and the overlay.
+  Item, quest and station names come from the game data in that language,
+  and items are recognised whichever language the game itself is in.
+  ![Items tab in Spanish](docs/assets/items-es.jpg)
 
 ### How the advice works
 

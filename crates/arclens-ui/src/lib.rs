@@ -6,6 +6,7 @@
 pub mod card;
 pub mod format;
 pub mod markers;
+pub mod names;
 pub mod palette;
 pub mod theme;
 

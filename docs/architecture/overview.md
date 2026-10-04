@@ -39,7 +39,8 @@ overlay state (visibility, interactivity, current item).
 | `arclens-data` | lib | Providers (RaidTheory), download, disk cache, icon cache, fuzzy search | core |
 | `arclens-ipc` | lib | Wire protocol, framing, version handshake, `Endpoint` (Unix socket / named pipe) | core, tokio |
 | `arclens-hotkeys` | lib | Global hotkeys, stable action ids (portal / `RegisterHotKey`) | ashpd / global-hotkey |
-| `arclens-ui` | lib | Design tokens and the shared item card used by app and overlay | core, iced |
+| `arclens-ui` | lib | Design tokens, the shared item card and game names in the interface language, used by app and overlay | core, i18n, iced |
+| `arclens-i18n` | lib | Interface translations: Fluent messages per language, the current language, `t!` | fluent-bundle, sys-locale |
 | `arclens-vision` | lib | Frame → tooltip panels → name lines → OCR text (`Analyzer`); map labels, header, pan/zoom tracking | image, ocrs, rustfft |
 | `arclens-capture` | lib | Screen → RGB frames at a set pace (portal + PipeWire / Graphics Capture) | ashpd, pipewire / windows-capture |
 | `arclens` | bin | Companion app: owns state, wires everything | all libs, iced |

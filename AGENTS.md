@@ -58,6 +58,7 @@ crates/arclens-data      RaidTheory provider, download, disk cache, fuzzy search
 crates/arclens-ipc       app <-> overlay protocol (NDJSON over a Unix socket)
 crates/arclens-hotkeys   XDG GlobalShortcuts portal
 crates/arclens-ui        shared iced widgets + design tokens (item card, palette)
+crates/arclens-i18n      translations: Fluent messages per language, `t!`
 crates/arclens-vision    frame analysis: tooltip panels, name lines, OCR (pure, no I/O)
 crates/arclens-capture   screen capture: XDG ScreenCast portal + PipeWire
 apps/arclens             companion app (iced): owns all state
@@ -88,6 +89,8 @@ Offline data: `ARCLENS_RAIDTHEORY_DIR=/path/to/arcraiders-data cargo run -p arcl
 
 - fmt, clippy (`-D warnings`) and tests are green for the whole workspace.
 - New logic has unit tests; new data sources have fixture tests.
+- User-facing text goes through `arclens_i18n::t!` with a message in every
+  `crates/arclens-i18n/locales/<lang>/` (the tests check ids match).
 - Docs are updated when behaviour, architecture or research findings change:
   - `docs/ROADMAP.md` checkboxes;
   - research notes, with a date;

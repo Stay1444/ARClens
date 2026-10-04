@@ -11,6 +11,7 @@ repository.workspace = true
 anyhow = { workspace = true }
 arclens-core = { workspace = true }
 arclens-ipc = { workspace = true }
+arclens-i18n = { workspace = true }
 arclens-ui = { workspace = true }
 futures = { workspace = true }
 iced = { workspace = true }

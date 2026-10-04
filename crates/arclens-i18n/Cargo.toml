@@ -1,0 +1,19 @@
+[package]
+name = "arclens-i18n"
+description = "Translations of the ARClens app and overlay (Fluent)"
+version.workspace = true
+publish.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+fluent-bundle = { workspace = true }
+sys-locale = { workspace = true }
+unic-langid = { workspace = true }
+
+[dev-dependencies]
+fluent-syntax = { workspace = true }
+
+[lints]
+workspace = true

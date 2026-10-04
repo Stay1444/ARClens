@@ -28,8 +28,13 @@ impl Paths {
         })
     }
 
-    pub fn catalog_cache(&self) -> PathBuf {
-        self.cache.join("catalog.json")
+    /// The catalog cache for dataset language `lang` (`en`, `es`).
+    pub fn catalog_cache(&self, lang: &str) -> PathBuf {
+        if lang == "en" {
+            self.cache.join("catalog.json")
+        } else {
+            self.cache.join(format!("catalog-{lang}.json"))
+        }
     }
 
     pub fn progress(&self) -> PathBuf {

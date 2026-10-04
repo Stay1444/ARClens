@@ -55,15 +55,12 @@ pub fn rarity(rarity: Option<Rarity>) -> Color {
     }
 }
 
-pub fn rarity_label(rarity: Option<Rarity>) -> &'static str {
-    match rarity {
-        None => "",
-        Some(Rarity::Common) => "COMMON",
-        Some(Rarity::Uncommon) => "UNCOMMON",
-        Some(Rarity::Rare) => "RARE",
-        Some(Rarity::Epic) => "EPIC",
-        Some(Rarity::Legendary) => "LEGENDARY",
-    }
+/// The rarity in capitals, empty when unknown.
+pub fn rarity_label(rarity: Option<Rarity>) -> String {
+    rarity
+        .map(crate::names::rarity)
+        .unwrap_or_default()
+        .to_uppercase()
 }
 
 pub fn verdict(verdict: Verdict) -> Color {
@@ -77,20 +74,22 @@ pub fn verdict(verdict: Verdict) -> Color {
 }
 
 /// Like [`verdict_label`], but says SALVAGE instead of RECYCLE in raid.
-pub fn verdict_label_in(verdict: Verdict, place: arclens_core::Place) -> &'static str {
+pub fn verdict_label_in(verdict: Verdict, place: arclens_core::Place) -> String {
     match (verdict, place) {
-        (Verdict::Recycle, arclens_core::Place::Raid) => "SALVAGE",
+        (Verdict::Recycle, arclens_core::Place::Raid) => arclens_i18n::t!("verdict-salvage"),
         _ => verdict_label(verdict),
     }
 }
 
-pub fn verdict_label(verdict: Verdict) -> &'static str {
+/// The verdict as the card's big word: KEEP, SELL, …
+pub fn verdict_label(verdict: Verdict) -> String {
+    use arclens_i18n::t;
     match verdict {
-        Verdict::Keep => "KEEP",
-        Verdict::Sell => "SELL",
-        Verdict::Recycle => "RECYCLE",
-        Verdict::Learn => "LEARN",
-        Verdict::Unknown => "NO DATA",
+        Verdict::Keep => t!("verdict-keep"),
+        Verdict::Sell => t!("verdict-sell"),
+        Verdict::Recycle => t!("verdict-recycle"),
+        Verdict::Learn => t!("verdict-learn"),
+        Verdict::Unknown => t!("verdict-unknown"),
     }
 }
 

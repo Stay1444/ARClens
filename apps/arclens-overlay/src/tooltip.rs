@@ -1,7 +1,9 @@
 //! The tooltip for the marker or area under the pointer on the map.
 
 use crate::{Message, Overlay};
-use arclens_core::{MapPoint, Marker, MarkerArea, Transform, humanize};
+use arclens_core::{MapPoint, Marker, MarkerArea, Transform};
+use arclens_i18n::t;
+use arclens_ui::names;
 use arclens_ui::palette::{self, with_alpha};
 use arclens_ui::theme::{self, CREAM, DISPLAY, INK, RADIUS};
 use iced::widget::{column, container, row, text};
@@ -79,8 +81,12 @@ pub fn view(state: &Overlay) -> Option<Element<'_, Message>> {
         match hovered(&state.markers, &state.areas, transform, screen, pointer)? {
             Hovered::Marker(marker) => {
                 let kind = match &marker.subcategory {
-                    Some(sub) => format!("{} · {}", humanize(&marker.category), humanize(sub)),
-                    None => humanize(&marker.category),
+                    Some(sub) => format!(
+                        "{} · {}",
+                        names::marker_kind(&marker.category),
+                        names::marker_kind(sub)
+                    ),
+                    None => names::marker_kind(&marker.category),
                 };
                 let mut col = column![
                     text(kind)
@@ -90,7 +96,7 @@ pub fn view(state: &Overlay) -> Option<Element<'_, Message>> {
                 .spacing(4);
                 if marker.locked {
                     col = col.push(
-                        text("Behind a locked door")
+                        text(t!("overlay-locked-door"))
                             .size(theme::size::SMALL)
                             .color(palette::TEXT_MUTED),
                     );
@@ -101,7 +107,7 @@ pub fn view(state: &Overlay) -> Option<Element<'_, Message>> {
                         marker.subcategory.as_deref(),
                         24.0,
                     ),
-                    marker.title(),
+                    names::marker_title(marker),
                     col,
                 )
             }
@@ -109,12 +115,12 @@ pub fn view(state: &Overlay) -> Option<Element<'_, Message>> {
                 let kind = area
                     .subcategory
                     .as_deref()
-                    .map_or_else(|| humanize(&area.category), humanize);
+                    .map_or_else(|| names::marker_kind(&area.category), names::marker_kind);
                 (
                     arclens_ui::markers::badge(&area.category, area.subcategory.as_deref(), 24.0),
                     format!("{} × {kind}", area.count),
                     column![
-                        text("Possible spots in this area: not all are there every raid.")
+                        text(t!("overlay-area-help"))
                             .size(theme::size::SMALL)
                             .color(palette::TEXT_MUTED)
                     ],

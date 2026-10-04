@@ -7,6 +7,7 @@ use crate::{data, game_process, hotkeys, overlay_link, overlay_process, vision};
 use arclens_core::{Item, ItemId, Place, Progress, Situation, advise_in, breakdown};
 use arclens_data::{Catalog, ItemSearch};
 use arclens_hotkeys::Action;
+use arclens_i18n::t;
 use arclens_ipc::ToOverlay;
 use arclens_ui::format::thousands;
 use arclens_ui::palette::{self, with_alpha};
@@ -138,6 +139,9 @@ struct Settings {
     /// How often game data and map markers are refetched, in hours.
     #[serde(default = "default_refresh_hours")]
     refresh_hours: u32,
+    /// Interface language as a BCP 47 tag; `None`: the system's.
+    #[serde(default)]
+    language: Option<String>,
 }
 
 const fn default_refresh_hours() -> u32 {
@@ -150,11 +154,19 @@ impl Default for Settings {
             region: None,
             overlay: arclens_ipc::OverlaySettings::default(),
             refresh_hours: default_refresh_hours(),
+            language: None,
         }
     }
 }
 
 impl Settings {
+    /// The language picked, if it is one we have.
+    fn language(&self) -> Option<arclens_i18n::Lang> {
+        self.language
+            .as_deref()
+            .and_then(arclens_i18n::Lang::from_tag)
+    }
+
     fn max_age(&self) -> std::time::Duration {
         std::time::Duration::from_secs(u64::from(self.refresh_hours) * 3600)
     }
@@ -251,6 +263,8 @@ type MapImageKey = (String, Option<u32>);
 #[derive(Debug, Clone)]
 pub enum Message {
     CatalogLoaded(Result<Arc<Catalog>, String>),
+    /// `None`: follow the system.
+    SetLanguage(Option<arclens_i18n::Lang>),
     QueryChanged(String),
     Select(ItemId),
     /// Enter in the search box: open the top result.
@@ -327,6 +341,11 @@ impl App {
                 .and_then(arclens_data::metaforge::region_for_time_zone)
                 .map(str::to_owned),
         };
+        arclens_i18n::set(
+            settings
+                .language()
+                .unwrap_or_else(arclens_i18n::Lang::system),
+        );
         let app = Self {
             catalog: Load::Loading,
             search: ItemSearch::default(),
@@ -379,7 +398,11 @@ impl App {
         };
         let tasks = Task::batch([
             Task::perform(
-                data::load(paths.clone(), settings.max_age()),
+                data::load(
+                    paths.clone(),
+                    settings.max_age(),
+                    arclens_i18n::current().data_code(),
+                ),
                 Message::CatalogLoaded,
             ),
             Task::perform(
@@ -433,11 +456,8 @@ impl App {
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::CatalogLoaded(Ok(catalog)) => {
-                self.catalog = Load::Ready(catalog);
-                // The catalogue carries fallback event icons.
-                return Task::batch([self.refresh_results(), self.request_event_icons()]);
-            }
+            Message::CatalogLoaded(Ok(catalog)) => return self.on_catalog(catalog),
+            Message::SetLanguage(lang) => return self.set_language(lang),
             Message::CatalogLoaded(Err(error)) => self.catalog = Load::Failed(error),
             Message::QueryChanged(query) => {
                 self.query = query;
@@ -470,10 +490,7 @@ impl App {
             }
             Message::Hotkey(hotkeys::Event::Unavailable(error)) => {
                 tracing::debug!(%error, "hotkeys unavailable");
-                self.status.push(
-                    "Global hotkeys unavailable (no GlobalShortcuts portal); use the buttons above."
-                        .to_owned(),
-                );
+                self.status.push(t!("status-no-hotkeys"));
             }
             Message::Overlay(event) => return self.on_overlay_event(event),
             Message::ToggleVision => {
@@ -529,7 +546,8 @@ impl App {
             }
             Message::Vision(event) => return self.on_vision_event(event),
             Message::OverlayProcess(overlay_process::Event::Unavailable(error)) => {
-                self.status.push(format!("Overlay not started: {error}"));
+                self.status
+                    .push(t!("status-overlay-not-started", error = error.clone()));
             }
             // The rest are Map-tab messages.
             message => return self.update_map(message),
@@ -566,9 +584,7 @@ impl App {
                 self.send(ToOverlay::SetInteractive {
                     interactive: self.overlay_interactive,
                 });
-                self.send(ToOverlay::Configure {
-                    settings: self.settings.overlay,
-                });
+                self.send_configure();
                 self.push_selected_to_overlay();
                 self.push_map_panel();
                 self.push_map_markers();
@@ -610,13 +626,11 @@ impl App {
             }
             overlay_link::Event::Listening | overlay_link::Event::Message(_) => {}
             overlay_link::Event::Failed(error) => {
-                self.status.push(format!("Overlay link failed: {error}"));
+                self.status
+                    .push(t!("status-overlay-link-failed", error = error.clone()));
             }
             overlay_link::Event::Incompatible(error) => {
-                let note = format!(
-                    "Overlay is out of date ({error}): rebuild it with \
-                     `cargo build --release -p arclens-overlay`"
-                );
+                let note = t!("status-overlay-outdated", error = error.clone());
                 if !self.status.contains(&note) {
                     self.status.push(note);
                 }
@@ -728,7 +742,8 @@ impl App {
             vision::Event::MapPointer(at) => self.send(ToOverlay::Pointer { at }),
             vision::Event::Unavailable(reason) => {
                 tracing::info!(%reason, "item detection off");
-                self.status.push(format!("Item detection off: {reason}"));
+                self.status
+                    .push(t!("status-detection-off", reason = reason.clone()));
             }
         }
         Task::none()
@@ -819,9 +834,9 @@ impl App {
         });
         let blueprints: Vec<_> = catalog.items.iter().filter(|i| i.is_blueprint()).collect();
         vec![
-            line("Workshop", built, levels),
+            line(&t!("progress-workshop"), built, levels),
             line(
-                "Quests",
+                &t!("progress-quests"),
                 count(
                     catalog
                         .quests
@@ -831,9 +846,9 @@ impl App {
                 ),
                 count(catalog.quests.len()),
             ),
-            line("Projects", phases_done, phases),
+            line(&t!("progress-projects"), phases_done, phases),
             line(
-                "Blueprints",
+                &t!("progress-blueprints"),
                 count(
                     blueprints
                         .iter()
@@ -850,20 +865,12 @@ impl App {
         let Load::Ready(catalog) = &self.catalog else {
             return;
         };
-        let wanted = read.station.to_uppercase();
-        let Some(station) = catalog
-            .stations
-            .iter()
-            .map(|s| {
-                (
-                    s,
-                    strsim::normalized_levenshtein(&wanted, &s.name.to_uppercase()),
-                )
-            })
-            .filter(|&(_, score)| score >= 0.8)
-            .max_by(|a, b| a.1.total_cmp(&b.1))
-            .map(|(s, _)| s)
-        else {
+        let Some(station) = arclens_data::best_named(
+            &read.station,
+            &catalog.stations,
+            |s| s.names().collect(),
+            0.8,
+        ) else {
             tracing::debug!(station = %read.station, "unknown workshop station");
             return;
         };
@@ -889,11 +896,13 @@ impl App {
         }
         tracing::info!(station = %station.id, level, "workshop level read from the game");
         progress.stations.insert(station.id.clone(), level);
-        let note = format!(
-            "{} set to level {level} (read from the game).",
-            station.name
+        let note = t!(
+            "status-level-from-game",
+            station = station.name.as_str(),
+            level = level
         );
-        self.status.retain(|s| !s.contains("(read from the game)"));
+        let marker = t!("status-from-game-marker");
+        self.status.retain(|s| !s.contains(&marker));
         self.status.push(note);
         true
     }
@@ -917,19 +926,8 @@ impl App {
         let progress = self.progress.get_or_insert_with(Progress::default);
         let mut changed = false;
         for title in titles {
-            let wanted = title.to_uppercase();
-            let quest = catalog
-                .quests
-                .iter()
-                .map(|q| {
-                    (
-                        q,
-                        strsim::normalized_levenshtein(&wanted, &q.name.to_uppercase()),
-                    )
-                })
-                .filter(|&(_, score)| score >= 0.85)
-                .max_by(|a, b| a.1.total_cmp(&b.1))
-                .map(|(q, _)| q);
+            let quest =
+                arclens_data::best_named(title, &catalog.quests, |q| q.names().collect(), 0.85);
             let Some(quest) = quest else {
                 tracing::debug!(%title, "unknown quest title");
                 continue;
@@ -940,9 +938,9 @@ impl App {
             }
         }
         if changed {
-            self.status.retain(|s| !s.contains("(read from the game)"));
-            self.status
-                .push("Quest progress updated (read from the game).".to_owned());
+            let marker = t!("status-from-game-marker");
+            self.status.retain(|s| !s.contains(&marker));
+            self.status.push(t!("status-quests-from-game"));
             self.progress_changed();
         }
     }
@@ -1224,12 +1222,16 @@ impl App {
 
     /// Refetches game data and the open map's markers, ignoring the cache.
     fn refresh_data(&mut self) -> Task<Message> {
-        self.status.push("Refreshing game data…".to_owned());
+        self.status.push(t!("status-refreshing"));
         self.markers.remove(&self.map);
         let map = self.map.clone();
         Task::batch([
             Task::perform(
-                data::load(self.paths.clone(), std::time::Duration::ZERO),
+                data::load(
+                    self.paths.clone(),
+                    std::time::Duration::ZERO,
+                    arclens_i18n::current().data_code(),
+                ),
                 Message::CatalogLoaded,
             ),
             Task::perform(
@@ -1549,7 +1551,7 @@ impl App {
         };
         let map_name = map
             .and_then(|id| arclens_data::metaforge::MAPS.iter().find(|m| m.0 == id))
-            .map_or("Unknown map", |m| m.1);
+            .map_or_else(|| t!("map-unknown"), |m| arclens_ui::names::map(m.0));
         let categories = match map.and_then(|m| Some((m, self.markers.get(m)?))) {
             Some((map, Load::Ready(markers))) => {
                 panel_categories(markers, &self.marker_filter, self.condition_bit(map))
@@ -1564,7 +1566,7 @@ impl App {
                 .into_iter()
                 .map(|p| arclens_ipc::PanelPreset {
                     id: p.id.clone(),
-                    name: p.name.clone(),
+                    name: crate::presets::Presets::display_name(p),
                     for_condition: !p.conditions.is_empty(),
                 })
                 .collect()
@@ -1572,9 +1574,9 @@ impl App {
             Vec::new()
         };
         let panel = arclens_ipc::MapPanel {
-            map_name: map_name.to_owned(),
+            map_name,
             categories,
-            condition: condition.map(str::to_owned),
+            condition: condition.map(arclens_ui::names::condition),
             presets,
             active_preset: self.presets.active().map(|p| p.id.clone()),
             edited: self.presets.edited,
@@ -1619,9 +1621,52 @@ impl App {
             _ => return,
         }
         crate::store::save(&self.paths.settings(), &self.settings);
+        self.send_configure();
+    }
+
+    /// Sends the overlay its settings and language.
+    fn send_configure(&self) {
         self.send(ToOverlay::Configure {
             settings: self.settings.overlay,
+            lang: Some(arclens_i18n::current().code().to_owned()),
         });
+    }
+
+    fn on_catalog(&mut self, catalog: Arc<Catalog>) -> Task<Message> {
+        if catalog.lang != arclens_i18n::current().data_code() {
+            // Loaded for a language since switched away from.
+            return Task::none();
+        }
+        self.catalog = Load::Ready(catalog);
+        self.push_selected_to_overlay();
+        self.push_menu_card();
+        // The catalogue carries fallback event icons.
+        Task::batch([self.refresh_results(), self.request_event_icons()])
+    }
+
+    /// Switches the interface language, then reloads game data in it.
+    fn set_language(&mut self, lang: Option<arclens_i18n::Lang>) -> Task<Message> {
+        self.settings.language = lang.map(|l| l.code().to_owned());
+        crate::store::save(&self.paths.settings(), &self.settings);
+        let lang = lang.unwrap_or_else(arclens_i18n::Lang::system);
+        let reload = lang.data_code() != arclens_i18n::current().data_code();
+        arclens_i18n::set(lang);
+        tracing::info!(lang = lang.code(), "language changed");
+        self.send_configure();
+        self.refresh_map_summary();
+        self.push_map_panel();
+        self.push_menu_card();
+        if !reload {
+            return Task::none();
+        }
+        Task::perform(
+            data::load(
+                self.paths.clone(),
+                self.settings.max_age(),
+                lang.data_code(),
+            ),
+            Message::CatalogLoaded,
+        )
     }
 
     /// Saves the player's server region and reloads the schedule for it.
@@ -1678,6 +1723,7 @@ impl App {
                 overlay: self.settings.overlay,
                 region: self.settings.region.as_deref(),
                 refresh_hours: self.settings.refresh_hours,
+                language: self.settings.language(),
             }),
             Tab::Items => self.view_catalog_or_status(),
         };
@@ -1766,35 +1812,35 @@ impl App {
                     .presets
                     .active()
                     .filter(|_| here)
-                    .map(|p| p.name.as_str()),
+                    .map(crate::presets::Presets::display_name),
             })
         });
         let status = vec![
             Status {
-                label: "GAME",
+                label: t!("home-status-game"),
                 value: if self.game_running {
-                    "Running".to_owned()
+                    t!("home-status-running")
                 } else {
-                    "Not running".to_owned()
+                    t!("home-status-not-running")
                 },
                 ok: self.game_running,
             },
             Status {
-                label: "GAME CAPTURE",
+                label: t!("home-status-capture"),
                 value: match self.capture {
-                    CaptureMode::Auto if self.game_running => "On (auto)".to_owned(),
-                    CaptureMode::Auto => "Waits for game".to_owned(),
-                    CaptureMode::Always => "Always on".to_owned(),
-                    CaptureMode::Off => "Off".to_owned(),
+                    CaptureMode::Auto if self.game_running => t!("home-status-capture-on"),
+                    CaptureMode::Auto => t!("home-status-capture-waits"),
+                    CaptureMode::Always => t!("home-status-capture-always"),
+                    CaptureMode::Off => t!("home-status-off"),
                 },
                 ok: self.capturing(),
             },
             Status {
-                label: "OVERLAY",
+                label: t!("home-status-overlay"),
                 value: match (&self.overlay, self.overlay_visible) {
-                    (None, _) => "Offline".to_owned(),
-                    (Some(_), true) => "Shown".to_owned(),
-                    (Some(_), false) => "Ready".to_owned(),
+                    (None, _) => t!("home-status-offline"),
+                    (Some(_), true) => t!("home-status-shown"),
+                    (Some(_), false) => t!("home-status-ready"),
                 },
                 ok: self.overlay.is_some(),
             },
@@ -1817,12 +1863,10 @@ impl App {
 
     fn view_events(&self) -> Element<'_, Message> {
         match &self.events {
-            Load::Loading => centered(text("Loading event schedule…").color(palette::TEXT_MUTED)),
+            Load::Loading => centered(text(t!("events-loading")).color(palette::TEXT_MUTED)),
             Load::Failed(error) => centered(
                 column![
-                    text("Could not load the event schedule")
-                        .size(20)
-                        .font(BOLD),
+                    text(t!("events-load-failed")).size(20).font(BOLD),
                     text(error).color(palette::TEXT_MUTED),
                 ]
                 .spacing(6)
@@ -1841,10 +1885,10 @@ impl App {
 
     fn view_catalog_or_status(&self) -> Element<'_, Message> {
         match &self.catalog {
-            Load::Loading => centered(text("Loading game data…").color(palette::TEXT_MUTED)),
+            Load::Loading => centered(text(t!("data-loading")).color(palette::TEXT_MUTED)),
             Load::Failed(error) => centered(
                 column![
-                    text("Could not load game data").size(20).font(BOLD),
+                    text(t!("data-load-failed")).size(20).font(BOLD),
                     text(error).color(palette::TEXT_MUTED),
                 ]
                 .spacing(6)
@@ -1857,14 +1901,14 @@ impl App {
     /// "● Overlay shown" in the top bar.
     fn overlay_status(&self) -> Element<'_, Message> {
         let (dot, label) = match (&self.overlay, self.overlay_visible) {
-            (None, _) => (palette::TEXT_MUTED, "Overlay offline"),
+            (None, _) => (palette::TEXT_MUTED, t!("top-overlay-offline")),
             (Some(_), true) => (
                 palette::verdict(arclens_core::Verdict::Keep),
-                "Overlay shown",
+                t!("top-overlay-shown"),
             ),
             (Some(_), false) => (
                 palette::verdict(arclens_core::Verdict::Sell),
-                "Overlay hidden",
+                t!("top-overlay-hidden"),
             ),
         };
         row![
@@ -1891,19 +1935,19 @@ impl App {
         let compact = self.window_width < TOP_BAR_COMPACT;
         let narrow = self.window_width < TOP_BAR_NARROW;
         let tabs = [
-            ("Home", Tab::Home),
-            ("Items", Tab::Items),
-            ("Map", Tab::Map),
-            ("Events", Tab::Events),
-            ("Progress", Tab::Progress),
-            ("Settings", Tab::Settings),
+            (t!("tab-home"), Tab::Home),
+            (t!("tab-items"), Tab::Items),
+            (t!("tab-map"), Tab::Map),
+            (t!("tab-events"), Tab::Events),
+            (t!("tab-progress"), Tab::Progress),
+            (t!("tab-settings"), Tab::Settings),
         ]
         .into_iter()
         .fold(row![].spacing(2), |r, (label, tab)| {
-            r.push(tab_button(label, self.tab == tab, Message::SetTab(tab)))
+            r.push(tab_button(&label, self.tab == tab, Message::SetTab(tab)))
         });
         let search = (self.tab == Tab::Items).then(|| {
-            text_input("Search items…", &self.query)
+            text_input(&t!("items-search"), &self.query)
                 .id(SEARCH_ID)
                 .on_input(Message::QueryChanged)
                 .on_submit(Message::SelectFirst)
@@ -1935,7 +1979,7 @@ impl App {
         let mut column = column![bar].spacing(10);
         if !inline_search
             && let Some(search) = (self.tab == Tab::Items).then(|| {
-                text_input("Search items…", &self.query)
+                text_input(&t!("items-search"), &self.query)
                     .id(SEARCH_ID)
                     .on_input(Message::QueryChanged)
                     .on_submit(Message::SelectFirst)
@@ -1963,38 +2007,46 @@ impl App {
     /// Capture, overlay and interactive toggles; shorter when `compact`.
     fn top_bar_buttons(&self, compact: bool) -> Vec<Element<'_, Message>> {
         let capture = match (self.capture, self.game_running) {
-            (CaptureMode::Auto, true) => "auto · game running",
-            (CaptureMode::Auto, false) => "auto · waiting for game",
-            (CaptureMode::Always, _) => "always",
-            (CaptureMode::Off, _) => "off",
+            (CaptureMode::Auto, true) => t!("top-capture-auto-running"),
+            (CaptureMode::Auto, false) => t!("top-capture-auto-waiting"),
+            (CaptureMode::Always, _) => t!("top-capture-always"),
+            (CaptureMode::Off, _) => t!("top-capture-off"),
         };
         let (overlay, interactive) = (
             if self.overlay_visible {
-                "Hide overlay"
+                t!("top-hide-overlay")
             } else {
-                "Show overlay"
+                t!("top-show-overlay")
             },
             if self.overlay_interactive {
-                "Click-through"
+                t!("top-click-through")
             } else {
-                "Interactive"
+                t!("top-interactive")
             },
         );
         if compact {
             vec![
-                pill_button("Capture", capture, Message::ToggleVision),
+                pill_button(t!("top-capture"), capture, Message::ToggleVision),
                 pill_button(
-                    if self.overlay_visible { "Hide" } else { "Show" },
-                    "overlay",
+                    if self.overlay_visible {
+                        t!("top-hide")
+                    } else {
+                        t!("top-show")
+                    },
+                    t!("top-overlay"),
                     Message::ToggleOverlay,
                 ),
-                pill_button(interactive, "mode", Message::ToggleInteractive),
+                pill_button(interactive, t!("top-mode"), Message::ToggleInteractive),
             ]
         } else {
             vec![
-                pill_button("Game capture", capture, Message::ToggleVision),
-                pill_button(overlay, "Ctrl+Shift+O", Message::ToggleOverlay),
-                pill_button(interactive, "Ctrl+Shift+I", Message::ToggleInteractive),
+                pill_button(t!("top-game-capture"), capture, Message::ToggleVision),
+                pill_button(overlay, "Ctrl+Shift+O".to_owned(), Message::ToggleOverlay),
+                pill_button(
+                    interactive,
+                    "Ctrl+Shift+I".to_owned(),
+                    Message::ToggleInteractive,
+                ),
             ]
         }
     }
@@ -2007,15 +2059,18 @@ impl App {
             .fold(column![].spacing(2), |col, item| {
                 col.push(self.view_row(item, catalog))
             });
-        let list_header = text(if self.query.trim().is_empty() {
-            format!(
-                "BROWSING {} OF {} ITEMS · TYPE TO SEARCH",
-                self.results.len(),
-                catalog.items.len()
-            )
-        } else {
-            format!("{} RESULTS", self.results.len())
-        })
+        let list_header = text(
+            if self.query.trim().is_empty() {
+                t!(
+                    "items-browsing",
+                    shown = self.results.len(),
+                    total = catalog.items.len()
+                )
+            } else {
+                t!("items-results", count = self.results.len())
+            }
+            .to_uppercase(),
+        )
         .size(theme::size::TINY)
         .font(theme::DISPLAY_SEMI)
         .color(palette::TEXT_MUTED);
@@ -2038,18 +2093,14 @@ impl App {
                         recycle_names: recycle_names(item, catalog, Place::Workshop),
                         size: CardSize::Full,
                     });
-                    scrollable(
-                        container(card)
-                            .padding(theme::PAGE_PADDING)
-                            .max_width(820),
-                    )
-                    .height(Length::Fill)
-                    .into()
+                    scrollable(container(card).padding(theme::PAGE_PADDING).max_width(820))
+                        .height(Length::Fill)
+                        .into()
                 }
                 None => centered(
                     column![
-                        theme::heading("Pick an item", theme::size::H1),
-                        text("Search above (Enter opens the top result) or browse the list. The selected item is also shown on the in-game overlay.")
+                        theme::heading(&t!("items-pick"), theme::size::H1),
+                        text(t!("items-pick-help"))
                             .size(theme::size::BODY)
                             .color(palette::TEXT_MUTED),
                     ]
@@ -2186,7 +2237,7 @@ fn recycle_names(item: &Item, catalog: &Catalog, place: Place) -> Vec<String> {
         .collect()
 }
 
-fn pill_button<'a>(label: &'a str, shortcut: &'a str, on_press: Message) -> Element<'a, Message> {
+fn pill_button<'a>(label: String, shortcut: String, on_press: Message) -> Element<'a, Message> {
     button(
         column![
             text(label).size(theme::size::SMALL).font(theme::STRONG),
@@ -2214,7 +2265,7 @@ fn pill_button<'a>(label: &'a str, shortcut: &'a str, on_press: Message) -> Elem
     .into()
 }
 
-fn tab_button(label: &str, active: bool, on_press: Message) -> Element<'_, Message> {
+fn tab_button<'a>(label: &str, active: bool, on_press: Message) -> Element<'a, Message> {
     theme::tab(label, active, on_press)
 }
 
@@ -2230,12 +2281,11 @@ fn panel_categories(
     filter: &arclens_core::MarkerFilter,
     condition: Option<u8>,
 ) -> Vec<arclens_ipc::PanelCategory> {
-    use arclens_core::humanize;
     arclens_core::marker_counts(markers.iter().filter(|m| m.occurs_in(condition)))
         .into_iter()
         .map(|(category, subs)| arclens_ipc::PanelCategory {
             id: category.to_owned(),
-            label: humanize(category),
+            label: arclens_ui::names::marker_kind(category),
             count: subs.values().sum(),
             shown: filter.shows_category(category),
             subcategories: subs
@@ -2243,7 +2293,7 @@ fn panel_categories(
                 .filter(|(sub, _)| !sub.is_empty())
                 .map(|(sub, count)| arclens_ipc::PanelCategory {
                     id: sub.to_owned(),
-                    label: humanize(sub),
+                    label: arclens_ui::names::marker_kind(sub),
                     count,
                     shown: filter.shows_subcategory(category, sub),
                     subcategories: Vec::new(),

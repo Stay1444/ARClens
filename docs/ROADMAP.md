@@ -346,8 +346,21 @@ green CI.
 - [x] A spawned overlay exits when its app's stdin pipe closes (any app
       death, SIGKILL included), so an orphan can't attach to the next app.
 
+## M4: Languages
+
+- [x] English and Spanish (Spain) for the app and the overlay
+      (2026-10-04): Fluent messages in `crates/arclens-i18n`, a language
+      setting (system / English / Español), the overlay told over IPC.
+      Item, quest and station names and item descriptions come from
+      RaidTheory in the chosen language, with the other language kept for
+      matching what the game shows (`docs/assets/items-es.jpg`,
+      `docs/research/i18n.md`).
+- [ ] Check the Spanish game terms (map names, conditions, marker kinds)
+      against the game set to Spanish.
+- [ ] Screen reading with the game in Spanish: station page title
+      (`NIVEL`?), map header and place names. Needs Spanish captures.
+
 ## Later
 
 - X11 and Windows overlay backends.
-- Localisation (the dataset already ships ~20 languages).
 - Crafting and workshop planner, and quest tracker in the companion window.

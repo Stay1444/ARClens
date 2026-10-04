@@ -443,8 +443,9 @@ fn run(output: mpsc::Sender<Event>) {
     let mut analyzer = match analyzer {
         Ok(reader) => Analyzer::new(reader),
         Err(error) => {
-            out.send(Event::Unavailable(format!(
-                "OCR model unavailable: {error}"
+            out.send(Event::Unavailable(arclens_i18n::t!(
+                "status-ocr-unavailable",
+                error = error
             )));
             return;
         }
@@ -453,8 +454,9 @@ fn run(output: mpsc::Sender<Event>) {
     let mut source = match frame_source(&paths) {
         Ok(source) => source,
         Err(error) => {
-            out.send(Event::Unavailable(format!(
-                "screen capture unavailable: {error:#}"
+            out.send(Event::Unavailable(arclens_i18n::t!(
+                "status-capture-unavailable",
+                error = format!("{error:#}")
             )));
             return;
         }

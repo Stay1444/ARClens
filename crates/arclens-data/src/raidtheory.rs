@@ -26,18 +26,33 @@ use std::path::{Path, PathBuf};
 /// Attribution string stored in [`Catalog::source`].
 pub const SOURCE: &str = "RaidTheory/arcraiders-data (MIT)";
 
-/// Language used when resolving [`Localized`] strings.
-const LANG: &str = "en";
+/// The dataset's languages ARClens speaks (its keys: `en`, `es`). Names
+/// in the ones not shown become aliases, for matching the game's text.
+pub const LANGUAGES: [&str; 2] = ["en", "es"];
 
 /// Loads a catalog from a local checkout / extracted archive of the dataset.
 #[derive(Debug, Clone)]
 pub struct RaidTheoryDir {
     root: PathBuf,
+    /// Language of names and descriptions (a [`LANGUAGES`] key).
+    lang: String,
 }
 
 impl RaidTheoryDir {
+    /// Names in English; see [`Self::in_language`].
     pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        Self {
+            root: root.into(),
+            lang: "en".to_owned(),
+        }
+    }
+
+    /// Names and descriptions in `lang` (a [`LANGUAGES`] key), English
+    /// where the dataset has no translation.
+    #[must_use]
+    pub fn in_language(mut self, lang: &str) -> Self {
+        lang.clone_into(&mut self.lang);
+        self
     }
 
     /// Reads and joins items, hideout, quests and projects into a [`Catalog`].
@@ -46,7 +61,10 @@ impl RaidTheoryDir {
     pub fn load(&self) -> Result<Catalog, Error> {
         let raw_items = read_dir_json::<RawItem>(&self.root.join("items"))?;
         let recipes = recipes(&raw_items);
-        let mut items: Vec<Item> = raw_items.into_iter().map(RawItem::into_item).collect();
+        let mut items: Vec<Item> = raw_items
+            .into_iter()
+            .map(|raw| raw.into_item(&self.lang))
+            .collect();
         items.sort_by(|a, b| a.id.cmp(&b.id));
 
         let (mut stations, mut requirements) = self.stations()?;
@@ -66,6 +84,7 @@ impl RaidTheoryDir {
 
         stations.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(Catalog::new(SOURCE, items, Vec::new())
+            .in_language(&self.lang)
             .with_stations(stations)
             .with_quests_and_projects(quests, projects)
             .with_event_icons(self.event_icons()?))
@@ -113,7 +132,7 @@ impl RaidTheoryDir {
         let mut stations = Vec::new();
         let mut requirements = Requirements::new();
         for station in read_dir_json::<RawStation>(&self.root.join("hideout"))? {
-            let station_name = station.name.resolve();
+            let station_name = station.name.resolve(&self.lang);
             for level in &station.levels {
                 for req in &level.requirement_item_ids {
                     requirements
@@ -136,6 +155,7 @@ impl RaidTheoryDir {
                 .any(|level| !level.requirement_item_ids.is_empty());
             if station.max_level > 0 && needs_items {
                 stations.push(Station {
+                    aliases: station.name.aliases(&self.lang),
                     id: station.id,
                     name: station_name,
                     max_level: station.max_level,
@@ -166,7 +186,7 @@ impl RaidTheoryDir {
 
         let mut quests = Vec::new();
         for quest in read_dir_json::<RawQuest>(&self.root.join("quests"))? {
-            let name = quest.name.resolve();
+            let name = quest.name.resolve(&self.lang);
             for req in &quest.required_item_ids {
                 push(
                     &req.item_id,
@@ -178,6 +198,7 @@ impl RaidTheoryDir {
                 );
             }
             quests.push(Quest {
+                aliases: quest.name.aliases(&self.lang),
                 needs_items: !quest.required_item_ids.is_empty(),
                 id: quest.id,
                 name,
@@ -196,11 +217,11 @@ impl RaidTheoryDir {
         if projects_path.exists() {
             let raw: Vec<RawProject> = read_json(&projects_path)?;
             for project in raw.into_iter().filter(|p| !p.disabled) {
-                let project_name = project.name.resolve();
+                let project_name = project.name.resolve(&self.lang);
                 let mut phases = Vec::new();
                 // Phases are listed in order; their number is their place.
                 for (phase, number) in project.phases.into_iter().zip(1u32..) {
-                    let phase_name = phase.name.resolve();
+                    let phase_name = phase.name.resolve(&self.lang);
                     for req in phase.requirement_item_ids {
                         push(
                             &req.item_id,
@@ -337,15 +358,31 @@ enum Localized {
 }
 
 impl Localized {
-    fn resolve(&self) -> String {
+    /// The text in `lang`, else English, else any.
+    fn resolve(&self, lang: &str) -> String {
         match self {
             Self::Plain(s) => s.clone(),
             Self::ByLang(map) => map
-                .get(LANG)
+                .get(lang)
+                .filter(|s| !s.trim().is_empty())
+                .or_else(|| map.get("en"))
                 .or_else(|| map.values().next())
                 .cloned()
                 .unwrap_or_default(),
         }
+    }
+
+    /// The text in the other [`LANGUAGES`], where it differs.
+    fn aliases(&self, lang: &str) -> Vec<String> {
+        let shown = self.resolve(lang);
+        let mut out: Vec<String> = LANGUAGES
+            .iter()
+            .filter(|&&other| other != lang)
+            .map(|other| self.resolve(other))
+            .filter(|name| !name.is_empty() && *name != shown)
+            .collect();
+        out.dedup();
+        out
     }
 }
 
@@ -381,13 +418,14 @@ struct RawItem {
 }
 
 impl RawItem {
-    fn into_item(self) -> Item {
+    fn into_item(self, lang: &str) -> Item {
         Item {
             id: ItemId::new(self.id),
-            name: self.name.resolve(),
+            name: self.name.resolve(lang),
+            aliases: self.name.aliases(lang),
             description: self
                 .description
-                .map(|d| d.resolve())
+                .map(|d| d.resolve(lang))
                 .filter(|d| !d.is_empty()),
             rarity: self.rarity.as_deref().and_then(parse_rarity),
             category: self.kind,
@@ -492,6 +530,34 @@ mod tests {
     }
 
     #[test]
+    fn names_come_in_the_chosen_language_with_the_others_as_aliases() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/raidtheory");
+        let es = RaidTheoryDir::new(&root).in_language("es").load().unwrap();
+        assert_eq!(es.lang, "es");
+        let guitar = es.item(&ItemId::new("acoustic_guitar")).unwrap();
+        assert_eq!(guitar.name, "Guitarra acústica");
+        assert_eq!(guitar.aliases, ["Acoustic Guitar"]);
+        assert_eq!(
+            guitar.description.as_deref(),
+            Some("Una guitarra acústica que se puede tocar.")
+        );
+        // No Spanish name: English, and no alias.
+        let wires = es.item(&ItemId::new("wires")).unwrap();
+        assert_eq!(wires.name, "Wires");
+        assert_eq!(wires.aliases, Vec::<String>::new());
+        // The game's text matches in either language, accents or not.
+        for text in ["ACOUSTIC GUITAR", "GUITARRA ACUSTICA", "GUITARRA ACÚSTICA"] {
+            let (item, _) = crate::match_name(text, &es.items).unwrap();
+            assert_eq!(item.id.as_str(), "acoustic_guitar", "{text}");
+        }
+
+        let en = fixture();
+        let guitar = en.item(&ItemId::new("acoustic_guitar")).unwrap();
+        assert_eq!(guitar.name, "Acoustic Guitar");
+        assert_eq!(guitar.aliases, ["Guitarra acústica"]);
+    }
+
+    #[test]
     fn reads_event_icons() {
         let catalog = fixture();
         assert_eq!(
@@ -507,6 +573,7 @@ mod tests {
         let quest = |id: &str, previous: &[&str]| Quest {
             id: id.into(),
             name: id.into(),
+            aliases: Vec::new(),
             trader: String::new(),
             previous: previous.iter().map(|&p| p.into()).collect(),
             needs_items: false,

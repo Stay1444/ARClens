@@ -11,6 +11,7 @@ use crate::format::thousands;
 use crate::palette::{self, with_alpha};
 use crate::theme::{self, size};
 use arclens_core::{Advice, Item, Place, RequirementKind, Verdict, breakdown};
+use arclens_i18n::t;
 use iced::widget::{Space, column, container, image, row, text};
 use iced::{Alignment, Border, Color, Element, Length};
 use std::path::Path;
@@ -59,8 +60,8 @@ pub fn item_card<'a, Message: 'a>(card: &ItemCard<'a>) -> Element<'a, Message> {
         && let Some(upgrade) = &card.advice.parts_for
     {
         body = body.push(section(
-            "PARTS WOULD HELP WITH",
-            vec![format!("{upgrade} (recycle if you're short on parts)")],
+            &t!("card-parts-would-help"),
+            vec![t!("card-parts-would-help-line", upgrade = upgrade.as_str())],
         ));
     }
     if let Some(section) = crafts_section(card) {
@@ -142,11 +143,14 @@ fn header<'a, Message: 'a>(
     // Tags like the game's: the type, then the rarity on its colour.
     let mut tags = row![].spacing(3);
     if let Some(category) = &card.item.category {
-        tags = tags.push(tag(&category.to_uppercase(), theme::INK));
+        tags = tags.push(tag(
+            &crate::names::item_type(category).to_uppercase(),
+            theme::INK,
+        ));
     }
     let rarity = palette::rarity_label(card.item.rarity);
     if !rarity.is_empty() {
-        tags = tags.push(tag(rarity, rarity_color));
+        tags = tags.push(tag(&rarity, rarity_color));
     }
 
     let name_size = match card.size {
@@ -222,26 +226,31 @@ fn reason(card: &ItemCard<'_>) -> String {
         Verdict::Keep => {
             let n = advice.needs.len();
             match advice.needs.first() {
-                None => "Worth keeping".to_owned(),
-                Some(first) if n == 1 => format!("Needed for {}", first.name),
-                Some(first) => format!("Needed for {} +{} more", first.name, n - 1),
+                None => t!("reason-worth-keeping"),
+                Some(first) => t!(
+                    "reason-needed-for",
+                    name = first.name.as_str(),
+                    more = n - 1
+                ),
             }
         }
         Verdict::Recycle => match (&advice.parts_for, advice.recycle_value, advice.sell_value) {
-            (Some(upgrade), _, _) => format!("Parts needed for {upgrade}"),
-            (None, Some(r), Some(s)) if r > s => format!("+{} more than selling", thousands(r - s)),
-            _ => "Worth more as parts".to_owned(),
+            (Some(upgrade), _, _) => t!("reason-parts-needed", upgrade = upgrade.as_str()),
+            (None, Some(r), Some(s)) if r > s => {
+                t!("reason-more-than-selling", amount = thousands(r - s))
+            }
+            _ => t!("reason-worth-more-as-parts"),
         },
         Verdict::Sell => match (advice.sell_value, advice.recycle_value) {
             (Some(s), Some(r)) if s > r => match advice.place {
-                Place::Workshop => format!("+{} more than recycling", thousands(s - r)),
-                Place::Raid => format!("Carry out: +{} more than salvaging", thousands(s - r)),
+                Place::Workshop => t!("reason-more-than-recycling", amount = thousands(s - r)),
+                Place::Raid => t!("reason-more-than-salvaging", amount = thousands(s - r)),
             },
-            (Some(_), Some(_)) => "Same value either way".to_owned(),
-            _ => "Doesn't recycle into anything useful".to_owned(),
+            (Some(_), Some(_)) => t!("reason-same-value"),
+            _ => t!("reason-no-useful-parts"),
         },
-        Verdict::Learn => "Learn it to unlock crafting rather than selling it".to_owned(),
-        Verdict::Unknown => "No value data for this item".to_owned(),
+        Verdict::Learn => t!("reason-learn"),
+        Verdict::Unknown => t!("reason-no-data"),
     }
 }
 
@@ -250,18 +259,22 @@ fn values<'a, Message: 'a>(advice: &Advice) -> Element<'a, Message> {
     let in_raid = advice.place == Place::Raid;
     // In raid the tooltip shows no value, so ours is the undamaged base.
     let sell_label = if in_raid && !advice.value_from_game {
-        "SELL (BASE VALUE)"
+        t!("card-sell-base")
     } else {
-        "SELL"
+        t!("card-sell")
     };
     row![
         stat(
-            sell_label,
+            &sell_label,
             advice.sell_value,
             advice.verdict == Verdict::Sell
         ),
         stat(
-            if in_raid { "SALVAGE" } else { "RECYCLE" },
+            &if in_raid {
+                t!("card-salvage")
+            } else {
+                t!("card-recycle")
+            },
             advice.recycle_value,
             best_is_recycle
         ),
@@ -270,11 +283,7 @@ fn values<'a, Message: 'a>(advice: &Advice) -> Element<'a, Message> {
     .into()
 }
 
-fn stat<'a, Message: 'a>(
-    label: &'a str,
-    value: Option<u32>,
-    highlight: bool,
-) -> Element<'a, Message> {
+fn stat<'a, Message: 'a>(label: &str, value: Option<u32>, highlight: bool) -> Element<'a, Message> {
     let value_text = value.map_or_else(|| "—".to_owned(), |v| format!("{} ¢", thousands(v)));
     let value_color = if value.is_some() {
         palette::COIN
@@ -283,7 +292,7 @@ fn stat<'a, Message: 'a>(
     };
     container(
         column![
-            text(label)
+            text(label.to_uppercase())
                 .size(size::TINY)
                 .font(theme::DISPLAY_SEMI)
                 .color(palette::TEXT_MUTED),
@@ -329,10 +338,10 @@ fn recycles_section<'a, Message: 'a>(card: &ItemCard<'a>) -> Option<Element<'a, 
         })
         .collect();
     let title = match card.advice.place {
-        Place::Workshop => "RECYCLES INTO",
-        Place::Raid => "SALVAGES INTO",
+        Place::Workshop => t!("card-recycles-into"),
+        Place::Raid => t!("card-salvages-into"),
     };
-    Some(section(title, vec![parts.join("  ·  ")]))
+    Some(section(&title, vec![parts.join("  ·  ")]))
 }
 
 fn needed_for_section<'a, Message: 'a>(card: &ItemCard<'a>) -> Option<Element<'a, Message>> {
@@ -350,9 +359,9 @@ fn needed_for_section<'a, Message: 'a>(card: &ItemCard<'a>) -> Option<Element<'a
         .map(|r| format!("{}  {} ×{}", kind_tag(r.kind), r.name, r.quantity))
         .collect();
     if reqs.len() > limit {
-        lines.push(format!("+{} more", reqs.len() - limit));
+        lines.push(t!("card-more", count = reqs.len() - limit));
     }
-    Some(section("NEEDED FOR", lines))
+    Some(section(&t!("card-needed-for"), lines))
 }
 
 /// For materials: what they're used to craft. Informational only — every
@@ -373,26 +382,26 @@ fn crafts_section<'a, Message: 'a>(card: &ItemCard<'a>) -> Option<Element<'a, Me
         .collect::<Vec<_>>()
         .join(", ");
     if products.len() > limit {
-        line = format!("{line} +{} more", products.len() - limit);
+        line = format!("{line} {}", t!("card-more", count = products.len() - limit));
     }
-    Some(section("USED TO CRAFT", vec![line]))
+    Some(section(&t!("card-used-to-craft"), vec![line]))
 }
 
-fn kind_tag(kind: RequirementKind) -> &'static str {
+fn kind_tag(kind: RequirementKind) -> String {
     match kind {
-        RequirementKind::Quest => "Quest",
-        RequirementKind::WorkshopUpgrade => "Workshop",
-        RequirementKind::Project => "Project",
-        RequirementKind::Crafting => "Crafting",
+        RequirementKind::Quest => t!("kind-quest"),
+        RequirementKind::WorkshopUpgrade => t!("kind-workshop"),
+        RequirementKind::Project => t!("kind-project"),
+        RequirementKind::Crafting => t!("kind-crafting"),
     }
 }
 
-fn section<'a, Message: 'a>(title: &'a str, lines: Vec<String>) -> Element<'a, Message> {
+fn section<'a, Message: 'a>(title: &str, lines: Vec<String>) -> Element<'a, Message> {
     lines
         .into_iter()
         .fold(
             column![
-                text(title)
+                text(title.to_uppercase())
                     .size(size::TINY)
                     .font(theme::DISPLAY_SEMI)
                     .color(palette::TEXT_MUTED)

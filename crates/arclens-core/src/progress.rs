@@ -14,6 +14,9 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct Station {
     pub id: String,
     pub name: String,
+    /// Its name in the other languages, for reading it off the screen.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<String>,
     pub max_level: u32,
 }
 
@@ -22,6 +25,9 @@ pub struct Station {
 pub struct Quest {
     pub id: String,
     pub name: String,
+    /// Its name in the other languages, for reading it off the screen.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<String>,
     /// The trader who gives it.
     #[serde(default)]
     pub trader: String,
@@ -31,6 +37,20 @@ pub struct Quest {
     /// Whether it asks for items (and so matters to advice).
     #[serde(default)]
     pub needs_items: bool,
+}
+
+impl Station {
+    /// Its name, then its aliases.
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        std::iter::once(self.name.as_str()).chain(self.aliases.iter().map(String::as_str))
+    }
+}
+
+impl Quest {
+    /// Its name, then its aliases.
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        std::iter::once(self.name.as_str()).chain(self.aliases.iter().map(String::as_str))
+    }
 }
 
 /// A project (expeditions among them) and its phases, in order.
@@ -161,6 +181,7 @@ mod tests {
         Quest {
             id: id.into(),
             name: id.into(),
+            aliases: Vec::new(),
             trader: String::new(),
             previous: previous.iter().map(|&p| p.into()).collect(),
             needs_items: false,

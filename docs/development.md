@@ -62,6 +62,25 @@ Useful environment variables:
 | `ARCLENS_OCR_MODEL=/path/text-recognition.rten` | Use a local OCR model instead of downloading it to the cache |
 | `ARCLENS_OVERLAY_BIN=/path/to/arclens-overlay` | Overlay binary to launch |
 
+## Translations
+
+Interface text lives in `crates/arclens-i18n/locales/<lang>/*.ftl`
+([Fluent](https://projectfluent.org/fluent/guide/) syntax), one folder per
+language (`en`, `es-ES`):
+
+- `common.ftl`: the item card (app and overlay); `app.ftl`: the app;
+  `overlay.ftl`: the overlay; `game.ftl`: game names keyed by data id
+  (`map-dam`, `condition-night-raid`, `marker-weapon-case`).
+- In code: `t!("message-id")` or `t!("message-id", count = n)`. Data-keyed
+  names go through `arclens_ui::names` (fall back to the data's text).
+- Add the message to **every** language; `cargo test -p arclens-i18n`
+  fails on a missing or extra id, a variable mismatch, or a `t!` id
+  without a message.
+- A new language: a `Lang` variant, its folder, and the dataset key
+  RaidTheory uses for it (`Lang::data_code`).
+- Try it: Settings → Language, or set `"language": "es-ES"` in
+  `settings.json`.
+
 ## Item detection (vision)
 
 - The app runs a background worker: frame → tooltip → OCR → catalogue match

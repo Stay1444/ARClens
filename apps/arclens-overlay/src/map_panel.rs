@@ -3,6 +3,7 @@
 //! overlay; its rectangle becomes the surface's input region.
 
 use crate::Message;
+use arclens_i18n::t;
 use arclens_ipc::{MapPanel, PanelCategory, ToApp};
 use arclens_ui::palette::{self, with_alpha};
 use arclens_ui::theme::{self, CREAM, DISPLAY, DISPLAY_SEMI, INK, RADIUS, STRONG};
@@ -78,7 +79,7 @@ pub fn view(state: &PanelState, screen: Size) -> Option<Element<'_, Message>> {
     let total: usize = panel.categories.iter().map(|c| c.count).sum();
     let shown: usize = panel.categories.iter().map(shown_count).sum();
     let toggle = expand_button(
-        format!("MARKERS · {shown} OF {total} SHOWN"),
+        t!("overlay-markers-shown", shown = shown, total = total).to_uppercase(),
         state.expanded,
     );
 
@@ -171,11 +172,11 @@ fn preset_switcher(panel: &MapPanel) -> Option<Element<'_, Message>> {
         .presets
         .iter()
         .find(|p| Some(&p.id) == panel.active_preset.as_ref());
-    let name = active.map_or("Custom", |p| p.name.as_str());
+    let name = active.map_or_else(|| t!("overlay-preset-custom"), |p| p.name.clone());
     let label = if panel.edited && active.is_some() {
         format!("{name} *")
     } else {
-        name.to_owned()
+        name
     };
     let step = |by| cycle(panel, by).map(|id| send(ToApp::ApplyPreset { id }));
     let arrow = |glyph, by| {
@@ -188,7 +189,7 @@ fn preset_switcher(panel: &MapPanel) -> Option<Element<'_, Message>> {
         row![
             arrow("◂", -1),
             column![
-                text("PRESET")
+                text(t!("map-preset").to_uppercase())
                     .size(11)
                     .font(DISPLAY_SEMI)
                     .color(palette::TEXT_MUTED),
@@ -349,15 +350,15 @@ fn filter<'a>(state: &'a PanelState, panel: &'a MapPanel) -> Element<'a, Message
     }
 
     column![
-        text_input("Search markers…", &state.query)
+        text_input(&t!("map-search"), &state.query)
             .on_input(|q| Message::Panel(PanelMessage::Query(q)))
             .padding([6, 10])
             .size(15)
             .font(theme::BODY)
             .style(theme::input_style),
         row![
-            small_button("Show all", send(ToApp::ShowAllMarkers)),
-            small_button("Hide all", send(ToApp::HideAllMarkers)),
+            small_button(&t!("map-show-all"), send(ToApp::ShowAllMarkers)),
+            small_button(&t!("map-hide-all"), send(ToApp::HideAllMarkers)),
         ]
         .spacing(6),
         scrollable(list.padding(iced::Padding {
@@ -389,7 +390,7 @@ fn expander<'a>(category: &PanelCategory, open: bool) -> Element<'a, Message> {
         .into()
 }
 
-fn small_button(label: &str, on_press: Message) -> Element<'_, Message> {
+fn small_button<'a>(label: &str, on_press: Message) -> Element<'a, Message> {
     button(text(label.to_uppercase()).size(13).font(DISPLAY_SEMI))
         .padding([3, 12])
         .on_press(on_press)

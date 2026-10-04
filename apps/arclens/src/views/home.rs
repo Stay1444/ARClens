@@ -5,6 +5,8 @@ use crate::app::{Message, Tab};
 use crate::event_icons::EventIcons;
 use crate::views::events::{ACTIVE, UPCOMING, card};
 use arclens_core::{ScheduledEvent, agenda, countdown};
+use arclens_i18n::t;
+use arclens_ui::names;
 use arclens_ui::palette::{self, with_alpha};
 use arclens_ui::theme::{self, size, space};
 use iced::widget::{Space, button, column, container, row, scrollable, svg, text, text_input};
@@ -18,8 +20,8 @@ const NEXT_SHOWN: usize = 4;
 pub const SEARCH_ID: &str = "home-search";
 
 /// A status chip: label, value, and whether it is good news.
-pub struct Status<'a> {
-    pub label: &'a str,
+pub struct Status {
+    pub label: String,
     pub value: String,
     pub ok: bool,
 }
@@ -28,12 +30,12 @@ pub struct Status<'a> {
 pub struct LastMap<'a> {
     pub name: &'a str,
     pub condition: Option<&'a str>,
-    pub preset: Option<&'a str>,
+    pub preset: Option<String>,
 }
 
 pub struct HomeView<'a> {
     pub icon: &'a svg::Handle,
-    pub status: Vec<Status<'a>>,
+    pub status: Vec<Status>,
     /// `None` while the schedule loads (or failed).
     pub events: Option<&'a [ScheduledEvent]>,
     pub icons: &'a EventIcons,
@@ -51,7 +53,7 @@ pub fn view<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
         svg(home.icon.clone()).width(64).height(64),
         column![
             text("ARCLENS").size(size::TITLE).font(theme::DISPLAY),
-            text("Companion and overlay for ARC Raiders")
+            text(t!("home-tagline"))
                 .size(size::BODY)
                 .color(palette::TEXT_MUTED),
         ]
@@ -65,8 +67,8 @@ pub fn view<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
 
     let search = text_input(
         &match home.item_count {
-            Some(n) => format!("Look up any of {n} items…"),
-            None => "Look up an item…".to_owned(),
+            Some(n) => t!("home-search-count", count = n),
+            None => t!("home-search"),
         },
         "",
     )
@@ -94,7 +96,7 @@ pub fn view<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
         .into()
 }
 
-fn chip<'a>(status: &Status<'a>) -> Element<'a, Message> {
+fn chip<'a>(status: &Status) -> Element<'a, Message> {
     let color = if status.ok {
         ACTIVE
     } else {
@@ -111,7 +113,7 @@ fn chip<'a>(status: &Status<'a>) -> Element<'a, Message> {
                 ..container::Style::default()
             }),
             column![
-                theme::label(status.label),
+                theme::label(&status.label),
                 text(status.value.clone())
                     .size(size::SMALL)
                     .font(theme::STRONG),
@@ -127,12 +129,12 @@ fn chip<'a>(status: &Status<'a>) -> Element<'a, Message> {
 
 /// Running now, then next up.
 fn conditions<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
-    let all = link("All events →", Message::SetTab(Tab::Events));
+    let all = link(t!("home-all-events"), Message::SetTab(Tab::Events));
     let Some(events) = home.events else {
         return theme::panel(
-            "Map conditions",
+            &t!("home-conditions"),
             Some(all),
-            text("Loading the schedule…")
+            text(t!("home-loading-schedule"))
                 .size(size::BODY)
                 .color(palette::TEXT_MUTED),
         );
@@ -147,7 +149,7 @@ fn conditions<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
             r.push(card(
                 e,
                 home.icons,
-                format!("Ends in {}", countdown(e.end_ms - now)),
+                t!("events-ends-in", time = countdown(e.end_ms - now)),
                 ACTIVE,
             ))
         })
@@ -161,16 +163,16 @@ fn conditions<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
             r.push(card(
                 e,
                 home.icons,
-                format!("In {}", countdown(e.start_ms - now)),
+                t!("home-in", time = countdown(e.start_ms - now)),
                 UPCOMING,
             ))
         })
         .wrap()
         .vertical_spacing(space::GAP);
-    let mut col = column![theme::label("Now")].spacing(10);
+    let mut col = column![theme::label(&t!("home-now"))].spacing(10);
     if agenda.active.is_empty() {
         col = col.push(
-            text("Nothing running right now.")
+            text(t!("home-nothing-running"))
                 .size(size::BODY)
                 .color(palette::TEXT_MUTED),
         );
@@ -180,31 +182,31 @@ fn conditions<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
     if !agenda.upcoming.is_empty() {
         col = col
             .push(Space::new().height(6))
-            .push(theme::label("Next"))
+            .push(theme::label(&t!("home-next")))
             .push(next);
     }
-    theme::panel("Map conditions", Some(all), col)
+    theme::panel(&t!("home-conditions"), Some(all), col)
 }
 
 fn maps<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
     let last: Element<'a, Message> = match &home.last_map {
         Some(last) => column![
-            theme::label("Last seen in game"),
+            theme::label(&t!("home-last-seen")),
             text(match last.condition {
-                Some(c) => format!("{} · {c}", last.name),
-                None => last.name.to_owned(),
+                Some(c) => format!("{} · {}", names::map(last.name), names::condition(c)),
+                None => names::map(last.name),
             })
             .size(size::BODY)
             .font(theme::STRONG),
         ]
-        .push(last.preset.map(|p| {
-            text(format!("Preset: {p}"))
+        .push(last.preset.as_ref().map(|p| {
+            text(t!("home-preset", name = p.as_str()))
                 .size(size::SMALL)
                 .color(palette::TEXT_MUTED)
         }))
         .spacing(3)
         .into(),
-        None => text("Open the map in game and markers appear on it.")
+        None => text(t!("home-open-map-hint"))
             .size(size::SMALL)
             .color(palette::TEXT_MUTED)
             .into(),
@@ -212,10 +214,10 @@ fn maps<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
     let buttons = home
         .maps
         .iter()
-        .fold(column![].spacing(6), |col, &(id, name)| {
-            col.push(list_button(name, Message::OpenMap(id.to_owned())))
+        .fold(column![].spacing(6), |col, &(id, _)| {
+            col.push(list_button(names::map(id), Message::OpenMap(id.to_owned())))
         });
-    panel("Maps", column![last, buttons].spacing(14))
+    panel(&t!("home-maps"), column![last, buttons].spacing(14))
 }
 
 fn workshop<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
@@ -232,7 +234,7 @@ fn workshop<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
                     text(built.to_string())
                         .size(size::TITLE)
                         .font(theme::DISPLAY),
-                    text(format!("/ {total} levels built"))
+                    text(t!("home-levels-built", total = total))
                         .size(size::BODY)
                         .color(palette::TEXT_MUTED),
                 ]
@@ -248,32 +250,30 @@ fn workshop<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
                             ..Border::default()
                         },
                     }),
-                text("Advice keeps what your next upgrades need.")
+                text(t!("home-levels-help"))
                     .size(size::SMALL)
                     .color(palette::TEXT_MUTED),
             ]
             .spacing(10)
             .into()
         }
-        None => text(
-            "Set your workshop levels so keep / sell / recycle advice knows what you still need.",
-        )
-        .size(size::SMALL)
-        .color(palette::TEXT_MUTED)
-        .into(),
+        None => text(t!("home-levels-unset"))
+            .size(size::SMALL)
+            .color(palette::TEXT_MUTED)
+            .into(),
     };
     panel(
-        "Progress",
+        &t!("home-progress"),
         column![
             body,
-            list_button("Edit progress", Message::SetTab(Tab::Progress))
+            list_button(t!("home-edit-progress"), Message::SetTab(Tab::Progress))
         ]
         .spacing(14),
     )
 }
 
 fn in_game<'a>() -> Element<'a, Message> {
-    let tip = |title: &'a str, body: &'a str| {
+    let tip = |title: String, body: String| {
         column![
             text(title).size(size::BODY).font(theme::STRONG),
             text(body).size(size::SMALL).color(palette::TEXT_MUTED),
@@ -281,29 +281,23 @@ fn in_game<'a>() -> Element<'a, Message> {
         .spacing(2)
     };
     panel(
-        "In game",
+        &t!("home-in-game"),
         column![
-            tip(
-                "Hover an item",
-                "A card beside the game's tooltip says keep, sell or recycle."
-            ),
-            tip(
-                "Open the map",
-                "Markers follow the map; the panel bottom right switches presets."
-            ),
-            tip("Ctrl+Shift+O", "Show or hide the overlay."),
+            tip(t!("home-tip-hover"), t!("home-tip-hover-body")),
+            tip(t!("home-tip-map"), t!("home-tip-map-body")),
+            tip("Ctrl+Shift+O".to_owned(), t!("home-tip-toggle-body")),
         ]
         .spacing(12),
     )
 }
 
-fn panel<'a>(title: &'a str, body: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
+fn panel<'a>(title: &str, body: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     container(theme::panel(title, None, body))
         .width(Length::FillPortion(1))
         .into()
 }
 
-fn list_button(label: &str, on_press: Message) -> Element<'_, Message> {
+fn list_button<'a>(label: String, on_press: Message) -> Element<'a, Message> {
     button(
         row![
             text(label).size(size::BODY).width(Length::Fill),
@@ -334,7 +328,7 @@ fn list_button(label: &str, on_press: Message) -> Element<'_, Message> {
     .into()
 }
 
-fn link(label: &str, on_press: Message) -> Element<'_, Message> {
+fn link<'a>(label: String, on_press: Message) -> Element<'a, Message> {
     button(text(label).size(size::SMALL).font(theme::STRONG))
         .padding(0)
         .on_press(on_press)
