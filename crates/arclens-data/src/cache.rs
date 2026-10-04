@@ -74,6 +74,7 @@ mod tests {
             required_for: Vec::new(),
             ingredient_of: Vec::new(),
             image_url: None,
+            details: arclens_core::ItemDetails::default(),
         };
         cache
             .store(&Catalog::new("test", vec![item], Vec::new()))

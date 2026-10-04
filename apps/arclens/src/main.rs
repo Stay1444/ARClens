@@ -6,6 +6,7 @@
 
 pub mod app;
 mod data;
+mod detail;
 mod event_icons;
 mod game_process;
 mod hotkeys;

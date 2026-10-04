@@ -96,6 +96,9 @@ pub struct App {
     /// the map has none or it failed.
     /// Map images by map and floor, `None` while loading or missing.
     map_images: std::collections::HashMap<MapImageKey, Option<iced::widget::image::Handle>>,
+    /// Items open in the overlay's windows, newest first (they may have
+    /// been closed there since).
+    overlay_items: Vec<ItemId>,
     /// The floor shown on maps with several (its `zlayers` bit).
     map_floor: Option<u32>,
     /// The open in-game map's view, as last read from the screen.
@@ -250,6 +253,9 @@ enum Load<T> {
     Failed(String),
 }
 
+/// Item windows the overlay keeps (as `arclens-overlay`'s `detail::MAX_OPEN`).
+const OVERLAY_ITEMS: usize = 4;
+
 /// The floor a map opens on: its upper one, if it has several.
 fn first_floor(map: &str) -> Option<u32> {
     arclens_data::map_images::floors(map)
@@ -392,6 +398,7 @@ impl App {
             map_summary: crate::views::map::MapSummary::default(),
             map_plot: iced::widget::canvas::Cache::new(),
             map_images: std::collections::HashMap::new(),
+            overlay_items: Vec::new(),
             map_floor: first_floor(arclens_data::metaforge::MAPS[0].0),
             paths: paths.clone(),
             status: Vec::new(),
@@ -466,7 +473,6 @@ impl App {
             Message::Select(id) => {
                 self.tab = Tab::Items;
                 self.selected = Some(id);
-                self.push_selected_to_overlay();
             }
             Message::SelectFirst => {
                 if let Some(first) = self.results.first().cloned() {
@@ -556,14 +562,21 @@ impl App {
     }
 
     fn on_icon_loaded(&mut self, id: ItemId, icon: Option<Icon>) {
-        let is_selected = self.selected.as_ref() == Some(&id);
+        let in_window = match &self.catalog {
+            Load::Ready(catalog) => self.overlay_items.iter().any(|open| {
+                catalog
+                    .item(open)
+                    .is_some_and(|item| crate::detail::referenced(item, catalog).contains(&id))
+            }),
+            _ => false,
+        };
         let is_hovered = self.hover.as_ref().is_some_and(|(h, ..)| *h == id);
         let in_search =
             self.overlay_interactive && self.results.iter().take(SEARCH_HITS).any(|r| *r == id);
         self.icons.insert(id, icon);
         // Resend so the overlay picks up the icon path.
-        if is_selected {
-            self.push_selected_to_overlay();
+        if in_window {
+            self.push_overlay_items(false);
         }
         if is_hovered {
             self.push_hover_to_overlay();
@@ -585,7 +598,8 @@ impl App {
                     interactive: self.overlay_interactive,
                 });
                 self.send_configure();
-                self.push_selected_to_overlay();
+                // A restarted overlay lost its windows: open them again.
+                self.push_overlay_items(true);
                 self.push_map_panel();
                 self.push_map_markers();
                 self.push_menu_card();
@@ -598,13 +612,7 @@ impl App {
                 return icons;
             }
             overlay_link::Event::Message(arclens_ipc::ToApp::PickItem { id }) => {
-                self.selected = Some(id);
-                self.push_selected_to_overlay();
-                // The card is only drawn while the overlay is shown.
-                if !self.overlay_visible {
-                    self.overlay_visible = true;
-                    self.send(ToOverlay::SetVisible { visible: true });
-                }
+                return self.open_in_overlay(id);
             }
             overlay_link::Event::Message(arclens_ipc::ToApp::ToggleMarkerCategory { category }) => {
                 self.edit_marker_filter(Message::ToggleMarkerCategory(category));
@@ -1008,7 +1016,7 @@ impl App {
     fn progress_changed(&self) {
         crate::progress::save(&self.progress_path, self.progress.as_ref());
         // Verdicts depend on progress: refresh what the overlay shows.
-        self.push_selected_to_overlay();
+        self.push_overlay_items(false);
         self.push_hover_to_overlay();
     }
 
@@ -1060,18 +1068,56 @@ impl App {
         });
     }
 
-    fn push_selected_to_overlay(&self) {
-        let (Load::Ready(catalog), Some(id)) = (&self.catalog, &self.selected) else {
+    /// Opens `id`'s window in the overlay and fetches the icons it shows.
+    fn open_in_overlay(&mut self, id: ItemId) -> Task<Message> {
+        let Load::Ready(catalog) = &self.catalog else {
+            return Task::none();
+        };
+        let Some(item) = catalog.item(&id) else {
+            return Task::none();
+        };
+        let detail = self.item_detail(item, catalog);
+        self.send(ToOverlay::OpenItem {
+            detail: Box::new(detail),
+        });
+        self.overlay_items.retain(|open| *open != id);
+        self.overlay_items.insert(0, id);
+        self.overlay_items.truncate(OVERLAY_ITEMS);
+        let loads: Vec<_> = crate::detail::referenced(item, catalog)
+            .iter()
+            .filter_map(|id| catalog.item(id))
+            .filter_map(|item| self.icons.request(item))
+            .map(|load| Task::perform(load, |(id, icon)| Message::IconLoaded(id, icon)))
+            .collect();
+        Task::batch(loads)
+    }
+
+    /// Resends the overlay's item windows (`open`: reopen them, oldest
+    /// first, after the overlay restarted).
+    fn push_overlay_items(&self, open: bool) {
+        let Load::Ready(catalog) = &self.catalog else {
             return;
         };
-        if let Some(item) = catalog.item(id) {
-            self.send(ToOverlay::ShowItem {
-                item: Box::new(item.clone()),
-                advice: self.advice(item, catalog, Situation::default()),
-                icon: self.icons.get(id).map(|icon| icon.path.clone()),
-                recycle_names: recycle_names(item, catalog, Place::Workshop),
-            });
+        for id in self.overlay_items.iter().rev() {
+            if let Some(item) = catalog.item(id) {
+                let detail = Box::new(self.item_detail(item, catalog));
+                self.send(if open {
+                    ToOverlay::OpenItem { detail }
+                } else {
+                    ToOverlay::UpdateItem { detail }
+                });
+            }
         }
+    }
+
+    fn item_detail(&self, item: &Item, catalog: &Catalog) -> arclens_ipc::ItemDetail {
+        crate::detail::build(
+            item,
+            self.advice(item, catalog, Situation::default()),
+            catalog,
+            self.progress.as_ref(),
+            &self.icons,
+        )
     }
 
     /// Whether the screen is being captured now.
@@ -1650,7 +1696,7 @@ impl App {
         self.refresh_map_summary();
         self.send_configure();
         self.push_map_panel();
-        self.push_selected_to_overlay();
+        self.push_overlay_items(false);
         self.push_menu_card();
         // The catalogue carries fallback event icons.
         Task::batch([self.refresh_results(), self.request_event_icons()])

@@ -235,6 +235,7 @@ dependencies = [
  "iced_layershell",
  "image",
  "mouse_position",
+ "serde_json",
  "smithay-client-toolkit 0.20.0",
  "tokio",
  "tracing",

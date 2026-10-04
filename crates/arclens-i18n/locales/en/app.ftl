@@ -95,7 +95,7 @@ items-results = { $count ->
    *[other] { $count } results
 }
 items-pick = Pick an item
-items-pick-help = Search above (Enter opens the top result) or browse the list. The selected item is also shown on the in-game overlay.
+items-pick-help = Search above (Enter opens the top result) or browse the list. In game, Ctrl+Shift+I opens the overlay's quick search, where picked items open in their own windows.
 
 ## Map
 
@@ -215,8 +215,8 @@ settings-language-help = The language of the app and the overlay. Item, quest an
 settings-language-system = System ({ $name })
 settings-overlay-size = Overlay size
 settings-overlay-size-help = Scales everything the overlay draws: cards, the map panel, markers and the quick search.
-settings-pinned-card = Pinned item card
-settings-pinned-card-help = Where the card of the item you pick (in the app or the overlay's quick search) sits while the overlay is shown.
+settings-pinned-card = Status badge
+settings-pinned-card-help = The corner of the screen where the overlay shows its status while it is visible.
 settings-overlay-background = Overlay background
 settings-overlay-background-help = How much of the game shows through the overlay's cards and panels.
 settings-opacity-solid = Solid
@@ -234,3 +234,40 @@ corner-top-left = Top left
 corner-top-right = Top right
 corner-bottom-left = Bottom left
 corner-bottom-right = Bottom right
+
+## The overlay's item window (built by the app)
+
+detail-crafting = Crafting
+detail-upgrades = Upgrades
+detail-repair = Repair
+detail-repair-restores = Repair (restores { $percent } %)
+detail-sold-by = Sold by
+detail-unlocks = Unlocks crafting
+detail-mod-slots = Mod slots
+detail-fits = Fits
+detail-weight = Weight
+detail-value-per-kg = Value per kg
+detail-stack = Stack size
+detail-found-in = Found in
+detail-blueprint = Blueprint
+detail-blueprint-learned = Learned
+detail-blueprint-missing = Not learned
+detail-blueprint-needed = Needed
+detail-quest-item = Quest item
+detail-yes = Yes
+detail-added-in = Added in
+detail-base-game = Launch
+detail-in-raid = In raid
+detail-level = level { $level }
+detail-makes = makes { $count }
+detail-upgrade-from = upgrades from
+detail-upgrade-to = upgrades to
+detail-per-day = { $count } a day
+detail-limit = { $count } per restock
+detail-currency-coins = coins
+detail-currency-creds = creds
+detail-slot-muzzle = Muzzle
+detail-slot-grip = Grip
+detail-slot-stock = Stock
+detail-slot-magazine = Magazine
+detail-slot-special = Special

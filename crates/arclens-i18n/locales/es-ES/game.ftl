@@ -126,3 +126,18 @@ item-type-lmg = Ametralladora ligera
 item-type-basic-material = Material básico
 item-type-misc = Varios
 item-type-shield = Escudo
+
+## Tipos de zona de botín («se encuentra en»)
+
+zone-arc = ARC
+zone-exodus = Éxodo
+zone-residential = Residencial
+zone-nature = Naturaleza
+zone-commercial = Comercial
+zone-security = Seguridad
+zone-industrial = Industrial
+zone-mechanical = Mecánica
+zone-medical = Médica
+zone-electrical = Eléctrica
+zone-technological = Tecnológica
+zone-old-world = Viejo mundo

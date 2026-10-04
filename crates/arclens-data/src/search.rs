@@ -89,6 +89,7 @@ mod tests {
             required_for: Vec::new(),
             ingredient_of: Vec::new(),
             image_url: None,
+            details: arclens_core::ItemDetails::default(),
         }
     }
 

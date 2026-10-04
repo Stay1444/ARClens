@@ -193,6 +193,7 @@ mod tests {
             required_for: Vec::new(),
             ingredient_of: Vec::new(),
             image_url: None,
+            details: crate::item::ItemDetails::default(),
         }
     }
 

@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 /// Everything fetched from a [`crate::Provider`], plus where and when it came from.
 /// Bump when the catalogue's content or meaning changes (new fields filled by
 /// the loader), so caches written by older versions are rebuilt.
-pub const SCHEMA_VERSION: u32 = 6;
+pub const SCHEMA_VERSION: u32 = 7;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Catalog {
@@ -32,6 +32,9 @@ pub struct Catalog {
     pub quests: Vec<arclens_core::Quest>,
     #[serde(default)]
     pub projects: Vec<arclens_core::Project>,
+    /// Every station's name by id, crafting benches included.
+    #[serde(default)]
+    pub station_names: BTreeMap<String, String>,
     /// Map-condition icon URLs by [`crate::event_key`].
     #[serde(default)]
     pub event_icons: BTreeMap<String, String>,
@@ -56,6 +59,7 @@ impl Catalog {
             quests: Vec::new(),
             projects: Vec::new(),
             event_icons: BTreeMap::new(),
+            station_names: BTreeMap::new(),
             index: HashMap::new(),
         };
         catalog.reindex();
@@ -65,6 +69,12 @@ impl Catalog {
     #[must_use]
     pub fn in_language(mut self, lang: &str) -> Self {
         lang.clone_into(&mut self.lang);
+        self
+    }
+
+    #[must_use]
+    pub fn with_station_names(mut self, names: BTreeMap<String, String>) -> Self {
+        self.station_names = names;
         self
     }
 

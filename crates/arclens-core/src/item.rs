@@ -98,6 +98,87 @@ pub struct Item {
     pub ingredient_of: Vec<String>,
     #[serde(default)]
     pub image_url: Option<String>,
+    /// Everything else the data source knows, for the detailed view.
+    #[serde(default, skip_serializing_if = "ItemDetails::is_empty")]
+    pub details: ItemDetails,
+}
+
+/// What the item card doesn't need but the detailed view shows: stats,
+/// crafting, upgrades, repair, vendors, mods, where it's found.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct ItemDetails {
+    /// Stats and effects as `(label, value)`, in the catalogue's language
+    /// ("Ammo Type", "Medium Ammo"; "Damage", "8").
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stats: Vec<(String, String)>,
+    /// What crafting it takes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recipe: Vec<ItemQuantity>,
+    /// How many one craft makes (1 when absent).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub craft_quantity: Option<u32>,
+    /// Where it is crafted: station ids, or `in_raid`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub craft_bench: Vec<String>,
+    /// The station level crafting it needs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub station_level: Option<u32>,
+    /// The next tier (weapons).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upgrades_to: Option<ItemId>,
+    /// What upgrading the previous tier into this one costs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub upgrade_cost: Vec<ItemQuantity>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub repair_cost: Vec<ItemQuantity>,
+    /// Share of durability a repair restores (0–1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repair_durability: Option<f32>,
+    /// Traders that sell it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub vendors: Vec<Vendor>,
+    /// Kinds of place it drops in ("Residential", "ARC").
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub found_in: Vec<String>,
+    /// Weapons a mod fits.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub compatible_with: Vec<String>,
+    /// A weapon's mod slots and the mods each takes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mod_slots: Vec<(String, Vec<ItemId>)>,
+    /// Crafting it needs its blueprint learned.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub blueprint_locked: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub quest_item: bool,
+    /// The game version it came with.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added_in: Option<String>,
+    /// A hint from the data source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tip: Option<String>,
+}
+
+impl ItemDetails {
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
+/// A trader's offer of the item.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Vendor {
+    pub trader: String,
+    /// The price: items, or the currencies `coins` / `creds` as ids.
+    pub cost: Vec<ItemQuantity>,
+    /// How many per refresh.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refresh_seconds: Option<u32>,
+    /// The trader level it needs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub required_level: Option<u32>,
 }
 
 /// A reason to keep an item: something in the game consumes it.

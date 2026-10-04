@@ -111,6 +111,20 @@ pub fn item_card<'a, Message: 'a>(card: &ItemCard<'a>) -> Element<'a, Message> {
         .into()
 }
 
+/// The card's cream header (icon, tags, name), for other layouts.
+pub fn heading<'a, Message: 'a>(card: &ItemCard<'a>) -> Element<'a, Message> {
+    let icon_size = match card.size {
+        CardSize::Compact => 56.0,
+        CardSize::Full => 80.0,
+    };
+    header(card, palette::rarity(card.item.rarity), icon_size)
+}
+
+/// The card's verdict bar (KEEP / SELL… and why), for other layouts.
+pub fn verdict<'a, Message: 'a>(card: &ItemCard<'a>) -> Element<'a, Message> {
+    verdict_bar(card)
+}
+
 fn header<'a, Message: 'a>(
     card: &ItemCard<'a>,
     rarity_color: Color,

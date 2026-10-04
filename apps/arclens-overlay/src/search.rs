@@ -14,10 +14,10 @@ use iced::{Alignment, Border, Element, Length};
 /// Widget id of the search box, focused when the overlay turns interactive.
 pub const INPUT_ID: &str = "overlay-quick-search";
 /// Box width, logical pixels.
-const WIDTH: f32 = 520.0;
+pub const WIDTH: f32 = 520.0;
 /// Distance from the top of the screen, as a share of its height (below
 /// the game's top bar).
-const TOP: f32 = 0.09;
+pub const TOP: f32 = 0.09;
 /// Results shown at most.
 pub const MAX_HITS: usize = 8;
 
@@ -55,12 +55,19 @@ impl SearchState {
                 self.query.clone_from(&query);
                 Some(ToApp::Search { query })
             }
-            SearchMessage::Submit => self
-                .hits
-                .first()
-                .map(|hit| ToApp::PickItem { id: hit.id.clone() }),
-            SearchMessage::Pick(id) => Some(ToApp::PickItem { id }),
+            SearchMessage::Submit => {
+                let id = self.hits.first()?.id.clone();
+                Some(self.pick(id))
+            }
+            SearchMessage::Pick(id) => Some(self.pick(id)),
         }
+    }
+
+    /// Opens `id`'s window and clears the box for the next search.
+    fn pick(&mut self, id: ItemId) -> ToApp {
+        self.query.clear();
+        self.hits.clear();
+        ToApp::PickItem { id }
     }
 
     /// The app's answer for `query`; ignored once the box says otherwise.
@@ -84,8 +91,8 @@ impl SearchState {
     }
 }
 
-/// The search panel on a `screen`-sized surface.
-pub fn view(state: &SearchState, screen: iced::Size) -> Element<'_, Message> {
+/// The search panel; with item windows open, a button closing them all.
+pub fn panel(state: &SearchState, open: usize) -> Element<'_, Message> {
     let input = text_input(&t!("items-search"), &state.query)
         .id(INPUT_ID)
         .on_input(|q| Message::Search(SearchMessage::Query(q)))
@@ -110,6 +117,26 @@ pub fn view(state: &SearchState, screen: iced::Size) -> Element<'_, Message> {
     }
     for hit in &state.hits {
         body = body.push(hit_row(hit));
+    }
+    if open > 0 {
+        body = body.push(
+            row![
+                text(t!("overlay-detail-hint"))
+                    .size(theme::size::TINY)
+                    .color(palette::TEXT_MUTED)
+                    .width(Length::Fill),
+                button(
+                    text(t!("overlay-detail-close-all", count = open).to_uppercase())
+                        .size(theme::size::TINY)
+                        .font(DISPLAY_SEMI),
+                )
+                .padding([3, 10])
+                .on_press(Message::Detail(crate::detail::DetailMessage::CloseAll))
+                .style(theme::secondary_button_style),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center),
+        );
     }
 
     let header = container(
@@ -149,11 +176,7 @@ pub fn view(state: &SearchState, screen: iced::Size) -> Element<'_, Message> {
             text_color: Some(palette::TEXT),
             ..container::Style::default()
         });
-    column![
-        Space::new().height(screen.height * TOP),
-        container(column![header, body].width(WIDTH)).center_x(Length::Fill),
-    ]
-    .into()
+    column![header, body].width(WIDTH).into()
 }
 
 fn hit_row(hit: &Hit) -> Element<'_, Message> {
@@ -224,6 +247,9 @@ mod tests {
                 id: ItemId("rusted gear".into())
             })
         );
+        // Cleared for the next search.
+        assert_eq!(state.query, "");
+        assert_eq!(state.update(SearchMessage::Submit), None);
     }
 
     #[test]

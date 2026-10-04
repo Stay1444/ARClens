@@ -259,26 +259,29 @@ pub fn secondary_button<'a, M: Clone + 'a>(label: &str, on_press: Option<M>) -> 
     button(text(label.to_owned()).size(size::SMALL).font(STRONG))
         .padding([7, 16])
         .on_press_maybe(on_press)
-        .style(|_, status| {
-            let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
-            button::Style {
-                background: Some(
-                    palette::with_alpha(palette::TEXT, if hovered { 0.12 } else { 0.04 }).into(),
-                ),
-                text_color: if matches!(status, button::Status::Disabled) {
-                    palette::TEXT_MUTED
-                } else {
-                    palette::TEXT
-                },
-                border: Border {
-                    color: palette::with_alpha(palette::TEXT, 0.25),
-                    width: 1.0,
-                    radius: RADIUS.into(),
-                },
-                ..button::Style::default()
-            }
-        })
+        .style(secondary_button_style)
         .into()
+}
+
+/// The style of [`secondary_button`], for buttons built elsewhere.
+pub fn secondary_button_style(_: &iced::Theme, status: button::Status) -> button::Style {
+    let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+    button::Style {
+        background: Some(
+            palette::with_alpha(palette::TEXT, if hovered { 0.12 } else { 0.04 }).into(),
+        ),
+        text_color: if matches!(status, button::Status::Disabled) {
+            palette::TEXT_MUTED
+        } else {
+            palette::TEXT
+        },
+        border: Border {
+            color: palette::with_alpha(palette::TEXT, 0.25),
+            width: 1.0,
+            radius: RADIUS.into(),
+        },
+        ..button::Style::default()
+    }
 }
 
 /// A search or text box on the dark panels.

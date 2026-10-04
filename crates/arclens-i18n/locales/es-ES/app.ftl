@@ -95,7 +95,7 @@ items-results = { $count ->
    *[other] { $count } resultados
 }
 items-pick = Elige un objeto
-items-pick-help = Busca arriba (Intro abre el primer resultado) o recorre la lista. El objeto elegido también se muestra en el overlay del juego.
+items-pick-help = Busca arriba (Intro abre el primer resultado) o recorre la lista. En el juego, Ctrl+Shift+I abre la búsqueda rápida del overlay, donde cada objeto elegido se abre en su propia ventana.
 
 ## Mapa
 
@@ -215,8 +215,8 @@ settings-language-help = El idioma de la app y del overlay. Los nombres de objet
 settings-language-system = Sistema ({ $name })
 settings-overlay-size = Tamaño del overlay
 settings-overlay-size-help = Escala todo lo que dibuja el overlay: tarjetas, el panel del mapa, los marcadores y la búsqueda rápida.
-settings-pinned-card = Tarjeta fijada
-settings-pinned-card-help = Dónde se coloca la tarjeta del objeto que eliges (en la app o en la búsqueda rápida del overlay) mientras el overlay está visible.
+settings-pinned-card = Indicador de estado
+settings-pinned-card-help = La esquina de la pantalla donde el overlay muestra su estado mientras está visible.
 settings-overlay-background = Fondo del overlay
 settings-overlay-background-help = Cuánto del juego se ve a través de las tarjetas y paneles del overlay.
 settings-opacity-solid = Opaco
@@ -234,3 +234,40 @@ corner-top-left = Arriba a la izquierda
 corner-top-right = Arriba a la derecha
 corner-bottom-left = Abajo a la izquierda
 corner-bottom-right = Abajo a la derecha
+
+## La ventana de objeto del overlay (la construye la app)
+
+detail-crafting = Fabricación
+detail-upgrades = Mejoras
+detail-repair = Reparación
+detail-repair-restores = Reparación (restaura un { $percent } %)
+detail-sold-by = Lo venden
+detail-unlocks = Desbloquea la fabricación de
+detail-mod-slots = Ranuras de accesorios
+detail-fits = Encaja en
+detail-weight = Peso
+detail-value-per-kg = Valor por kg
+detail-stack = Tamaño de pila
+detail-found-in = Se encuentra en
+detail-blueprint = Plano
+detail-blueprint-learned = Aprendido
+detail-blueprint-missing = Sin aprender
+detail-blueprint-needed = Necesario
+detail-quest-item = Objeto de misión
+detail-yes = Sí
+detail-added-in = Añadido en
+detail-base-game = Lanzamiento
+detail-in-raid = En partida
+detail-level = nivel { $level }
+detail-makes = da { $count }
+detail-upgrade-from = se mejora desde
+detail-upgrade-to = se mejora a
+detail-per-day = { $count } al día
+detail-limit = { $count } por reposición
+detail-currency-coins = monedas
+detail-currency-creds = créditos
+detail-slot-muzzle = Boca
+detail-slot-grip = Empuñadura
+detail-slot-stock = Culata
+detail-slot-magazine = Cargador
+detail-slot-special = Especial

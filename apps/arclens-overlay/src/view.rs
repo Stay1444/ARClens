@@ -36,8 +36,10 @@ pub fn view(state: &Overlay) -> Element<'_, Message> {
             screen,
         ));
     }
-    if let (true, Some(screen)) = (state.interactive, state.screen) {
-        layers = layers.push(crate::search::view(&state.search, screen));
+    if let Some(screen) = state.screen
+        && (state.interactive || !state.details.is_empty())
+    {
+        layers = layers.push(top_row(state, screen));
     }
     let hover: Element<'_, Message> = layers.push(hover).into();
     if !state.visible {
@@ -45,30 +47,9 @@ pub fn view(state: &Overlay) -> Element<'_, Message> {
     }
 
     // The badge is always drawn while visible, so "is the overlay on screen
-    // at all?" can be answered at a glance, even with nothing selected.
+    // at all?" can be answered at a glance.
     let corner = state.settings.corner;
-    let card = state.item.as_ref().map(|shown| {
-        item_card(&ItemCard {
-            item: &shown.item,
-            advice: shown.advice.clone(),
-            icon: shown.icon.as_ref(),
-            recycle_names: shown.recycle_names.clone(),
-            size: CardSize::Compact,
-        })
-    });
-    // The badge stays on the screen's edge, the card towards the middle.
-    let panel = if corner.is_top() {
-        column![status_badge(state)].push(card)
-    } else {
-        column![].push(card).push(status_badge(state))
-    }
-    .spacing(8)
-    .align_x(if corner.is_left() {
-        iced::Alignment::Start
-    } else {
-        iced::Alignment::End
-    });
-    let placed = container(panel)
+    let placed = container(status_badge(state))
         .width(Length::Fill)
         .height(Length::Fill)
         .padding(24);
@@ -84,6 +65,35 @@ pub fn view(state: &Overlay) -> Element<'_, Message> {
     };
 
     stack![placed, hover].into()
+}
+
+/// The quick search (while interactive) and the item windows, side by
+/// side across the top of the screen.
+fn top_row(state: &Overlay, screen: iced::Size) -> Element<'_, Message> {
+    use crate::{detail, search};
+    let search = state
+        .interactive
+        .then(|| search::panel(&state.search, state.details.open.len()));
+    let used = if search.is_some() {
+        search::WIDTH + detail::GAP
+    } else {
+        0.0
+    };
+    let windows = detail::windows(
+        &state.details,
+        screen.width - 48.0 - used,
+        screen.height * (1.0 - search::TOP) - 24.0,
+    );
+    let row = iced::widget::row![]
+        .spacing(detail::GAP)
+        .align_y(iced::Alignment::Start)
+        .push(search)
+        .push(windows);
+    column![
+        Space::new().height(screen.height * search::TOP),
+        container(row).center_x(Length::Fill),
+    ]
+    .into()
 }
 
 /// Gap between the game's tooltip and our card, in logical pixels.
@@ -329,10 +339,10 @@ fn status_badge(state: &Overlay) -> Element<'_, Message> {
     } else {
         t!("top-click-through")
     };
-    let hint = if state.item.is_none() {
-        format!(" · {}", t!("overlay-pick-hint"))
-    } else {
+    let hint = if state.interactive {
         String::new()
+    } else {
+        format!(" · {}", t!("overlay-search-shortcut"))
     };
     container(
         text(format!("ARCLENS · {mode}{hint}").to_uppercase())

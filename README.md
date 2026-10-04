@@ -39,9 +39,14 @@ first, with Windows support too.
   shows the map conditions running now and next with countdowns, and your
   workshop, quest, project and blueprint progress.
   ![Main-menu card](docs/assets/overlay-menu-card.png)
-- **Quick search.** In interactive mode (Ctrl+Shift+I) a search box at the
-  top of the screen finds any item and pins its card.
-  ![Overlay quick search](docs/assets/overlay-search.png)
+- **Quick search and item windows.** In interactive mode (Ctrl+Shift+I) a
+  search box at the top of the screen finds any item; Enter or a click
+  opens its window with everything the data has: verdict, values, weight
+  and value per kg, stats, what it recycles and salvages into, its recipe
+  and bench, what it crafts, upgrade tiers and costs, repair, which
+  traders sell it, mod slots, where it's found and your progress on what
+  needs it. Open several side by side; ✕ or Esc closes them.
+  ![Item windows next to the quick search](docs/assets/overlay-item-windows.jpg)
 
 ### In the companion app
 

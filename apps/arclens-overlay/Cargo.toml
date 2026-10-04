@@ -21,6 +21,9 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
+[dev-dependencies]
+serde_json = { workspace = true }
+
 [target.'cfg(target_os = "linux")'.dependencies]
 iced_layershell = { workspace = true }
 # Same versions iced_layershell uses; only for listing outputs.

@@ -18,7 +18,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 mod transport;
 pub use transport::{Endpoint, Listener};
 
-pub const PROTOCOL_VERSION: u32 = 14;
+pub const PROTOCOL_VERSION: u32 = 15;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hello {
@@ -39,18 +39,15 @@ pub enum ToOverlay {
     SetInteractive {
         interactive: bool,
     },
-    /// Show an item card (quick lookup or detected hovered item).
-    ShowItem {
-        item: Box<Item>,
-        advice: Advice,
-        /// Local path of the item's icon, if cached. Optional, so older
-        /// peers keep working without a protocol bump.
-        #[serde(default)]
-        icon: Option<PathBuf>,
-        /// Display names aligned with `item.recycles_into` (the overlay has
-        /// no catalog to resolve ids).
-        #[serde(default)]
-        recycle_names: Vec<String>,
+    /// Open an item's detailed window (picked in the quick search), or
+    /// bring it to the front if open.
+    OpenItem {
+        detail: Box<ItemDetail>,
+    },
+    /// New data for an item's window (icons arrived, progress changed);
+    /// ignored if the window was closed.
+    UpdateItem {
+        detail: Box<ItemDetail>,
     },
     /// The item whose in-game tooltip is under the cursor (detected from the
     /// screen). Drawn next to `anchor` regardless of the manual visibility
@@ -133,6 +130,47 @@ pub enum ToOverlay {
         query: String,
         hits: Vec<SearchHit>,
     },
+}
+
+/// Everything the overlay's detailed item window shows, ready to draw:
+/// the app resolves names, icons and progress, in the interface language.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ItemDetail {
+    pub item: Item,
+    pub advice: Advice,
+    #[serde(default)]
+    pub icon: Option<PathBuf>,
+    /// Short facts as `(label, value)`: values, weight, stack, where found.
+    #[serde(default)]
+    pub facts: Vec<(String, String)>,
+    /// Stats and effects as `(label, value)`.
+    #[serde(default)]
+    pub stats: Vec<(String, String)>,
+    /// Titled lists: needed for, recycling, crafting, vendors, mods…
+    #[serde(default)]
+    pub sections: Vec<DetailSection>,
+}
+
+/// A titled list in the detailed window.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DetailSection {
+    pub title: String,
+    pub rows: Vec<DetailRow>,
+}
+
+/// One row: usually an item (icon, name, amount), with a note on the
+/// right; `done` dims it (an upgrade already built, a quest finished).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct DetailRow {
+    pub name: String,
+    #[serde(default)]
+    pub icon: Option<PathBuf>,
+    #[serde(default)]
+    pub quantity: Option<u32>,
+    #[serde(default)]
+    pub note: Option<String>,
+    #[serde(default)]
+    pub done: bool,
 }
 
 /// How the overlay looks, as the user set it in the app.

@@ -10,6 +10,7 @@
 //!   (`shell/layer.rs`);
 //! - Windows: a topmost transparent window (`shell/window.rs`).
 
+mod detail;
 mod ipc;
 mod map_panel;
 mod menu_card;
@@ -103,7 +104,8 @@ pub struct Overlay {
     connected: bool,
     visible: bool,
     interactive: bool,
-    item: Option<ShownItem>,
+    /// Item windows opened from the quick search.
+    details: detail::Details,
     /// Item detected under the cursor in game, with the game tooltip's
     /// position. Shown whether or not `visible` is set.
     hover: Option<Hovered>,
@@ -154,6 +156,7 @@ impl Overlay {
         self.visible
             || self.interactive
             || self.hover.is_some()
+            || !self.details.is_empty()
             || self.panel.panel.is_some()
             || self.menu_card.is_some()
             || ((!self.markers.is_empty() || !self.areas.is_empty()) && self.transform.is_some())
@@ -192,6 +195,11 @@ pub enum Message {
     Ipc(ipc::Event),
     Panel(map_panel::PanelMessage),
     Search(search::SearchMessage),
+    Detail(detail::DetailMessage),
+    /// Esc: closes the newest item window.
+    Escape,
+    /// The surface got the keyboard: type into the search box.
+    SurfaceFocused,
     /// Surface size changed (logical pixels).
     Resized(iced::Size),
     /// For the platform's shell.
@@ -209,6 +217,11 @@ fn subscription(state: &Overlay) -> Subscription<Message> {
             iced::Event::Window(
                 iced::window::Event::Resized(size) | iced::window::Event::Opened { size, .. },
             ) => Some(Message::Resized(size)),
+            iced::Event::Window(iced::window::Event::Focused) => Some(Message::SurfaceFocused),
+            iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+                ..
+            }) => Some(Message::Escape),
             _ => None,
         }),
         shell::subscription(state),
@@ -263,6 +276,15 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
             };
         }
         Message::Shell(msg) => return shell::update(state, msg),
+        Message::Detail(msg) => {
+            state.details.update_message(msg);
+            return focus_search(state);
+        }
+        Message::Escape => {
+            state.details.close_newest();
+            return focus_search(state);
+        }
+        Message::SurfaceFocused => return focus_search(state),
         Message::Tick => {
             state.now_ms = now_ms();
             return Task::none();
@@ -305,6 +327,15 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
     }
 }
 
+/// Puts the keyboard in the search box, while it is shown.
+fn focus_search(state: &Overlay) -> Task<Message> {
+    if state.interactive {
+        iced::widget::operation::focus(search::INPUT_ID)
+    } else {
+        Task::none()
+    }
+}
+
 /// The app's settings and language.
 fn configure(
     state: &mut Overlay,
@@ -343,15 +374,12 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
             state.interactive = interactive;
             return shell::input_task(state);
         }
-        ToOverlay::ShowItem {
-            item,
-            advice,
-            icon,
-            recycle_names,
-        } => {
-            tracing::info!(item = %item.name, "showing item");
-            state.item = Some(ShownItem::new(item, advice, icon.as_deref(), recycle_names));
+        ToOverlay::OpenItem { detail } => {
+            tracing::info!(item = %detail.item.name, "opening item window");
+            state.details.open(detail);
+            return focus_search(state);
         }
+        ToOverlay::UpdateItem { detail } => state.details.update(detail),
         ToOverlay::ShowMarkers {
             markers,
             transform,

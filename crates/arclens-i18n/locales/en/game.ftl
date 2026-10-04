@@ -126,3 +126,18 @@ item-type-lmg = LMG
 item-type-basic-material = Basic Material
 item-type-misc = Misc
 item-type-shield = Shield
+
+## Loot zone kinds (an item's "found in")
+
+zone-arc = ARC
+zone-exodus = Exodus
+zone-residential = Residential
+zone-nature = Nature
+zone-commercial = Commercial
+zone-security = Security
+zone-industrial = Industrial
+zone-mechanical = Mechanical
+zone-medical = Medical
+zone-electrical = Electrical
+zone-technological = Technological
+zone-old-world = Old World

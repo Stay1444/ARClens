@@ -36,6 +36,14 @@ green CI.
       card (`PickItem`), and the overlay is shown if it was hidden
       (`docs/assets/overlay-search.png`, headless with wtype). Unverified
       on KDE and Windows.
+- [x] **Item windows** (2026-10-04, protocol v15): a pick in the quick
+      search opens a window beside it with every field RaidTheory has
+      (stats, crafting, upgrades, repair, vendors, mods, where found) and
+      the player's progress on what needs the item. Up to four side by
+      side, each with ✕, Esc closes the newest, "close all" in the search
+      panel; the search box is cleared and keeps the keyboard (also when
+      the compositor hands it over late). Replaces the pinned corner card
+      that couldn't be closed (`docs/assets/overlay-item-windows.jpg`).
 - [x] **Overlay size and card corner** (2026-10-03): a Settings tab in the
       app (`docs/assets/settings.png`) sets the overlay's scale (80–150 %,
       applied as iced's scale factor, input regions scaled to match) and
