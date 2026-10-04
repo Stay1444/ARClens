@@ -119,8 +119,6 @@ pub fn panel<'a, M: 'a>(
                 },
                 ..container::Style::default()
             }),
-        // The game's colours, as a thin line under the header.
-        stripe_band(3.0),
         container(body)
             .padding(space::PANEL)
             .width(Length::Fill)
