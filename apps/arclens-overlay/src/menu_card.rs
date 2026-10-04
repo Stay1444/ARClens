@@ -59,6 +59,7 @@ enum Page {
     Now,
     Next,
     Progress,
+    Controls,
 }
 
 impl Page {
@@ -67,6 +68,7 @@ impl Page {
             Self::Now => t!("overlay-card-now"),
             Self::Next => t!("overlay-card-next"),
             Self::Progress => t!("overlay-card-progress"),
+            Self::Controls => t!("overlay-card-controls"),
         }
         .to_uppercase()
     }
@@ -88,9 +90,8 @@ fn pages(card: &MenuCard, now_ms: i64) -> Vec<Page> {
     if !card.progress.is_empty() {
         pages.push(Page::Progress);
     }
-    if pages.is_empty() {
-        pages.push(Page::Now);
-    }
+    // Always something to show.
+    pages.push(Page::Controls);
     pages
 }
 
@@ -202,6 +203,7 @@ pub fn view<'a>(
             alpha,
         ),
         Page::Progress => progress(&card.progress, alpha),
+        Page::Controls => controls(alpha),
     };
     // Slides in from the right as it fades in.
     let body = container(body)
@@ -312,6 +314,46 @@ fn initials<'a>(name: &str, accent: Color, alpha: f32) -> Element<'a, Message> {
     .into()
 }
 
+/// The keys and what they do; the default bindings (the desktop may let
+/// the player change them).
+fn controls<'a>(alpha: f32) -> Element<'a, Message> {
+    let keys = [
+        ("Ctrl+Shift+I".to_owned(), t!("overlay-controls-search")),
+        ("Ctrl+Shift+O".to_owned(), t!("overlay-controls-toggle")),
+        ("Esc".to_owned(), t!("overlay-controls-esc")),
+        (
+            t!("overlay-controls-hover-key"),
+            t!("overlay-controls-hover"),
+        ),
+        (t!("overlay-controls-map-key"), t!("overlay-controls-map")),
+    ];
+    keys.into_iter()
+        .fold(column![].spacing(7), |col, (key, action)| {
+            col.push(
+                row![
+                    container(text(key).size(12).font(BOLD).color(with_alpha(INK, alpha)),)
+                        .padding([1, 6])
+                        .width(118)
+                        .style(move |_| container::Style {
+                            background: Some(with_alpha(CREAM, 0.9 * alpha).into()),
+                            border: Border {
+                                radius: 3.0.into(),
+                                ..Border::default()
+                            },
+                            ..container::Style::default()
+                        }),
+                    text(action)
+                        .size(13)
+                        .color(with_alpha(palette::TEXT, alpha))
+                        .width(Length::Fill),
+                ]
+                .spacing(10)
+                .align_y(Alignment::Center),
+            )
+        })
+        .into()
+}
+
 fn progress(lines: &[ProgressLine], alpha: f32) -> Element<'_, Message> {
     lines
         .iter()
@@ -378,16 +420,24 @@ mod tests {
             active: vec![event(100_000)],
             ..MenuCard::default()
         };
-        assert_eq!(pages(&card, 0), [Page::Now]);
+        assert_eq!(pages(&card, 0), [Page::Now, Page::Controls]);
         card.upcoming = vec![event(200_000)];
         card.progress = vec![ProgressLine {
             label: "Workshop".into(),
             done: 3,
             total: 33,
         }];
-        assert_eq!(pages(&card, 0), [Page::Now, Page::Next, Page::Progress]);
+        assert_eq!(
+            pages(&card, 0),
+            [Page::Now, Page::Next, Page::Progress, Page::Controls]
+        );
         // Once the running condition ended, its page goes.
-        assert_eq!(pages(&card, 150_000), [Page::Next, Page::Progress]);
+        assert_eq!(
+            pages(&card, 150_000),
+            [Page::Next, Page::Progress, Page::Controls]
+        );
+        // With nothing else, the controls still show.
+        assert_eq!(pages(&MenuCard::default(), 0), [Page::Controls]);
 
         assert_eq!(current(3, 0), (0, 0.0));
         assert_eq!(current(3, PAGE_MS + FADE_MS), (1, 1.0));
