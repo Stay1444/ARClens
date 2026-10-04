@@ -118,6 +118,10 @@ pub fn view<'a>(page: &SettingsView<'a>) -> Element<'a, Message> {
             t!("settings-region-help"),
             region_pills(region),
         ),
+        // The version, for bug reports.
+        text(t!("settings-about", version = env!("CARGO_PKG_VERSION")))
+            .size(size::SMALL)
+            .color(palette::TEXT_MUTED),
     ]
     .spacing(space::SECTION)
     .padding(theme::PAGE_PADDING)

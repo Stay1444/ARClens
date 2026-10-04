@@ -229,6 +229,7 @@ settings-refresh-daily = Cada día
 settings-refresh-weekly = Cada semana
 settings-region = Región del servidor
 settings-region-help = Las horas de las condiciones de mapa cambian según la región.
+settings-about = ARClens { $version } · GPL-3.0 o posterior · github.com/Stay1444/ARClens
 corner-top-left = Arriba a la izquierda
 corner-top-right = Arriba a la derecha
 corner-bottom-left = Abajo a la izquierda

@@ -229,6 +229,7 @@ settings-refresh-daily = Daily
 settings-refresh-weekly = Weekly
 settings-region = Server region
 settings-region-help = Map condition times differ per region.
+settings-about = ARClens { $version } · GPL-3.0-or-later · github.com/Stay1444/ARClens
 corner-top-left = Top left
 corner-top-right = Top right
 corner-bottom-left = Bottom left
