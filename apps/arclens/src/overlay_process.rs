@@ -84,9 +84,13 @@ async fn supervise() -> Result<(), String> {
             command.arg(MonitorRect::FLAG).arg(monitor.to_arg());
         }
         let started = Instant::now();
-        let mut child = command
-            .spawn()
-            .map_err(|e| format!("could not start {}: {e}", bin.display()))?;
+        let mut child = command.spawn().map_err(|e| {
+            arclens_i18n::t!(
+                "error-overlay-start",
+                bin = bin.display().to_string(),
+                error = e.to_string()
+            )
+        })?;
         tracing::info!(bin = %bin.display(), pid = child.id(), ?monitor, "overlay started");
         // Held until the child is replaced; `wait()` would otherwise close
         // it at once, and the overlay takes a closed stdin as "app gone".

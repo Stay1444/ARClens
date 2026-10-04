@@ -96,6 +96,10 @@ marker-mushroom = Mushroom
 marker-prickly-pear = Prickly Pear
 marker-roots = Roots
 marker-poi = Point of Interest
+marker-assessor = Assessor
+marker-harvester = Harvester
+marker-queen = Queen
+marker-matriarch = Matriarch
 
 ## Item types (RaidTheory)
 

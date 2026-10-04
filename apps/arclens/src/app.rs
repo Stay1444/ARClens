@@ -1629,6 +1629,7 @@ impl App {
         self.send(ToOverlay::Configure {
             settings: self.settings.overlay,
             lang: Some(arclens_i18n::current().code().to_owned()),
+            names: arclens_ui::names::data_names(),
         });
     }
 
@@ -1637,7 +1638,18 @@ impl App {
             // Loaded for a language since switched away from.
             return Task::none();
         }
+        // Quest markers are named by their quest's id.
+        arclens_ui::names::set_data_names(
+            catalog
+                .quests
+                .iter()
+                .map(|q| (arclens_i18n::slug(&q.id), q.name.clone()))
+                .collect(),
+        );
         self.catalog = Load::Ready(catalog);
+        self.refresh_map_summary();
+        self.send_configure();
+        self.push_map_panel();
         self.push_selected_to_overlay();
         self.push_menu_card();
         // The catalogue carries fallback event icons.

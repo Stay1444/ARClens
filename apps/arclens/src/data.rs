@@ -161,7 +161,7 @@ pub async fn load_events(
             tracing::warn!(%error, "event schedule fetch failed; trying cache");
             let bytes = tokio::fs::read(&cache)
                 .await
-                .map_err(|_| format!("could not load the event schedule: {error}"))?;
+                .map_err(|_| arclens_i18n::t!("error-schedule", error = error.to_string()))?;
             metaforge::parse_schedule(&bytes).map_err(|e| e.to_string())
         }
     }
@@ -229,7 +229,7 @@ pub async fn load_markers(
             tracing::warn!(%error, map, "map data fetch failed; trying cache");
             let bytes = tokio::fs::read(&cache)
                 .await
-                .map_err(|_| format!("could not load markers: {error}"))?;
+                .map_err(|_| arclens_i18n::t!("error-markers", error = error.to_string()))?;
             parse(&bytes)
         }
     }

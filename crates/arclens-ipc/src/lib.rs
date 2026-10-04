@@ -122,6 +122,10 @@ pub enum ToOverlay {
         /// send none: English.
         #[serde(default)]
         lang: Option<String>,
+        /// Names from the game data in that language, by slug of their id
+        /// (quests, for quest markers).
+        #[serde(default)]
+        names: std::collections::BTreeMap<String, String>,
     },
     /// Items matching the overlay's quick search for `query`, best first.
     /// The overlay drops results for a query it no longer shows.

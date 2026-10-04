@@ -2,7 +2,9 @@
 Type=Application
 Name=ARClens
 GenericName=ARC Raiders Companion
+GenericName[es]=Compañero de ARC Raiders
 Comment=Item lookup, map markers and an in-game overlay for ARC Raiders
+Comment[es]=Consulta de objetos, marcadores de mapa y un overlay en el juego para ARC Raiders
 Exec=arclens
 Icon=io.github.Stay1444.ARClens
 StartupWMClass=io.github.Stay1444.ARClens

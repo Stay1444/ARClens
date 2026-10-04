@@ -96,6 +96,10 @@ marker-mushroom = Seta
 marker-prickly-pear = Higo chumbo
 marker-roots = Raíces
 marker-poi = Punto de interés
+marker-assessor = Evaluador
+marker-harvester = Cosechadora
+marker-queen = Reina
+marker-matriarch = Matriarca
 
 ## Tipos de objeto (RaidTheory)
 

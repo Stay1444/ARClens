@@ -322,7 +322,12 @@ fn configure(
 fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
     match msg {
         ToOverlay::Hello(_) => {}
-        ToOverlay::Configure { settings, lang } => {
+        ToOverlay::Configure {
+            settings,
+            lang,
+            names,
+        } => {
+            arclens_ui::names::set_data_names(names);
             return configure(state, settings, lang.as_deref());
         }
         ToOverlay::SetVisible { visible } => {
