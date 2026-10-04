@@ -44,7 +44,7 @@ pub use map_motion::{Estimate, Footprint, Motion, MotionTracker, TRACK_REGION};
 pub use panel::{PanelParams, find_panels};
 pub use quests::{QuestScreen, quest_screen, quest_title_boxes, read_active_quests};
 pub use read::{NameReader, RECOGNITION_MODEL_URL};
-pub use screens::is_main_menu;
+pub use screens::{Screen, classify, is_inventory, is_main_menu, map_from_title};
 pub use text::{name_line, name_lines};
 pub use workshop::{StationLevel, parse_station_header, read_station_header, station_header_box};
 pub use workshop_overview::{WORKSHOP_TILES, is_workshop_overview, read_workshop_levels};

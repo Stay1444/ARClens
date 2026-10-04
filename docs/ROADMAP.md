@@ -206,9 +206,14 @@ green CI.
       1440p of the inventory (with tooltips), the map screen at several
       zooms and pans on each map, and the HUD. Store them under
       `crates/arclens-vision/tests/fixtures/` (git LFS if large).
-- [ ] `arclens-vision` offline detectors with precision/recall tests:
-  - [ ] inventory-open and map-open template matchers;
-  - [ ] which-map classifier;
+- [x] `arclens-vision` offline detectors with precision/recall tests:
+  - [x] screen classifier (2026-10-04, `arclens_vision::classify`):
+        main menu, map, inventory (stash and in-raid backpack), workshop,
+        trader, trader quests, logbook; no OCR. Precision and recall 1.0 on
+        all 33 fixture frames (`tests/screens.rs` fails on an unlabelled
+        new fixture);
+  - [x] which-map: `map_from_title` matches the OCR'd map title to its
+        id, tolerant of OCR slips (the app's `map_for_title` does the same);
   - [x] tooltip detector (cream panel → rectangle → name line), golden
         tests on 18 frames from stash, raid and trader;
   - [x] name-line reader (ocrs recognition model, Roman-numeral stroke
