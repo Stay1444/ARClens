@@ -2212,6 +2212,7 @@ fn tab_shortcut(event: iced::keyboard::Event) -> Option<Message> {
         "3" => Tab::Map,
         "4" => Tab::Events,
         "5" => Tab::Progress,
+        "6" => Tab::Settings,
         _ => return None,
     };
     Some(Message::SetTab(tab))

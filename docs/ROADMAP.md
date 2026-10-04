@@ -141,7 +141,7 @@ green CI.
 - [x] **Map** tab in the companion app: map picker, marker search, category
       and subcategory toggles with icons and counts, show/hide all, and an
       icon plot with place names and hover tooltips
-      (`docs/assets/map-tab.png`, synthetic markers). Derived data and the
+      (`docs/assets/map-tab.jpg`, synthetic markers). Derived data and the
       plot layer are cached and rebuilt only when markers, map, search or
       filter change.
 - [x] Marker icons: our own SVG glyphs (`arclens-ui/assets/markers`),
@@ -184,7 +184,7 @@ green CI.
       (area count, "not all are there every raid"). The pointer comes from
       the capture, never the game: PipeWire cursor metadata on Linux, the
       OS cursor position on Windows (protocol v11, `Pointer`;
-      `docs/assets/overlay-tooltip.png`). Verified headlessly with a
+      `docs/assets/overlay-tooltip.jpg`). Verified headlessly with a
       replayed cursor. **Not working on KDE yet** (field report): see
       "Marker tooltips need the compositor's pointer" in map-tracking.md.
 - [x] Region ids confirmed from MetaForge's front end (2026-10-04):
@@ -287,7 +287,7 @@ green CI.
       normalised screen, protocol v6), markers inside the viewport only,
       drawn as cached icon badges. End-to-end on `dam_zoom_mid` with
       synthetic marker data: 8/8 labels agree and the badges land on the
-      game's own icons (`docs/assets/overlay-map-markers.png`).
+      game's own icons (`docs/assets/overlay-map-markers.jpg`).
 - [x] **Pan/zoom tracking** (2026-10-03): markers follow the map at
       capture rate (20 fps) between label reads: phase correlation with a
       zoom search, outvoting the pointer-following place card, then
