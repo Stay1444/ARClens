@@ -129,6 +129,12 @@ Railyard on the tracks, Poolside at the hotel pool.
   (or nothing) for markers on those layers.
 - Stella Montis `zlayers` ↔ image pairing comes from which labels appear
   on which image. It holds for all 29 labels.
+- The app reads `zlayers` as a **bit set** (1 upper, 2 lower, 3 both;
+  `2147483647` and absent mean every floor). That reading is verified on
+  the labels only (2026-10-04). Stella Montis's *marker* data (loot,
+  containers) couldn't be fetched from the dev environment, so whether its
+  markers carry the same values is **unverified**; markers without a
+  usable `zlayers` show on both floors.
 - RaidTheory may re-render maps (the folder is already `v2`). Pin the
   dataset version or re-check the transforms when `images/maps` changes.
 

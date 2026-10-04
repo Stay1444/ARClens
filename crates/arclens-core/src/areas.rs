@@ -157,6 +157,7 @@ mod tests {
             label: None,
             locked: false,
             conditions: None,
+            floors: None,
         }
     }
 

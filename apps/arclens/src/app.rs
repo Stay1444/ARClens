@@ -93,7 +93,10 @@ pub struct App {
     map_plot: iced::widget::canvas::Cache,
     /// Map images by map id, decoded once: `None` while loading, or when
     /// the map has none or it failed.
-    map_images: std::collections::HashMap<String, Option<iced::widget::image::Handle>>,
+    /// Map images by map and floor, `None` while loading or missing.
+    map_images: std::collections::HashMap<MapImageKey, Option<iced::widget::image::Handle>>,
+    /// The floor shown on maps with several (its `zlayers` bit).
+    map_floor: Option<u32>,
     /// The open in-game map's view, as last read from the screen.
     game_view: GameMapView,
     /// The in-game map last recognised; kept across map close and reopen.
@@ -235,6 +238,16 @@ enum Load<T> {
     Failed(String),
 }
 
+/// The floor a map opens on: its upper one, if it has several.
+fn first_floor(map: &str) -> Option<u32> {
+    arclens_data::map_images::floors(map)
+        .first()
+        .map(|f| f.zlayers)
+}
+
+/// A map image: map id and floor.
+type MapImageKey = (String, Option<u32>);
+
 #[derive(Debug, Clone)]
 pub enum Message {
     CatalogLoaded(Result<Arc<Catalog>, String>),
@@ -272,7 +285,8 @@ pub enum Message {
     FilterEventsMap(Option<String>),
     SelectMap(String),
     MarkersLoaded(String, Result<Vec<arclens_core::Marker>, String>),
-    MapImageLoaded(String, Result<Option<Arc<data::MapPicture>>, String>),
+    MapImageLoaded(MapImageKey, Result<Option<Arc<data::MapPicture>>, String>),
+    SelectFloor(u32),
     MarkerQuery(String),
     ToggleMarkerCategory(String),
     ToggleMarkerSubcategory(String, String),
@@ -359,6 +373,7 @@ impl App {
             map_summary: crate::views::map::MapSummary::default(),
             map_plot: iced::widget::canvas::Cache::new(),
             map_images: std::collections::HashMap::new(),
+            map_floor: first_floor(arclens_data::metaforge::MAPS[0].0),
             paths: paths.clone(),
             status: Vec::new(),
         };
@@ -1110,10 +1125,16 @@ impl App {
                 if map != self.map {
                     self.map = map;
                     self.map_condition = None;
+                    self.map_floor = first_floor(&self.map);
                 }
                 self.sync_preset();
                 self.refresh_map_summary();
                 return self.load_map_markers();
+            }
+            Message::SelectFloor(floor) => {
+                self.map_floor = Some(floor);
+                self.refresh_map_summary();
+                return self.load_map_image();
             }
             Message::SelectCondition(condition) => {
                 self.map_condition = condition;
@@ -1157,7 +1178,7 @@ impl App {
                     self.push_map_panel();
                 }
             }
-            Message::MapImageLoaded(map, result) => self.on_map_image(map, result),
+            Message::MapImageLoaded(key, result) => self.on_map_image(key, result),
             Message::MarkersLoaded(map, result) => {
                 if let Err(error) = &result {
                     tracing::warn!(%error, map, "markers unavailable");
@@ -1219,7 +1240,11 @@ impl App {
     }
 
     /// Decodes a loaded map image once and keeps its handle.
-    fn on_map_image(&mut self, map: String, result: Result<Option<Arc<data::MapPicture>>, String>) {
+    fn on_map_image(
+        &mut self,
+        key: MapImageKey,
+        result: Result<Option<Arc<data::MapPicture>>, String>,
+    ) {
         let handle = match result {
             Ok(Some(picture)) => Some(iced::widget::image::Handle::from_rgba(
                 picture.width,
@@ -1228,14 +1253,14 @@ impl App {
             )),
             Ok(None) => None,
             Err(error) => {
-                tracing::warn!(%error, map, "map image unavailable");
+                tracing::warn!(%error, map = key.0, floor = ?key.1, "map image unavailable");
                 None
             }
         };
-        if map == self.map {
+        if key == self.map_image_key() {
             self.map_plot.clear();
         }
-        self.map_images.insert(map, handle);
+        self.map_images.insert(key, handle);
     }
 
     /// Starts loading the selected map's markers and image, unless already
@@ -1246,15 +1271,20 @@ impl App {
 
     /// Starts loading the selected map's image, once.
     fn load_map_image(&mut self) -> Task<Message> {
-        if self.map_images.contains_key(&self.map) {
+        let key = self.map_image_key();
+        if self.map_images.contains_key(&key) {
             return Task::none();
         }
-        self.map_images.insert(self.map.clone(), None);
-        let map = self.map.clone();
+        self.map_images.insert(key.clone(), None);
         Task::perform(
-            data::load_map_image(self.paths.clone(), map.clone()),
-            move |result| Message::MapImageLoaded(map.clone(), result),
+            data::load_map_image(self.paths.clone(), key.0.clone(), key.1),
+            move |result| Message::MapImageLoaded(key.clone(), result),
         )
+    }
+
+    /// The selected map and floor.
+    fn map_image_key(&self) -> MapImageKey {
+        (self.map.clone(), self.map_floor)
     }
 
     fn load_markers_only(&mut self) -> Task<Message> {
@@ -1504,6 +1534,7 @@ impl App {
                     &self.marker_query,
                     &self.marker_filter,
                     self.condition_bit(&self.map),
+                    self.map_floor,
                 )
             }
             _ => crate::views::map::MapSummary::default(),
@@ -1671,15 +1702,14 @@ impl App {
             conditions: arclens_data::metaforge::conditions(&self.map),
             condition: self.map_condition,
             presets: self.presets_view(),
+            floors: arclens_data::map_images::floors(&self.map),
+            floor: self.map_floor,
             background: self
                 .map_images
-                .get(&self.map)
+                .get(&self.map_image_key())
                 .and_then(Option::as_ref)
-                .zip(arclens_data::map_images::map_image(&self.map))
-                .map(|(handle, info)| {
-                    let (min, max) = info.bounds();
-                    crate::views::map::Background { handle, min, max }
-                }),
+                .zip(arclens_data::map_images::bounds(&self.map, self.map_floor))
+                .map(|(handle, (min, max))| crate::views::map::Background { handle, min, max }),
         })
     }
 

@@ -191,6 +191,11 @@ pub struct Marker {
     /// numbering differs per map). `None`: in every condition.
     #[serde(default)]
     pub conditions: Option<u32>,
+    /// Floors the marker is on, as a bit set (bit 0: floor 1; MetaForge's
+    /// `zlayers`), for maps with several (Stella Montis). `None`: every
+    /// floor.
+    #[serde(default)]
+    pub floors: Option<u32>,
 }
 
 impl Marker {
@@ -208,6 +213,15 @@ impl Marker {
     pub fn occurs_in(&self, condition: Option<u8>) -> bool {
         match (self.conditions, condition) {
             (Some(mask), Some(bit)) => bit < 32 && mask & (1 << bit) != 0,
+            _ => true,
+        }
+    }
+
+    /// Whether the marker is on `floor` (a single-bit mask; `None`: all
+    /// floors, so yes).
+    pub fn on_floor(&self, floor: Option<u32>) -> bool {
+        match (self.floors, floor) {
+            (Some(mask), Some(floor)) => mask & floor != 0,
             _ => true,
         }
     }
@@ -381,6 +395,7 @@ mod tests {
             label: label.map(Into::into),
             locked: false,
             conditions: None,
+            floors: None,
         }
     }
 
@@ -438,6 +453,7 @@ mod tests {
         // Bit 12: Hurricane on Dam.
         let hurricane = Marker {
             conditions: Some(1 << 12),
+            floors: None,
             ..marker("containers", Some("hurricane_cache"), None)
         };
         assert!(always.occurs_in(Some(12)) && always.occurs_in(Some(0)));

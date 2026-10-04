@@ -60,21 +60,55 @@ impl MapImage {
 
     /// The image's corners in marker coordinates: top-left, bottom-right.
     pub fn bounds(&self) -> (MapPoint, MapPoint) {
-        #[allow(clippy::cast_precision_loss, reason = "image sizes")]
-        let (w, h) = (self.size[0] as f32, self.size[1] as f32);
-        (
-            MapPoint::new(-self.tx / self.scale, -self.ty / self.scale),
-            MapPoint::new((w - self.tx) / self.scale, (h - self.ty) / self.scale),
-        )
+        corners(self.size, self.scale, self.tx, self.ty)
     }
+}
+
+/// One floor of a map drawn as a single image per floor (Stella Montis).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Floor {
+    /// `"upper"`, `"lower"`.
+    pub name: String,
+    /// The floor's bit in the markers' `floors` (MetaForge's `zlayers`).
+    pub zlayers: u32,
+    /// Path of the image in RaidTheory's repository.
+    pub image: String,
+    pub size: [u32; 2],
+    pub scale: f32,
+    pub tx: f32,
+    pub ty: f32,
+}
+
+impl Floor {
+    pub fn url(&self) -> String {
+        format!("{RAW_BASE}{}", self.image)
+    }
+
+    /// The image's corners in marker coordinates: top-left, bottom-right.
+    pub fn bounds(&self) -> (MapPoint, MapPoint) {
+        corners(self.size, self.scale, self.tx, self.ty)
+    }
+}
+
+/// Where an image of `size` pixels, placed by `image_px = scale · map +
+/// (tx, ty)`, has its corners in marker coordinates.
+fn corners(size: [u32; 2], scale: f32, tx: f32, ty: f32) -> (MapPoint, MapPoint) {
+    #[allow(clippy::cast_precision_loss, reason = "image sizes")]
+    let (w, h) = (size[0] as f32, size[1] as f32);
+    (
+        MapPoint::new(-tx / scale, -ty / scale),
+        MapPoint::new((w - tx) / scale, (h - ty) / scale),
+    )
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum Entry {
     Tiled(MapImage),
-    /// Maps made of separate images per floor (Stella Montis): not drawn
-    /// yet.
+    /// One image per floor (Stella Montis).
+    Layered {
+        layers: Vec<Floor>,
+    },
     Other(serde::de::IgnoredAny),
 }
 
@@ -87,6 +121,27 @@ fn all() -> &'static BTreeMap<String, Entry> {
 pub fn map_image(map: &str) -> Option<&'static MapImage> {
     match all().get(map)? {
         Entry::Tiled(image) => Some(image),
+        Entry::Layered { .. } | Entry::Other(_) => None,
+    }
+}
+
+/// The floors of `map`, upper first, if it is drawn one image per floor.
+pub fn floors(map: &str) -> &'static [Floor] {
+    match all().get(map) {
+        Some(Entry::Layered { layers }) => layers,
+        _ => &[],
+    }
+}
+
+/// The corners of the image drawn for `map` (on `floor`, a floor's
+/// `zlayers`, for maps with several), in marker coordinates.
+pub fn bounds(map: &str, floor: Option<u32>) -> Option<(MapPoint, MapPoint)> {
+    match all().get(map)? {
+        Entry::Tiled(image) => Some(image.bounds()),
+        Entry::Layered { layers } => layers
+            .iter()
+            .find(|f| Some(f.zlayers) == floor)
+            .map(Floor::bounds),
         Entry::Other(_) => None,
     }
 }
@@ -109,7 +164,7 @@ mod tests {
     }
 
     #[test]
-    fn tiled_maps_are_listed_and_layered_ones_skipped() {
+    fn tiled_maps_are_listed_and_layered_ones_have_floors() {
         for map in [
             "dam",
             "buried-city",
@@ -121,5 +176,23 @@ mod tests {
         }
         assert!(map_image("stella-montis").is_none());
         assert!(map_image("nowhere").is_none());
+        assert_eq!(floors("dam"), &[]);
+        let stella = floors("stella-montis");
+        let names: Vec<_> = stella
+            .iter()
+            .map(|f| (f.name.as_str(), f.zlayers))
+            .collect();
+        assert_eq!(names, [("upper", 1), ("lower", 2)]);
+        assert!(
+            stella[0]
+                .url()
+                .ends_with("images/maps/stella_montis_upper.png")
+        );
+        let (min, max) = bounds("stella-montis", Some(2)).unwrap();
+        let lower = &stella[1];
+        assert!((lower.scale * min.x + lower.tx).abs() < 1e-2);
+        assert!((lower.scale * max.x + lower.tx - 5120.0).abs() < 1e-1);
+        assert!(bounds("stella-montis", None).is_none());
+        assert!(bounds("dam", None).is_some());
     }
 }

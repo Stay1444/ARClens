@@ -383,6 +383,8 @@ struct RawMarker {
     behind_locked_door: Option<bool>,
     #[serde(default)]
     event_condition_mask: Option<serde_json::Value>,
+    #[serde(default)]
+    zlayers: Option<serde_json::Value>,
 }
 
 /// A coordinate, sent as a number or a numeric string.
@@ -418,6 +420,20 @@ fn condition_mask(value: Option<&serde_json::Value>) -> Option<u32> {
     u32::try_from(mask).ok().filter(|&m| m > 1)
 }
 
+/// A marker's `zlayers`: the floors it is on, as a bit set (Stella
+/// Montis labels carry 1 upper, 2 lower, 3 both). Absent, `0` and
+/// `2147483647` (every bit, what single-floor maps carry) mean every floor.
+fn floor_mask(value: Option<&serde_json::Value>) -> Option<u32> {
+    let mask = match value? {
+        serde_json::Value::Number(n) => n.as_u64()?,
+        serde_json::Value::String(s) => s.trim().parse().ok()?,
+        _ => return None,
+    };
+    u32::try_from(mask)
+        .ok()
+        .filter(|&m| m != 0 && m != i32::MAX.unsigned_abs())
+}
+
 /// Parses a `game-map-data` response for `map`.
 ///
 /// MetaForge's `lat` grows *downwards* on the map (verified 2026-10-03 on
@@ -449,6 +465,7 @@ pub fn parse_map_markers(bytes: &[u8], map: &str) -> Result<Vec<Marker>, Error> 
                 label: clean(m.instance_name),
                 locked: m.behind_locked_door.unwrap_or(false),
                 conditions: condition_mask(m.event_condition_mask.as_ref()),
+                floors: floor_mask(m.zlayers.as_ref()),
             })
         })
         .collect())
@@ -538,6 +555,23 @@ mod tests {
         let (_, hurricane) = condition_on_map("dam", "Hurricane").unwrap();
         assert!(markers[0].occurs_in(Some(hurricane)));
         assert!(!markers[0].occurs_in(Some(0)));
+    }
+
+    #[test]
+    fn reads_floor_masks() {
+        let markers = parse_map_markers(
+            br#"[{"id":"a","lat":1,"lng":2,"zlayers":1},
+                {"id":"b","lat":1,"lng":2,"zlayers":"2"},
+                {"id":"c","lat":1,"lng":2,"zlayers":3},
+                {"id":"d","lat":1,"lng":2,"zlayers":2147483647},
+                {"id":"e","lat":1,"lng":2}]"#,
+            "stella-montis",
+        )
+        .unwrap();
+        let masks: Vec<_> = markers.iter().map(|m| m.floors).collect();
+        assert_eq!(masks, [Some(1), Some(2), Some(3), None, None]);
+        let lower: Vec<_> = markers.iter().map(|m| m.on_floor(Some(2))).collect();
+        assert_eq!(lower, [false, true, true, true, true]);
     }
 
     #[test]

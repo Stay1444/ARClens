@@ -51,16 +51,20 @@ pub struct CategorySummary {
 }
 
 impl MapSummary {
-    /// `condition`: the bit of the map's current condition; markers of
-    /// other conditions are left out.
+    /// `condition`: the bit of the map's current condition; `floor`: the
+    /// floor shown, on maps with several. Markers elsewhere are left out.
     pub fn new(
         markers: &[Marker],
         query: &str,
         filter: &MarkerFilter,
         condition: Option<u8>,
+        floor: Option<u32>,
     ) -> Self {
         let matching: Vec<usize> = (0..markers.len())
-            .filter(|&i| markers[i].occurs_in(condition) && markers[i].matches(query))
+            .filter(|&i| {
+                let m = &markers[i];
+                m.occurs_in(condition) && m.on_floor(floor) && m.matches(query)
+            })
             .collect();
         let visible: Vec<usize> = matching
             .iter()
@@ -128,6 +132,9 @@ pub struct MapView<'a> {
     pub conditions: &'a [(&'static str, u8)],
     pub condition: Option<&'static str>,
     pub presets: PresetsView<'a>,
+    /// The map's floors, if it has several, and the one shown.
+    pub floors: &'a [arclens_data::map_images::Floor],
+    pub floor: Option<u32>,
     /// The map image, once loaded (not every map has one).
     pub background: Option<Background<'a>>,
 }
@@ -221,6 +228,24 @@ fn top_bar<'a>(map: &MapView<'a>) -> Element<'a, Message> {
             .wrap()
     });
 
+    let floors = (!map.floors.is_empty()).then(|| {
+        map.floors
+            .iter()
+            .fold(
+                row![container(theme::label("Floor")).width(100)]
+                    .spacing(space::GAP / 2.0)
+                    .align_y(Alignment::Center),
+                |r, floor| {
+                    r.push(pill(
+                        &humanize(&floor.name),
+                        map.floor == Some(floor.zlayers),
+                        Message::SelectFloor(floor.zlayers),
+                    ))
+                },
+            )
+            .wrap()
+    });
+
     column![
         row![
             container(theme::heading("Map", size::TITLE)).padding([0.0, space::GAP]),
@@ -229,6 +254,7 @@ fn top_bar<'a>(map: &MapView<'a>) -> Element<'a, Message> {
         .spacing(space::GAP)
         .align_y(Alignment::Center),
     ]
+    .push(floors)
     .push(conditions)
     .spacing(space::GAP)
     .into()

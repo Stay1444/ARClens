@@ -163,12 +163,12 @@ green CI.
 - [x] Map image behind the Map tab's plot, with wheel zoom about the
       pointer, drag to pan and double click to reset
       (`docs/assets/map-tab.jpg`). Zoom-1 tiles (2000 px) fetched once from
-      RaidTheory's repository and composed off the UI thread. Stella Montis
-      (one image per floor) isn't drawn yet.
-- [ ] Stella Montis map images: one image per floor, each aligned
-      (map-images.md). Needs to know which floor each marker is on
-      (MetaForge's `zlayers`, seen on its labels); its marker data
-      couldn't be fetched from this environment to check.
+      RaidTheory's repository and composed off the UI thread.
+- [x] Stella Montis map images: a floor picker (Upper / Lower) on the Map
+      tab draws that floor's image (one PNG per floor, scaled to 2000 px)
+      and only the markers on it, read from MetaForge's `zlayers`
+      (`docs/assets/map-stella-montis.jpg`). Verified on the labels; its
+      loot markers' `zlayers` still unchecked (map-images.md).
 - (Dropped 2026-10-04: manual calibration. Superseded by the automatic
   place-name fit plus motion tracking, which needs no clicks and follows
   pans and zooms.)

@@ -215,22 +215,61 @@ pub struct MapPicture {
     pub rgba: Vec<u8>,
 }
 
-/// The image of `map`, if it has one: tiles from RaidTheory (cached on
-/// disk, or read from [`DATA_DIR_ENV`] when set), composed off the UI
-/// thread. Missing tiles are left transparent.
-pub async fn load_map_image(paths: Paths, map: String) -> Result<Option<Arc<MapPicture>>, String> {
+/// Width the single-image floors (Stella Montis) are scaled down to, like
+/// the tiled maps' zoom 1.
+const FLOOR_IMAGE_WIDTH: u32 = 2000;
+
+/// The image of `map` (on `floor`, for maps with one image per floor), if
+/// it has one: from RaidTheory (cached on disk, or read from
+/// [`DATA_DIR_ENV`] when set), composed off the UI thread. Missing tiles
+/// are left transparent.
+pub async fn load_map_image(
+    paths: Paths,
+    map: String,
+    floor: Option<u32>,
+) -> Result<Option<Arc<MapPicture>>, String> {
+    let local = std::env::var_os(DATA_DIR_ENV).map(std::path::PathBuf::from);
+    let cache = arclens_data::ImageCache::new(paths.cache.join("images"), http_client());
+    let fetch = async |url: String| -> Result<Option<std::path::PathBuf>, String> {
+        match &local {
+            Some(dir) => Ok(Some(
+                dir.join(url.trim_start_matches(arclens_data::map_images::RAW_BASE)),
+            )),
+            None => cache.fetch(&url).await.map_err(|e| e.to_string()),
+        }
+    };
+    if let Some(floor) = arclens_data::map_images::floors(&map)
+        .iter()
+        .find(|f| Some(f.zlayers) == floor)
+    {
+        let Some(file) = fetch(floor.url()).await? else {
+            return Ok(None);
+        };
+        return tokio::task::spawn_blocking(move || {
+            let img = image::open(&file).map_err(|e| e.to_string())?;
+            let height = img.height() * FLOOR_IMAGE_WIDTH / img.width().max(1);
+            let img = img
+                .resize_exact(
+                    FLOOR_IMAGE_WIDTH,
+                    height,
+                    image::imageops::FilterType::Triangle,
+                )
+                .to_rgba8();
+            Ok(Some(Arc::new(MapPicture {
+                width: img.width(),
+                height: img.height(),
+                rgba: img.into_raw(),
+            })))
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    }
     let Some(info) = arclens_data::map_images::map_image(&map) else {
         return Ok(None);
     };
-    let local = std::env::var_os(DATA_DIR_ENV).map(std::path::PathBuf::from);
-    let cache = arclens_data::ImageCache::new(paths.cache.join("images"), http_client());
     let mut files = Vec::new();
     for (x, y, url) in info.tile_urls(MAP_IMAGE_ZOOM) {
-        let file = match &local {
-            Some(dir) => Some(dir.join(url.trim_start_matches(arclens_data::map_images::RAW_BASE))),
-            None => cache.fetch(&url).await.map_err(|e| e.to_string())?,
-        };
-        if let Some(file) = file {
+        if let Some(file) = fetch(url).await? {
             files.push((x, y, file));
         }
     }

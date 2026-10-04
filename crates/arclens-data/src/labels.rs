@@ -29,6 +29,9 @@ struct RawLabel {
     /// Which point of the text `lat`/`lng` mark: `top-left` or `center`.
     #[serde(default)]
     anchor: Option<String>,
+    /// Floors it is on, on maps with several (Stella Montis): a bit set.
+    #[serde(default)]
+    zlayers: Option<u32>,
 }
 
 /// A place name and the point of its text that `position` marks.
@@ -82,6 +85,9 @@ pub fn map_labels(map: &str) -> Vec<Marker> {
                     label: Some(l.text.clone()),
                     locked: false,
                     conditions: None,
+                    floors: l
+                        .zlayers
+                        .filter(|&f| f != 0 && f != i32::MAX.unsigned_abs()),
                 })
                 .collect()
         })
@@ -98,6 +104,21 @@ mod tests {
             assert!(map_labels(map).len() >= 15, "{map}");
         }
         assert_eq!(map_labels("nowhere").len(), 0);
+    }
+
+    #[test]
+    fn stella_montis_labels_know_their_floor() {
+        let labels = map_labels("stella-montis");
+        let floor = |name: &str| {
+            labels
+                .iter()
+                .find(|m| m.label.as_deref() == Some(name))
+                .and_then(|m| m.floors)
+        };
+        assert_eq!(floor("Seed Vault"), Some(1));
+        assert_eq!(floor("Atrium"), Some(2));
+        assert_eq!(floor("Loading Bay"), Some(3));
+        assert!(map_labels("dam").iter().all(|m| m.floors.is_none()));
     }
 
     #[test]
