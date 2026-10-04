@@ -260,7 +260,10 @@ green CI.
       (A cross-session cache is possible but fingerprints are fragile; not
       worth it yet.)
 - [x] Adaptive capture: 10 fps for 3 s after tooltip activity, 4 fps idle.
-- [ ] Benchmarks (`criterion`): a CPU budget per frame at 4 fps.
+- [x] Benchmarks (`criterion`, 2026-10-04, `benches/frame.rs`): the
+      cheap per-frame checks take ~2.1 ms (under 1 % of a 250 ms frame at
+      4 fps); map tracking takes ~17 ms per pan step and ~113 ms per zoom
+      step on a 4-vCPU container (see game-state-detection.md).
 - [x] Live capture: ScreenCast portal (`ashpd`) plus the PipeWire stream
       (`crates/arclens-capture`). Opt-in toggle, restore token persisted,
       ≤ 5 fps, cursor hidden. **Works on KDE (2026-10-03 field test).**

@@ -16,7 +16,12 @@ rten-imageproc = "0.26"
 rustfft = { workspace = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 image = { workspace = true, features = ["jpeg"] }
+
+[[bench]]
+name = "frame"
+harness = false
 
 [lints]
 workspace = true

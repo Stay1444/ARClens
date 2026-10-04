@@ -144,3 +144,53 @@ From the maintainer's 2560×1440 screenshots (fixtures `workshop_overview`,
 - **Projects:** the page title sits where station titles do; phases are
   numbered circles, the highlighted one being the phase viewed. Not used
   yet (see ROADMAP).
+
+## CPU budget per frame (2026-10-04)
+
+Measured with `criterion` (`crates/arclens-vision/benches/frame.rs`):
+`CARGO_INCREMENTAL=0 cargo bench -p arclens-vision --bench frame --
+--warm-up-time 1 --measurement-time 3`. Frames are the 2560×1440 JPEG
+fixtures, decoded once outside the measured loop; the "pan" motion frame is
+`map/dam_zoom_mid` shifted by (40, 24) px. Release profile, single thread.
+Code at commit `87180e7`.
+
+Machine: a 4-vCPU cloud container (`nproc` = 4), `Intel(R) Xeon(R)
+Processor @ 2.80GHz`. Shared, virtualised hardware: treat the numbers as
+an order of magnitude, not a spec for a gaming PC (which should be faster).
+
+Median per call:
+
+| Check | Frame | Median |
+|---|---|---|
+| `find_panels` (tooltip detection) | `stash_osprey_ii` (tooltip) | 1.62 ms |
+| `find_panels` | `raid_jolt_mine` (tooltip) | 1.40 ms |
+| `find_panels` | `stash_none_1` (no tooltip) | 1.20 ms |
+| `is_map_screen` | stash / map | 1.2 µs / 89 µs |
+| `is_main_menu` | stash | 26.5 µs |
+| `is_workshop_overview` | stash / overview | 0.3 µs / 26 µs |
+| `quest_screen` | stash / quest | 346 µs / 415 µs |
+| `station_header_box` | stash / project | 61.5 µs / 52.5 µs |
+| all of the above in sequence | `stash_osprey_ii` | **2.09 ms** |
+| `MotionTracker::track` | pan | 16.7 ms |
+| `MotionTracker::track` | zoom (`dam_zoom_mid` → `dam_zoom_in`) | 113 ms |
+
+Not measured: `Analyzer::analyze`. It needs `NameReader`, which loads the
+OCR recognition model from a file (`NameReader::from_model_file`), and its
+cost is dominated by OCR whenever a panel is found. Without a panel it is
+`find_panels` plus `name_lines` on nothing, so close to the `find_panels`
+row. Benchmarking OCR needs the model in the bench environment: a follow-up.
+
+Conclusion against the 4 fps budget (250 ms per frame), **verified on this
+machine only**:
+
+- The cheap checks together take about 2.1 ms per frame: **under 1 % of the
+  budget**, and at 4 fps about 8.4 ms of CPU per second, i.e. **~0.8 % of
+  one core**. At the 10 fps "fast" pace after tooltip activity, ~2 %.
+  `find_panels` is ~75 % of that, `quest_screen` most of the rest.
+- Map tracking is the expensive part. The app samples the map at 20 fps
+  (`MAP_INTERVAL` = 50 ms): a pan step at 16.7 ms is a third of one core at
+  that pace, within the 50 ms interval. A zoom step (scale search) at
+  113 ms exceeds the 50 ms interval and is ~45 % of even the 250 ms
+  budget, so while the user zooms tracking runs at under 9 fps on this
+  machine. If that shows up live, the scale search is the place to cut.
+- OCR is outside these numbers and runs only when a panel is found.

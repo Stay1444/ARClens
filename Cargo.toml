@@ -23,6 +23,8 @@ arclens-vision = { path = "crates/arclens-vision" }
 # External — keep alphabetical, versions pinned to minor.
 anyhow = "1.0"
 ashpd = { version = "0.13", default-features = false, features = ["tokio", "global_shortcuts"] }
+# Benchmarks only (dev-dependency); no plots or rayon.
+criterion = { version = "0.7", default-features = false, features = ["cargo_bench_support"] }
 directories = "6.0"
 flate2 = "1.1"
 futures = "0.3"
