@@ -79,9 +79,11 @@ pub fn locate_view(
 }
 
 /// Below this many agreeing labels a fit's scale is not trusted over a
-/// tracked view's. Fully zoomed out only the big region names show (4-5 on
-/// Dam), and they disagree with each other by ~30 px: the fit's scale came
-/// out 10 % off where tracking was 4 % off (`docs/research/map-tracking.md`).
+/// tracked view's. Fully zoomed out only the big region names show (5 on
+/// Dam, 4 on Buried City and Blue Gate). Their positions were re-measured
+/// at that zoom (2026-10-04), so a widest-zoom fit is now within ~1 % of
+/// the true scale; the threshold stays at 5 until that holds beyond the
+/// one recording per map (`docs/research/map-tracking.md`).
 pub const STRONG_FIT: usize = 5;
 
 /// `prior` (a tracked view, normalised like [`locate_view`]'s) moved so the

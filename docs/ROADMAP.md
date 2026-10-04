@@ -319,8 +319,11 @@ green CI.
 - [x] Widest zoom: a fit from fewer than 5 labels keeps the tracked
       scale and only re-centres the view (Dam f0070: 10 % → 4 % scale
       error; region labels disagree by ~30 px, see map-tracking.md).
-- [ ] Opening the map at the widest zoom still starts from the weak fit;
-      re-measure region-label positions in game to fix that.
+- [x] Opening the map at the widest zoom started from a weak fit (15 %
+      off on Dam). Region-label positions re-measured against the map
+      image (2026-10-04): Dam, Buried City and Blue Gate fits now within
+      ~1 % (map-tracking.md). Spaceport, Riven Tides and Stella Montis
+      region names are unmeasured (no recordings).
 - [x] Map screen state is sticky: an unreadable title keeps the last
       recognised map, and the map must be gone for 1 s before it counts as
       closed (field report 2026-10-03: it flipped to "Unknown map" while

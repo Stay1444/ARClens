@@ -4,38 +4,43 @@
   "dam": [
    {
     "text": "VICTORY RIDGE",
-    "lat": 1460.9987757550532,
-    "lng": 3265.6809680550614,
+    "lat": 1267.4,
+    "lng": 3215.2,
     "layer": "region",
-    "anchor": "top-left"
+    "anchor": "top-left",
+    "measured": "in-game text position at the widest zoom, measured 2026-10-04 (docs/research/map-tracking.md); was lat 1461.0, lng 3265.7"
    },
    {
     "text": "SWAMP",
-    "lat": 2371.913607161741,
-    "lng": 2983.516658904651,
+    "lat": 2586.2,
+    "lng": 2779.2,
     "layer": "region",
-    "anchor": "top-left"
+    "anchor": "top-left",
+    "measured": "in-game text position at the widest zoom, measured 2026-10-04 (docs/research/map-tracking.md); was lat 2371.9, lng 2983.5"
    },
    {
     "text": "THE DAM",
-    "lat": 2254.3425963150958,
-    "lng": 4048.4317608756164,
+    "lat": 2360.1,
+    "lng": 4022.6,
     "layer": "region",
-    "anchor": "top-left"
+    "anchor": "top-left",
+    "measured": "in-game text position at the widest zoom, measured 2026-10-04 (docs/research/map-tracking.md); was lat 2254.3, lng 4048.4"
    },
    {
     "text": "RED LAKES",
-    "lat": 2530.607253649125,
-    "lng": 4837.199719805892,
+    "lat": 2564.6,
+    "lng": 4867.7,
     "layer": "region",
-    "anchor": "top-left"
+    "anchor": "top-left",
+    "measured": "in-game text position at the widest zoom, measured 2026-10-04 (docs/research/map-tracking.md); was lat 2530.6, lng 4837.2"
    },
    {
     "text": "FORMICAI HILLS",
-    "lat": 3914.99190423607,
-    "lng": 2992.2612218165036,
+    "lat": 3942.6,
+    "lng": 3016.0,
     "layer": "region",
-    "anchor": "top-left"
+    "anchor": "top-left",
+    "measured": "in-game text position at the widest zoom, measured 2026-10-04 (docs/research/map-tracking.md); was lat 3915.0, lng 2992.3"
    },
    {
     "text": "Power Generation Complex",
@@ -547,10 +552,11 @@
    },
    {
     "text": "OLD TOWN",
-    "lat": 5903.475083610266,
-    "lng": 7528.134017847351,
+    "lat": 5986.3,
+    "lng": 7385.4,
     "layer": "region",
-    "anchor": "center"
+    "anchor": "center",
+    "measured": "in-game text position at the widest zoom, measured 2026-10-04 (docs/research/map-tracking.md); was lat 5903.5, lng 7528.1"
    },
    {
     "text": "Space Travel",
@@ -738,35 +744,39 @@
   "blue-gate": [
    {
     "text": "GATE APPROACH",
-    "lat": 4857.3719142152195,
-    "lng": 6669.444814659152,
+    "lat": 5004.8,
+    "lng": 6979.6,
     "layer": "region",
     "anchor": "center",
-    "zlayers": 2
+    "zlayers": 2,
+    "measured": "in-game text position at the widest zoom, measured 2026-10-04 (docs/research/map-tracking.md); was lat 4857.4, lng 6669.4"
    },
    {
     "text": "THE FOREST",
-    "lat": 4257.388483792863,
-    "lng": 5095.312869205887,
+    "lat": 3958.3,
+    "lng": 5474.6,
     "layer": "region",
     "anchor": "center",
-    "zlayers": 2
+    "zlayers": 2,
+    "measured": "in-game text position at the widest zoom, measured 2026-10-04 (docs/research/map-tracking.md); was lat 4257.4, lng 5095.3"
    },
    {
     "text": "THE MOUNTAINS",
-    "lat": 3712.2453829337524,
-    "lng": 8689.742088805426,
+    "lat": 3719.7,
+    "lng": 8530.9,
     "layer": "region",
     "anchor": "center",
-    "zlayers": 2
+    "zlayers": 2,
+    "measured": "in-game text position at the widest zoom, measured 2026-10-04 (docs/research/map-tracking.md); was lat 3712.2, lng 8689.7"
    },
    {
     "text": "FARMLANDS",
-    "lat": 6117.276928738068,
-    "lng": 6830.636915972292,
+    "lat": 6436.2,
+    "lng": 7296.2,
     "layer": "region",
     "anchor": "center",
-    "zlayers": 2
+    "zlayers": 2,
+    "measured": "in-game text position at the widest zoom, measured 2026-10-04 (docs/research/map-tracking.md); was lat 6117.3, lng 6830.6"
    },
    {
     "text": "Checkpoint",
