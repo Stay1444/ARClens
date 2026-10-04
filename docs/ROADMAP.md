@@ -187,8 +187,10 @@ green CI.
       `docs/assets/overlay-tooltip.png`). Verified headlessly with a
       replayed cursor. **Not working on KDE yet** (field report): see
       "Marker tooltips need the compositor's pointer" in map-tracking.md.
-- [ ] Confirm the region query parameter and ids (only `europe` seen so
-      far).
+- [x] Region ids confirmed from MetaForge's front end (2026-10-04):
+      `brazil` and `east-asia`, not `south-america` / `asia` (those got
+      Europe's schedule). Saved ids migrate; before the player picks a
+      region it is guessed from the time zone, as MetaForge does.
 - [x] Condition icons on the Events tab: MetaForge's per-event icon, else
       RaidTheory's per-type icon; downloaded once, decoded once; initials
       while loading or when missing.

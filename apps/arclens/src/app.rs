@@ -298,7 +298,16 @@ pub enum Message {
 
 impl App {
     pub fn boot(paths: Paths) -> (Self, Task<Message>) {
-        let settings: Settings = crate::store::load(&paths.settings()).unwrap_or_default();
+        let mut settings: Settings = crate::store::load(&paths.settings()).unwrap_or_default();
+        // Region ids changed to MetaForge's (2026-10-04); before the player
+        // picks one, guess it from the time zone as MetaForge does.
+        settings.region = match settings.region.take() {
+            Some(region) => Some(arclens_data::metaforge::normalize_region(&region).to_owned()),
+            None => jiff::tz::TimeZone::system()
+                .iana_name()
+                .and_then(arclens_data::metaforge::region_for_time_zone)
+                .map(str::to_owned),
+        };
         let app = Self {
             catalog: Load::Loading,
             search: ItemSearch::default(),

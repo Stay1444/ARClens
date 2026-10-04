@@ -14,17 +14,90 @@ use serde::Deserialize;
 pub const ATTRIBUTION: &str = "MetaForge (metaforge.app/arc-raiders)";
 pub const EVENTS_SCHEDULE_URL: &str = "https://metaforge.app/api/arc-raiders/events-schedule";
 
-/// Server regions the schedule can be asked for: `(id, name)`. The
-/// response's `region` field is verified (`"europe"`, 2026-10-03); the
-/// other ids and the `region` query parameter are **unverified** guesses, so
-/// callers compare [`Schedule::region`] with what they asked for.
+/// Server regions the schedule can be asked for: `(id, name)`. Ids and
+/// names as in MetaForge's own front end (its JS bundle in a capture of
+/// 2026-10-03: `["europe","north-america","brazil","east-asia","oceania"]`,
+/// unknown ids fall back to `europe`). Callers still compare
+/// [`Schedule::region`] with what they asked for.
 pub const REGIONS: &[(&str, &str)] = &[
     ("europe", "Europe"),
     ("north-america", "North America"),
-    ("south-america", "South America"),
-    ("asia", "Asia"),
+    ("brazil", "South America"),
+    ("east-asia", "Asia"),
     ("oceania", "Oceania"),
 ];
+
+/// A region id as saved by older versions, mapped to MetaForge's id.
+pub fn normalize_region(id: &str) -> &str {
+    match id {
+        "south-america" => "brazil",
+        "asia" => "east-asia",
+        other => other,
+    }
+}
+
+/// The region MetaForge itself picks for an IANA time zone (same rules as
+/// its front end, 2026-10-03), as a first guess before the player chooses.
+/// `None` where it makes no guess (e.g. the Middle East).
+pub fn region_for_time_zone(tz: &str) -> Option<&'static str> {
+    // South American zones outside `America/Argentina/…`.
+    const SOUTH_AMERICA: &[&str] = &[
+        "America/Sao_Paulo",
+        "America/Bahia",
+        "America/Belem",
+        "America/Fortaleza",
+        "America/Manaus",
+        "America/Recife",
+        "America/Bogota",
+        "America/Caracas",
+        "America/Lima",
+        "America/Santiago",
+        "America/Montevideo",
+        "America/Asuncion",
+        "America/La_Paz",
+        "America/Guayaquil",
+        "America/Cayenne",
+        "America/Paramaribo",
+        "America/Guyana",
+    ];
+    const MIDDLE_EAST: &[&str] = &[
+        "Asia/Dubai",
+        "Asia/Baghdad",
+        "Asia/Kuwait",
+        "Asia/Muscat",
+        "Asia/Nicosia",
+        "Asia/Qatar",
+        "Asia/Riyadh",
+        "Asia/Tbilisi",
+        "Asia/Tehran",
+        "Asia/Tel_Aviv",
+        "Asia/Jerusalem",
+        "Asia/Yerevan",
+        "Asia/Baku",
+        "Asia/Amman",
+        "Asia/Beirut",
+        "Asia/Damascus",
+        "Asia/Bahrain",
+    ];
+    match tz.split('/').next()? {
+        "Europe" | "Africa" => Some("europe"),
+        "Atlantic" => Some(match tz {
+            "Atlantic/Bermuda" => "north-america",
+            "Atlantic/Stanley" | "Atlantic/South_Georgia" => "brazil",
+            _ => "europe",
+        }),
+        "America" => Some(
+            if tz.starts_with("America/Argentina/") || SOUTH_AMERICA.contains(&tz) {
+                "brazil"
+            } else {
+                "north-america"
+            },
+        ),
+        "Asia" => (!MIDDLE_EAST.contains(&tz)).then_some("east-asia"),
+        "Australia" | "Pacific" => Some("oceania"),
+        _ => None,
+    }
+}
 
 /// Schedule URL for a region (`None`: MetaForge's own choice).
 pub fn events_schedule_url(region: Option<&str>) -> String {
@@ -384,6 +457,36 @@ pub fn parse_map_markers(bytes: &[u8], map: &str) -> Result<Vec<Marker>, Error> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn regions_use_metaforge_ids_and_old_ids_migrate() {
+        let ids: Vec<&str> = REGIONS.iter().map(|r| r.0).collect();
+        assert_eq!(
+            ids,
+            ["europe", "north-america", "brazil", "east-asia", "oceania"]
+        );
+        assert_eq!(normalize_region("south-america"), "brazil");
+        assert_eq!(normalize_region("asia"), "east-asia");
+        assert_eq!(normalize_region("europe"), "europe");
+    }
+
+    #[test]
+    fn guesses_the_region_from_the_time_zone() {
+        assert_eq!(region_for_time_zone("Europe/Madrid"), Some("europe"));
+        assert_eq!(
+            region_for_time_zone("America/New_York"),
+            Some("north-america")
+        );
+        assert_eq!(region_for_time_zone("America/Sao_Paulo"), Some("brazil"));
+        assert_eq!(
+            region_for_time_zone("America/Argentina/Buenos_Aires"),
+            Some("brazil")
+        );
+        assert_eq!(region_for_time_zone("Asia/Tokyo"), Some("east-asia"));
+        assert_eq!(region_for_time_zone("Asia/Dubai"), None);
+        assert_eq!(region_for_time_zone("Australia/Sydney"), Some("oceania"));
+        assert_eq!(region_for_time_zone("UTC"), None);
+    }
 
     #[test]
     fn parses_map_markers() {

@@ -88,6 +88,16 @@ _Last researched: 2026-10-03. Re-verify before relying on anything marked
   `metaforge.app/arc-raiders/map/dam`):**
   - `events-schedule?region=europe` (and `&includeAll=true`): the
     **`region` query parameter is confirmed**.
+  - **Region ids** (same capture, MetaForge's JS bundle, read 2026-10-04):
+    `["europe","north-america","brazil","east-asia","oceania"]`, labelled
+    Europe / North America / South America / Asia / Oceania; an unknown
+    id falls back to `europe`. Their default comes from the browser's
+    time zone (Europe/Africa → europe, Americas → north-america except
+    South American zones → brazil, Asia → east-asia except the Middle
+    East, Australia/Pacific → oceania). ARClens used `south-america` and
+    `asia` before: those silently got the European schedule. **Verified**
+    from their front-end code; not requested live (blocked from this
+    environment).
   - Marker data comes straight from their Supabase backend
     (`sb.metaforge.app/rest/v1/arc_map_data`, `map_inspector_data`,
     `custom_map_markers`), not through the public API. Undocumented
