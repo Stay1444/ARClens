@@ -127,6 +127,12 @@ impl Analyzer {
         crate::read_station_header(&self.reader, frame)
     }
 
+    /// The quests in progress, if `frame` shows the logbook or a trader's
+    /// quest page (OCR; call it every few seconds).
+    pub fn read_active_quests(&self, frame: &RgbImage) -> anyhow::Result<Vec<String>> {
+        crate::read_active_quests(&self.reader, frame)
+    }
+
     /// The hovered tooltip in `frame`, if any.
     ///
     /// When several panels are visible (trader screen: persistent purchase

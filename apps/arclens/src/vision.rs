@@ -182,6 +182,8 @@ impl MenuWatch {
 struct StationWatch {
     read_at: Option<Instant>,
     last: Option<arclens_vision::StationLevel>,
+    last_levels: Vec<(String, u32)>,
+    last_quests: Vec<String>,
 }
 
 impl StationWatch {
@@ -193,6 +195,33 @@ impl StationWatch {
             return;
         }
         self.read_at = Some(Instant::now());
+        // The workshop overview shows every station's level at once.
+        if arclens_vision::is_workshop_overview(frame) {
+            let levels: Vec<(String, u32)> = arclens_vision::read_workshop_levels(frame)
+                .into_iter()
+                .filter_map(|(tile, level)| {
+                    arclens_vision::WORKSHOP_TILES
+                        .get(tile)
+                        .map(|id| ((*id).to_owned(), level))
+                })
+                .collect();
+            if !levels.is_empty() && levels != self.last_levels {
+                self.last_levels.clone_from(&levels);
+                out.send_lossy(Event::WorkshopLevels(levels));
+            }
+            return;
+        }
+        // The logbook and the traders' quest pages list quests in progress.
+        if arclens_vision::quest_screen(frame).is_some() {
+            if let Ok(quests) = analyzer.read_active_quests(frame)
+                && !quests.is_empty()
+                && quests != self.last_quests
+            {
+                self.last_quests.clone_from(&quests);
+                out.send_lossy(Event::ActiveQuests(quests));
+            }
+            return;
+        }
         if let Ok(Some(station)) = analyzer.read_station_header(frame)
             && self.last.as_ref() != Some(&station)
         {
@@ -286,6 +315,10 @@ pub enum Event {
     MapMotion(Option<Motion>),
     /// A workshop station's page shows its level (sent when it changes).
     StationLevel(arclens_vision::StationLevel),
+    /// The workshop overview: station id and level for each tile read.
+    WorkshopLevels(Vec<(String, u32)>),
+    /// Quest titles the game lists as in progress (as read).
+    ActiveQuests(Vec<String>),
     /// The game's main menu appeared (`true`) or went away.
     MainMenu(bool),
     /// Where the pointer is over the open map, normalised to the screen

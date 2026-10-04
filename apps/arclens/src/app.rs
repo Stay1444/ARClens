@@ -687,6 +687,8 @@ impl App {
                 self.push_map_view();
             }
             vision::Event::StationLevel(read) => self.on_station_level(&read),
+            vision::Event::WorkshopLevels(levels) => self.on_workshop_levels(&levels),
+            vision::Event::ActiveQuests(titles) => self.on_active_quests(&titles),
             vision::Event::MainMenu(shown) => self.on_main_menu(shown),
             vision::Event::MapPointer(at) => self.send(ToOverlay::Pointer { at }),
             vision::Event::Unavailable(reason) => {
@@ -830,10 +832,25 @@ impl App {
             tracing::debug!(station = %read.station, "unknown workshop station");
             return;
         };
-        let level = read.level.min(station.max_level);
+        let id = station.id.clone();
+        if self.set_level_from_game(&id, read.level) {
+            self.progress_changed();
+        }
+    }
+
+    /// Sets a station's level as read on screen; whether it changed.
+    fn set_level_from_game(&mut self, station_id: &str, level: u32) -> bool {
+        let Load::Ready(catalog) = &self.catalog else {
+            return false;
+        };
+        // Stations whose upgrades need no items aren't tracked.
+        let Some(station) = catalog.stations.iter().find(|s| s.id == station_id) else {
+            return false;
+        };
+        let level = level.min(station.max_level);
         let progress = self.progress.get_or_insert_with(Progress::default);
         if progress.level(&station.id) == level {
-            return;
+            return false;
         }
         tracing::info!(station = %station.id, level, "workshop level read from the game");
         progress.stations.insert(station.id.clone(), level);
@@ -843,7 +860,56 @@ impl App {
         );
         self.status.retain(|s| !s.contains("(read from the game)"));
         self.status.push(note);
-        self.progress_changed();
+        true
+    }
+
+    /// The workshop overview was on screen: take every level it shows.
+    fn on_workshop_levels(&mut self, levels: &[(String, u32)]) {
+        let mut changed = false;
+        for (id, level) in levels {
+            changed |= self.set_level_from_game(id, *level);
+        }
+        if changed {
+            self.progress_changed();
+        }
+    }
+
+    /// The game listed quests in progress: every quest before them is done.
+    fn on_active_quests(&mut self, titles: &[String]) {
+        let Load::Ready(catalog) = &self.catalog else {
+            return;
+        };
+        let progress = self.progress.get_or_insert_with(Progress::default);
+        let mut changed = false;
+        for title in titles {
+            let wanted = title.to_uppercase();
+            let quest = catalog
+                .quests
+                .iter()
+                .map(|q| {
+                    (
+                        q,
+                        strsim::normalized_levenshtein(&wanted, &q.name.to_uppercase()),
+                    )
+                })
+                .filter(|&(_, score)| score >= 0.85)
+                .max_by(|a, b| a.1.total_cmp(&b.1))
+                .map(|(q, _)| q);
+            let Some(quest) = quest else {
+                tracing::debug!(%title, "unknown quest title");
+                continue;
+            };
+            if progress.note_active_quest(&quest.id, &catalog.quests) {
+                tracing::info!(quest = %quest.id, "quest in progress read from the game");
+                changed = true;
+            }
+        }
+        if changed {
+            self.status.retain(|s| !s.contains("(read from the game)"));
+            self.status
+                .push("Quest progress updated (read from the game).".to_owned());
+            self.progress_changed();
+        }
     }
 
     fn send(&self, msg: ToOverlay) {

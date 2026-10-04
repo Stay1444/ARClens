@@ -124,3 +124,23 @@ list `ps` shows: no handle on the game is opened, nothing is read from its
 memory, nothing is signalled, so rule 1 holds. Executable name
 **unverified** on a live install. Inside a Flatpak sandbox the host's
 processes are invisible, so there the user picks "Always".
+
+## Progress screens (2026-10-04)
+
+From the maintainer's 2560×1440 screenshots (fixtures `workshop_overview`,
+`quest_*`, `logbook`, `project_*`):
+
+- **Workshop overview:** eight tiles along the bottom: Scrappy, then
+  Workbench, Gunsmith, Gear Bench, Utility, Medical, Explosives,
+  Refiner. Each station tile shows its level as a roman numeral at the
+  bottom right, read by counting strokes. RaidTheory gives the Workbench
+  a max level of 0 although the game shows "I"; it isn't tracked
+  (no item costs). **Verified** on one screenshot.
+- **Quests:** the logbook (pause menu) and a trader's QUESTS tab both
+  name quests in progress in bold white capitals; the screens are told
+  apart by the outlined tab's width and position. A listed quest implies
+  its prerequisites are done. **Verified** on four screenshots; title
+  wrapping and other resolutions **unverified**.
+- **Projects:** the page title sits where station titles do; phases are
+  numbered circles, the highlighted one being the phase viewed. Not used
+  yet (see ROADMAP).

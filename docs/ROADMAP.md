@@ -96,8 +96,12 @@ green CI.
       and workshop progress (`docs/assets/overlay-menu-card.png`, protocol
       v10). Regions measured on one screenshot, **unverified** elsewhere;
       verified headlessly on a synthetic frame and against all fixtures.
-- [ ] Workshop overview tiles (roman numerals under each station) for
-      autofill without opening each station; needs fixture frames.
+- [x] **Workshop overview autofill** (2026-10-04): on the Workshop tab
+      every station tile's roman numeral is read by counting its strokes
+      (`arclens_vision::read_workshop_levels`, tile order in
+      `WORKSHOP_TILES`), so one look sets all levels. Measured on the
+      maintainer's 2560×1440 screenshot; a level-0 (unbuilt) tile is
+      untested and reads as unknown.
 - [x] Station headers read for long names too (field report 2026-10-03:
       Explosives and Utility Station weren't recognised; their
       "— LEVEL 01" fell outside the header region). The title now runs from
@@ -115,8 +119,15 @@ green CI.
       not ticked as learned on the Progress page's Blueprints section gets
       its own verdict instead of SELL; once learned, a duplicate gets the
       usual value advice. Protocol v14 (new verdict).
-- [ ] Autofill quests and project phases from the game's screens (needs
-      fixture frames of the quest log and project pages).
+- [x] **Quest autofill** (2026-10-04): the logbook and the traders' quest
+      pages list quests in progress (`arclens_vision::quest_screen`,
+      `read_active_quests`: outlined-tab detection, then OCR of the
+      titles). A quest in progress means every quest before it is done
+      (`Progress::note_active_quest`). Verified end to end by replaying the
+      fixtures through the app.
+- [ ] Project phases from the project pages. The highlighted phase circle
+      is the one *being viewed*, which needn't be the current phase; needs
+      a fixture of a project with finished phases to tell them apart.
 
 ## M2: Maps and timers
 
