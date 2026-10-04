@@ -34,13 +34,17 @@ pub struct Hit {
 pub struct SearchState {
     pub query: String,
     hits: Vec<Hit>,
+    /// The highlighted result, which Enter opens; moved with the arrows.
+    selected: usize,
 }
 
 #[derive(Debug, Clone)]
 pub enum SearchMessage {
     Query(String),
-    /// Enter: the top result.
+    /// Enter: the highlighted result.
     Submit,
+    /// Up (-1) or Down (+1): highlight the previous or next result.
+    Move(isize),
     Pick(ItemId),
 }
 
@@ -51,13 +55,23 @@ impl SearchState {
             SearchMessage::Query(query) => {
                 if query.trim().is_empty() {
                     self.hits.clear();
+                    self.selected = 0;
                 }
                 self.query.clone_from(&query);
                 Some(ToApp::Search { query })
             }
             SearchMessage::Submit => {
-                let id = self.hits.first()?.id.clone();
+                let id = self.hits.get(self.selected)?.id.clone();
                 Some(self.pick(id))
+            }
+            SearchMessage::Move(step) => {
+                if !self.hits.is_empty() {
+                    let len = self.hits.len().cast_signed();
+                    self.selected = (self.selected.cast_signed() + step)
+                        .rem_euclid(len)
+                        .cast_unsigned();
+                }
+                None
             }
             SearchMessage::Pick(id) => Some(self.pick(id)),
         }
@@ -67,6 +81,7 @@ impl SearchState {
     fn pick(&mut self, id: ItemId) -> ToApp {
         self.query.clear();
         self.hits.clear();
+        self.selected = 0;
         ToApp::PickItem { id }
     }
 
@@ -88,6 +103,7 @@ impl SearchState {
                 rarity: hit.rarity,
             })
             .collect();
+        self.selected = 0;
     }
 }
 
@@ -115,8 +131,8 @@ pub fn panel(state: &SearchState, open: usize) -> Element<'_, Message> {
                 .color(palette::TEXT_MUTED),
         );
     }
-    for hit in &state.hits {
-        body = body.push(hit_row(hit));
+    for (i, hit) in state.hits.iter().enumerate() {
+        body = body.push(hit_row(hit, i == state.selected));
     }
     if open > 0 {
         body = body.push(
@@ -179,7 +195,7 @@ pub fn panel(state: &SearchState, open: usize) -> Element<'_, Message> {
     column![header, body].width(WIDTH).into()
 }
 
-fn hit_row(hit: &Hit) -> Element<'_, Message> {
+fn hit_row(hit: &Hit, selected: bool) -> Element<'_, Message> {
     let color = palette::rarity(hit.rarity);
     let icon: Element<'_, Message> = match &hit.icon {
         Some(handle) => image(handle.clone()).width(36).height(36).into(),
@@ -205,11 +221,13 @@ fn hit_row(hit: &Hit) -> Element<'_, Message> {
     .padding([5, 8])
     .width(Length::Fill)
     .style(move |_, status| button::Style {
-        background: matches!(status, button::Status::Hovered | button::Status::Pressed)
-            .then(|| with_alpha(color, 0.18).into()),
+        background: (selected
+            || matches!(status, button::Status::Hovered | button::Status::Pressed))
+        .then(|| with_alpha(color, 0.18).into()),
         border: Border {
             radius: RADIUS.into(),
-            ..Default::default()
+            width: if selected { 1.0 } else { 0.0 },
+            color: with_alpha(color, 0.6),
         },
         text_color: palette::TEXT,
         ..Default::default()
@@ -250,6 +268,35 @@ mod tests {
         // Cleared for the next search.
         assert_eq!(state.query, "");
         assert_eq!(state.update(SearchMessage::Submit), None);
+    }
+
+    #[test]
+    fn arrows_move_the_highlight_and_enter_opens_it() {
+        let mut state = SearchState::default();
+        state.update(SearchMessage::Query("gear".into()));
+        state.results("gear", vec![hit("A"), hit("B"), hit("C")]);
+        assert_eq!(state.update(SearchMessage::Move(1)), None);
+        state.update(SearchMessage::Move(1));
+        assert_eq!(state.selected, 2);
+        // Wraps both ways.
+        state.update(SearchMessage::Move(1));
+        assert_eq!(state.selected, 0);
+        state.update(SearchMessage::Move(-1));
+        assert_eq!(state.selected, 2);
+        assert_eq!(
+            state.update(SearchMessage::Submit),
+            Some(ToApp::PickItem {
+                id: ItemId("c".into())
+            })
+        );
+        assert_eq!(state.selected, 0);
+        // New results start at the top.
+        state.update(SearchMessage::Query("x".into()));
+        state.results("x", vec![hit("X"), hit("Y")]);
+        state.update(SearchMessage::Move(1));
+        state.update(SearchMessage::Query("xy".into()));
+        state.results("xy", vec![hit("X"), hit("Y")]);
+        assert_eq!(state.selected, 0);
     }
 
     #[test]

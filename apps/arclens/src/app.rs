@@ -614,6 +614,12 @@ impl App {
             overlay_link::Event::Message(arclens_ipc::ToApp::PickItem { id }) => {
                 return self.open_in_overlay(id);
             }
+            overlay_link::Event::Message(arclens_ipc::ToApp::LeaveInteractive) => {
+                if self.overlay_interactive {
+                    self.overlay_interactive = false;
+                    self.send(ToOverlay::SetInteractive { interactive: false });
+                }
+            }
             overlay_link::Event::Message(arclens_ipc::ToApp::ToggleMarkerCategory { category }) => {
                 self.edit_marker_filter(Message::ToggleMarkerCategory(category));
             }

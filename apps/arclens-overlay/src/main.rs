@@ -26,7 +26,7 @@ mod shell;
 mod shell;
 
 use arclens_core::{Advice, Item, Marker, Transform};
-use arclens_ipc::{MonitorRect, ToOverlay};
+use arclens_ipc::{MonitorRect, ToApp, ToOverlay};
 use iced::{Color, Subscription, Task};
 
 fn main() -> anyhow::Result<()> {
@@ -209,6 +209,7 @@ pub enum Message {
 }
 
 fn subscription(state: &Overlay) -> Subscription<Message> {
+    use iced::keyboard::key::Named;
     // Surfaces closed by the compositor (e.g. output unplugged) are forgotten
     // by `sync_surface` on the next change; nothing to listen for here.
     Subscription::batch([
@@ -222,6 +223,12 @@ fn subscription(state: &Overlay) -> Subscription<Message> {
                 key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
                 ..
             }) => Some(Message::Escape),
+            iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: iced::keyboard::Key::Named(key @ (Named::ArrowUp | Named::ArrowDown)),
+                ..
+            }) => Some(Message::Search(search::SearchMessage::Move(
+                if key == Named::ArrowUp { -1 } else { 1 },
+            ))),
             _ => None,
         }),
         shell::subscription(state),
@@ -280,9 +287,17 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
             state.details.update_message(msg);
             return focus_search(state);
         }
+        // Esc closes the newest item window; with none open, the search.
         Message::Escape => {
-            state.details.close_newest();
-            return focus_search(state);
+            if state.details.close_newest() {
+                return focus_search(state);
+            }
+            if state.interactive
+                && let Some(outbox) = &state.outbox
+            {
+                outbox.send(ToApp::LeaveInteractive);
+            }
+            return Task::none();
         }
         Message::SurfaceFocused => return focus_search(state),
         Message::Tick => {

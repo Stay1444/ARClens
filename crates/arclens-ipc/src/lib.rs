@@ -18,7 +18,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 mod transport;
 pub use transport::{Endpoint, Listener};
 
-pub const PROTOCOL_VERSION: u32 = 15;
+pub const PROTOCOL_VERSION: u32 = 16;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hello {
@@ -416,6 +416,8 @@ pub enum ToApp {
     PickItem {
         id: ItemId,
     },
+    /// Esc with no item window left to close: leave interactive mode.
+    LeaveInteractive,
     /// Map panel: show or hide a marker category…
     ToggleMarkerCategory {
         category: String,

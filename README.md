@@ -40,12 +40,13 @@ first, with Windows support too.
   workshop, quest, project and blueprint progress.
   ![Main-menu card](docs/assets/overlay-menu-card.png)
 - **Quick search and item windows.** In interactive mode (Ctrl+Shift+I) a
-  search box at the top of the screen finds any item; Enter or a click
-  opens its window with everything the data has: verdict, values, weight
+  search box at the top of the screen finds any item; ↑/↓ pick a result,
+  Enter or a click opens its window with everything the data has: verdict, values, weight
   and value per kg, stats, what it recycles and salvages into, its recipe
   and bench, what it crafts, upgrade tiers and costs, repair, which
   traders sell it, mod slots, where it's found and your progress on what
-  needs it. Open several side by side; ✕ or Esc closes them.
+  needs it. Open several side by side; ✕ or Esc closes them, and Esc with none
+  open closes the search.
   ![Item windows next to the quick search](docs/assets/overlay-item-windows.jpg)
 
 ### In the companion app
