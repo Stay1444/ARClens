@@ -102,6 +102,20 @@ impl Progress {
         }
     }
 
+    /// `active` is in progress in the game (listed in its logbook or on
+    /// a trader's quest page): every quest before it is done, and it and
+    /// the ones after it are not. Returns whether anything changed.
+    pub fn note_active_quest(&mut self, active: &str, quests: &[Quest]) -> bool {
+        let before = self.quests_done.clone();
+        if let Some(quest) = quests.iter().find(|q| q.id == active) {
+            for previous in &quest.previous {
+                self.set_quest_done(previous, true, quests);
+            }
+        }
+        self.set_quest_done(active, false, quests);
+        self.quests_done != before
+    }
+
     /// Whether `req` is still ahead of the player: workshop upgrades not
     /// built yet, quests not done, project phases not finished. Anything
     /// without an id to check counts.
@@ -181,6 +195,22 @@ mod tests {
         progress.set_quest_done("d", true, &quests);
         progress.set_quest_done("b", false, &quests);
         assert_eq!(progress.quests_done.iter().collect::<Vec<_>>(), ["a", "d"]);
+    }
+
+    #[test]
+    fn an_active_quest_completes_its_chain_before_it() {
+        let quests = [
+            quest("a", &[]),
+            quest("b", &["a"]),
+            quest("c", &["b"]),
+            quest("d", &["c"]),
+        ];
+        let mut progress = Progress::default();
+        // Ticked too far by hand: "c" is still in progress in game.
+        progress.set_quest_done("d", true, &quests);
+        assert!(progress.note_active_quest("c", &quests));
+        assert_eq!(progress.quests_done.iter().collect::<Vec<_>>(), ["a", "b"]);
+        assert!(!progress.note_active_quest("c", &quests));
     }
 
     #[test]

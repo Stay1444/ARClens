@@ -11,6 +11,12 @@ maintainer's permission, for testing only. Game UI © Embark Studios AB.
 | `trader_*` | Trader (Tian Wen) | A persistent cream purchase panel is always present; hover tooltips can touch or overlap it |
 | `map/dam_*` | In-raid map screen, Dam Battlegrounds | Zoomed out / mid / in, and two POI hover cards |
 | `*_none*` | Same screens, nothing hovered | Must produce no tooltip |
+| `workshop_overview` | Workshop tab, station tiles with roman-numeral levels | Screenshot 2026-10-04 |
+| `quest_*` | A trader's QUESTS tab, one quest selected | Screenshots 2026-10-04 (Apollo, Lance) |
+| `logbook` | Pause menu, LOGBOOK tab: active quests, tracked resources | Screenshot 2026-10-04; the list scrolls |
+| `projects_overview`, `project_*` | Projects list and project pages (phase circles) | Screenshots 2026-10-04 |
+| `inventory_stash` | Pause menu, INVENTORY tab, nothing hovered | Screenshot 2026-10-04 |
 
-Frames are JPEG (quality ≈ 90) extracted at 1 fps with ffmpeg. Don't add
+Frames are JPEG (quality ≈ 90), extracted at 1 fps with ffmpeg or
+converted from the maintainer's PNG screenshots. Don't add
 full-resolution PNGs: crops or JPEGs only, to keep the repo small.
