@@ -52,7 +52,8 @@ first, with Windows support too.
   card, recycling, crafting uses and "needed for" (quests, workshop,
   projects).
   ![Items tab](docs/assets/items.png)
-- **Map**: map picker, marker search, category toggles with counts, spawn
+- **Map**: the map itself with every marker on it (scroll to zoom, drag to
+  pan), map picker, marker search, category toggles with counts, spawn
   areas, and preset management (save, update, delete, reset per map or
   condition).
   ![Map tab](docs/assets/map-tab.jpg)
@@ -275,8 +276,8 @@ Pull requests that cross these lines will be closed.
 
 ## Data and attribution
 
-- **Game data** (items, recycling, crafting, quests, workshop, projects)
-  and map-condition icons:
+- **Game data** (items, recycling, crafting, quests, workshop, projects),
+  map images and map-condition icons:
   [RaidTheory/arcraiders-data](https://github.com/RaidTheory/arcraiders-data)
   (MIT), by the team behind [arctracker.io](https://arctracker.io).
 - **Map markers and the map-condition schedule** (with its icons):

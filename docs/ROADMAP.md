@@ -136,8 +136,10 @@ green CI.
 
 ## M2: Maps and timers
 
-- [ ] Map images, with a per-map `Transform` from source pixels into map
-      space.
+- [x] Map images (2026-10-04): RaidTheory's tiles, aligned per map with
+      MetaForge's coordinates (`data/map-image-transforms.json`,
+      `docs/research/map-images.md`; Dam, Buried City, Blue Gate and
+      Stella Montis verified, Spaceport and Riven Tides estimated).
 - [x] MetaForge `game-map-data` provider (attributed, cached for a day,
       offline fallback). Tolerant of shape drift: one bad record is dropped,
       not the response.
@@ -157,8 +159,11 @@ green CI.
       kind, radius 45 / min 5 tuned on real Dam data;
       `docs/assets/map-areas.png`). Same rendering in the overlay. The filter is saved, and the overlay will use the
       same one.
-- [ ] Map image behind the plot, once its alignment with MetaForge
-      coordinates is known; pan/zoom.
+- [x] Map image behind the Map tab's plot, with wheel zoom about the
+      pointer, drag to pan and double click to reset
+      (`docs/assets/map-tab.jpg`). Zoom-1 tiles (2000 px) fetched once from
+      RaidTheory's repository and composed off the UI thread. Stella Montis
+      (one image per floor) isn't drawn yet.
 - (Dropped 2026-10-04: manual calibration. Superseded by the automatic
   place-name fit plus motion tracking, which needs no clicks and follows
   pans and zooms.)

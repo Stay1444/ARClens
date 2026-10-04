@@ -15,6 +15,10 @@ const ALLOWED_HOSTS: &[&str] = &[
     "cdn.arctracker.io",
 ];
 
+/// Allowed by host and path: RaidTheory's dataset files on GitHub (map
+/// tiles), not the rest of GitHub.
+const ALLOWED_PREFIXES: &[&str] = &["raw.githubusercontent.com/RaidTheory/arcraiders-data/"];
+
 #[derive(Debug, Clone)]
 pub struct ImageCache {
     dir: PathBuf,
@@ -59,7 +63,7 @@ impl ImageCache {
 fn file_name(url: &str) -> Option<String> {
     let rest = url.strip_prefix("https://")?;
     let (host, path) = rest.split_once('/')?;
-    if !ALLOWED_HOSTS.contains(&host) {
+    if !ALLOWED_HOSTS.contains(&host) && !ALLOWED_PREFIXES.iter().any(|p| rest.starts_with(p)) {
         return None;
     }
     let ext = path
@@ -88,6 +92,17 @@ mod tests {
         assert!(file_name("https://static.metaforge.app/arc-raiders/custom/night.webp").is_some());
         assert_eq!(file_name("http://cdn.arctracker.io/a.png"), None);
         assert_eq!(file_name("https://evil.example/a.png"), None);
+        // RaidTheory's map tiles, but not any GitHub file.
+        assert!(
+            file_name(
+                "https://raw.githubusercontent.com/RaidTheory/arcraiders-data/main/images/maps/dam-battleground/v2/low/1/0/0.webp"
+            )
+            .is_some()
+        );
+        assert_eq!(
+            file_name("https://raw.githubusercontent.com/someone/else/main/a.png"),
+            None
+        );
         assert_eq!(file_name("https://cdn.arctracker.io/a.svg"), None);
         // Stable across calls (the cache key).
         assert_eq!(

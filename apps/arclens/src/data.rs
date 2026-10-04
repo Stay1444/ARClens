@@ -202,3 +202,61 @@ pub async fn load_markers(
         }
     }
 }
+
+/// Zoom level of the map image drawn behind the Map tab's plot: 2000 px
+/// square, 16 small tiles.
+const MAP_IMAGE_ZOOM: u32 = 1;
+
+/// A map's image, composed from its tiles: RGBA pixels and size.
+#[derive(Debug, Clone)]
+pub struct MapPicture {
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
+}
+
+/// The image of `map`, if it has one: tiles from RaidTheory (cached on
+/// disk, or read from [`DATA_DIR_ENV`] when set), composed off the UI
+/// thread. Missing tiles are left transparent.
+pub async fn load_map_image(paths: Paths, map: String) -> Result<Option<Arc<MapPicture>>, String> {
+    let Some(info) = arclens_data::map_images::map_image(&map) else {
+        return Ok(None);
+    };
+    let local = std::env::var_os(DATA_DIR_ENV).map(std::path::PathBuf::from);
+    let cache = arclens_data::ImageCache::new(paths.cache.join("images"), http_client());
+    let mut files = Vec::new();
+    for (x, y, url) in info.tile_urls(MAP_IMAGE_ZOOM) {
+        let file = match &local {
+            Some(dir) => Some(dir.join(url.trim_start_matches(arclens_data::map_images::RAW_BASE))),
+            None => cache.fetch(&url).await.map_err(|e| e.to_string())?,
+        };
+        if let Some(file) = file {
+            files.push((x, y, file));
+        }
+    }
+    let (width, height) = info.size_at(MAP_IMAGE_ZOOM);
+    let tile = info.tile_size;
+    tokio::task::spawn_blocking(move || {
+        let mut canvas = image::RgbaImage::new(width, height);
+        for (x, y, file) in files {
+            match image::open(&file) {
+                Ok(img) => image::imageops::overlay(
+                    &mut canvas,
+                    &img.to_rgba8(),
+                    i64::from(x * tile),
+                    i64::from(y * tile),
+                ),
+                Err(error) => {
+                    tracing::debug!(%error, file = %file.display(), "map tile unreadable");
+                }
+            }
+        }
+        Some(Arc::new(MapPicture {
+            width,
+            height,
+            rgba: canvas.into_raw(),
+        }))
+    })
+    .await
+    .map_err(|e| e.to_string())
+}

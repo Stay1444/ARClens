@@ -104,6 +104,15 @@ impl MapSummary {
     }
 }
 
+/// The map's own image behind the markers: its handle (decoded once) and
+/// its corners in marker coordinates.
+#[derive(Debug, Clone, Copy)]
+pub struct Background<'a> {
+    pub handle: &'a iced::widget::image::Handle,
+    pub min: arclens_core::MapPoint,
+    pub max: arclens_core::MapPoint,
+}
+
 pub struct MapView<'a> {
     /// `(id, name)` of every map.
     pub maps: &'a [(&'static str, &'static str)],
@@ -119,6 +128,8 @@ pub struct MapView<'a> {
     pub conditions: &'a [(&'static str, u8)],
     pub condition: Option<&'static str>,
     pub presets: PresetsView<'a>,
+    /// The map image, once loaded (not every map has one).
+    pub background: Option<Background<'a>>,
 }
 
 /// The preset section of the panel.
@@ -151,6 +162,7 @@ pub fn view<'a>(map: &MapView<'a>) -> Element<'a, Message> {
                     summary: map.summary,
                     cache: map.plot,
                     searching: !map.query.trim().is_empty(),
+                    background: map.background,
                 })
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -479,14 +491,54 @@ fn category_row<'a>(category: &CategorySummary, open: Option<bool>) -> Element<'
     .into()
 }
 
-/// The map's markers as icons, fitted to the canvas. The marker layer is
-/// cached; only the hover tooltip is drawn per frame. A background map
-/// image comes once its alignment with the marker coordinates is known.
+/// The map's markers as icons over the map's image, fitted to the canvas;
+/// the wheel zooms about the pointer, dragging pans, a double click resets.
+/// The marker layer is cached; only the hover tooltip is drawn per frame.
 struct Plot<'a> {
     markers: &'a [Marker],
     summary: &'a MapSummary,
     cache: &'a canvas::Cache,
     searching: bool,
+    background: Option<Background<'a>>,
+}
+
+/// The plot's zoom and pan (the canvas's own state).
+#[derive(Debug, Clone, Copy)]
+pub struct PlotView {
+    zoom: f32,
+    pan: iced::Vector,
+    /// Pointer position when a drag started, and the pan then.
+    drag: Option<(Point, iced::Vector)>,
+    last_click: Option<std::time::Instant>,
+}
+
+impl Default for PlotView {
+    fn default() -> Self {
+        Self {
+            zoom: 1.0,
+            pan: iced::Vector::ZERO,
+            drag: None,
+            last_click: None,
+        }
+    }
+}
+
+impl PlotView {
+    const MAX_ZOOM: f32 = 12.0;
+
+    /// Zooms by `factor` keeping the point under `at` (canvas coordinates)
+    /// in place.
+    fn zoom_at(&mut self, factor: f32, at: Point, size: Size) {
+        let center = Point::new(size.width / 2.0, size.height / 2.0);
+        let zoom = (self.zoom * factor).clamp(1.0, Self::MAX_ZOOM);
+        // The unzoomed point under the cursor stays under it.
+        let base = center + (at - center - self.pan) * (1.0 / self.zoom);
+        self.pan = at - center - (base - center) * zoom;
+        self.zoom = zoom;
+        if (zoom - 1.0).abs() < f32::EPSILON {
+            self.pan = iced::Vector::ZERO;
+        }
+    }
 }
 
 impl Plot<'_> {
@@ -542,23 +594,35 @@ impl Plot<'_> {
 }
 
 impl canvas::Program<Message> for Plot<'_> {
-    type State = ();
+    type State = PlotView;
 
     fn draw(
         &self,
-        _state: &(),
+        state: &PlotView,
         renderer: &Renderer,
         _theme: &Theme,
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let fit = Fit::new(self.markers, bounds.size());
+        let fit = Fit::new(
+            self.markers,
+            self.background.map(|b| (b.min, b.max)),
+            bounds.size(),
+            state,
+        );
         let markers = self.cache.draw(renderer, bounds.size(), |frame| {
             frame.fill(
                 &Path::rounded_rectangle(Point::ORIGIN, bounds.size(), theme::RADIUS.into()),
                 theme::PANEL,
             );
             if let Some(fit) = &fit {
+                if let Some(background) = self.background {
+                    let (a, b) = (fit.map_point(background.min), fit.map_point(background.max));
+                    frame.draw_image(
+                        Rectangle::new(a, Size::new(b.x - a.x, b.y - a.y)),
+                        canvas::Image::new(background.handle.clone()).opacity(0.75_f32),
+                    );
+                }
                 self.draw_markers(frame, fit);
             }
         });
@@ -603,20 +667,58 @@ impl canvas::Program<Message> for Plot<'_> {
         geometry
     }
 
-    /// Redraw on pointer moves inside the plot, for the hover tooltip.
+    /// Zoom, pan and the hover tooltip.
     fn update(
         &self,
-        _state: &mut (),
+        state: &mut PlotView,
         event: &iced::Event,
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
-        match event {
-            iced::Event::Mouse(mouse::Event::CursorMoved { .. }) if cursor.is_over(bounds) => {
-                Some(canvas::Action::request_redraw())
+        let at = cursor.position_in(bounds);
+        let changed = match (event, at) {
+            (iced::Event::Mouse(mouse::Event::WheelScrolled { delta }), Some(at)) => {
+                let lines = match delta {
+                    mouse::ScrollDelta::Lines { y, .. } => *y,
+                    mouse::ScrollDelta::Pixels { y, .. } => y / 40.0,
+                };
+                state.zoom_at(1.2_f32.powf(lines), at, bounds.size());
+                true
             }
-            _ => None,
-        }
+            (iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)), Some(at)) => {
+                let now = std::time::Instant::now();
+                let double = state
+                    .last_click
+                    .is_some_and(|t| now.duration_since(t) < std::time::Duration::from_millis(350));
+                state.last_click = Some(now);
+                if double {
+                    *state = PlotView::default();
+                    true
+                } else {
+                    state.drag = Some((at, state.pan));
+                    false
+                }
+            }
+            (iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)), _) => {
+                state.drag = None;
+                false
+            }
+            (iced::Event::Mouse(mouse::Event::CursorMoved { .. }), Some(at)) => {
+                if let Some((from, pan)) = state.drag
+                    && state.zoom > 1.0
+                {
+                    state.pan = pan + (at - from);
+                    true
+                } else {
+                    return Some(canvas::Action::request_redraw());
+                }
+            }
+            _ => false,
+        };
+        changed.then(|| {
+            self.cache.clear();
+            canvas::Action::request_redraw().and_capture()
+        })
     }
 }
 
@@ -626,7 +728,8 @@ fn is_named_place(marker: &Marker) -> bool {
     marker.label.is_some() && ["label", "zone", "poi"].iter().any(|w| c.contains(w))
 }
 
-/// Uniform scale + offset fitting all markers into the canvas (aspect kept).
+/// Uniform scale + offset fitting the markers (else the map image) into the
+/// canvas (aspect kept), then the user's zoom and pan.
 struct Fit {
     scale: f32,
     min: Point,
@@ -636,31 +739,45 @@ struct Fit {
 impl Fit {
     const MARGIN: f32 = 24.0;
 
-    fn new(markers: &[Marker], size: Size) -> Option<Self> {
+    fn new(
+        markers: &[Marker],
+        image: Option<(arclens_core::MapPoint, arclens_core::MapPoint)>,
+        size: Size,
+        view: &PlotView,
+    ) -> Option<Self> {
         let (mut min, mut max) = (
             Point::new(f32::MAX, f32::MAX),
             Point::new(f32::MIN, f32::MIN),
         );
+        // The markers' extent (the playable area; the image around it is
+        // mostly scenery), else the image's.
         for m in markers {
             min = Point::new(min.x.min(m.position.x), min.y.min(m.position.y));
             max = Point::new(max.x.max(m.position.x), max.y.max(m.position.y));
+        }
+        if let (true, Some((a, b))) = (markers.is_empty(), image) {
+            (min, max) = (Point::new(a.x, a.y), Point::new(b.x, b.y));
         }
         let (w, h) = ((max.x - min.x).max(1.0), (max.y - min.y).max(1.0));
         let avail = Size::new(
             size.width - 2.0 * Self::MARGIN,
             size.height - 2.0 * Self::MARGIN,
         );
-        if markers.is_empty() || avail.width <= 0.0 || avail.height <= 0.0 {
+        if (markers.is_empty() && image.is_none()) || avail.width <= 0.0 || avail.height <= 0.0 {
             return None;
         }
         let scale = (avail.width / w).min(avail.height / h);
+        let offset = Point::new(
+            Self::MARGIN + (avail.width - w * scale) / 2.0,
+            Self::MARGIN + (avail.height - h * scale) / 2.0,
+        );
+        // Zoom about the canvas centre, then pan.
+        let center = Point::new(size.width / 2.0, size.height / 2.0);
+        let offset = center + (offset - center) * view.zoom + view.pan;
         Some(Self {
-            scale,
+            scale: scale * view.zoom,
             min,
-            offset: Point::new(
-                Self::MARGIN + (avail.width - w * scale) / 2.0,
-                Self::MARGIN + (avail.height - h * scale) / 2.0,
-            ),
+            offset,
         })
     }
 

@@ -91,6 +91,9 @@ pub struct App {
     /// the plot's cached marker layer. Rebuilt on change, not per frame.
     map_summary: crate::views::map::MapSummary,
     map_plot: iced::widget::canvas::Cache,
+    /// Map images by map id, decoded once: `None` while loading, or when
+    /// the map has none or it failed.
+    map_images: std::collections::HashMap<String, Option<iced::widget::image::Handle>>,
     /// The open in-game map's view, as last read from the screen.
     game_view: GameMapView,
     /// The in-game map last recognised; kept across map close and reopen.
@@ -269,6 +272,7 @@ pub enum Message {
     FilterEventsMap(Option<String>),
     SelectMap(String),
     MarkersLoaded(String, Result<Vec<arclens_core::Marker>, String>),
+    MapImageLoaded(String, Result<Option<Arc<data::MapPicture>>, String>),
     MarkerQuery(String),
     ToggleMarkerCategory(String),
     ToggleMarkerSubcategory(String, String),
@@ -354,6 +358,7 @@ impl App {
             last_map: None,
             map_summary: crate::views::map::MapSummary::default(),
             map_plot: iced::widget::canvas::Cache::new(),
+            map_images: std::collections::HashMap::new(),
             paths: paths.clone(),
             status: Vec::new(),
         };
@@ -1152,6 +1157,7 @@ impl App {
                     self.push_map_panel();
                 }
             }
+            Message::MapImageLoaded(map, result) => self.on_map_image(map, result),
             Message::MarkersLoaded(map, result) => {
                 if let Err(error) = &result {
                     tracing::warn!(%error, map, "markers unavailable");
@@ -1195,7 +1201,6 @@ impl App {
         Task::none()
     }
 
-    /// Starts loading the selected map's markers, unless already loaded.
     /// Refetches game data and the open map's markers, ignoring the cache.
     fn refresh_data(&mut self) -> Task<Message> {
         self.status.push("Refreshing game data…".to_owned());
@@ -1213,7 +1218,46 @@ impl App {
         ])
     }
 
+    /// Decodes a loaded map image once and keeps its handle.
+    fn on_map_image(&mut self, map: String, result: Result<Option<Arc<data::MapPicture>>, String>) {
+        let handle = match result {
+            Ok(Some(picture)) => Some(iced::widget::image::Handle::from_rgba(
+                picture.width,
+                picture.height,
+                picture.rgba.clone(),
+            )),
+            Ok(None) => None,
+            Err(error) => {
+                tracing::warn!(%error, map, "map image unavailable");
+                None
+            }
+        };
+        if map == self.map {
+            self.map_plot.clear();
+        }
+        self.map_images.insert(map, handle);
+    }
+
+    /// Starts loading the selected map's markers and image, unless already
+    /// loaded.
     fn load_map_markers(&mut self) -> Task<Message> {
+        Task::batch([self.load_map_image(), self.load_markers_only()])
+    }
+
+    /// Starts loading the selected map's image, once.
+    fn load_map_image(&mut self) -> Task<Message> {
+        if self.map_images.contains_key(&self.map) {
+            return Task::none();
+        }
+        self.map_images.insert(self.map.clone(), None);
+        let map = self.map.clone();
+        Task::perform(
+            data::load_map_image(self.paths.clone(), map.clone()),
+            move |result| Message::MapImageLoaded(map.clone(), result),
+        )
+    }
+
+    fn load_markers_only(&mut self) -> Task<Message> {
         if matches!(
             self.markers.get(&self.map),
             Some(Load::Ready(_) | Load::Loading)
@@ -1627,6 +1671,15 @@ impl App {
             conditions: arclens_data::metaforge::conditions(&self.map),
             condition: self.map_condition,
             presets: self.presets_view(),
+            background: self
+                .map_images
+                .get(&self.map)
+                .and_then(Option::as_ref)
+                .zip(arclens_data::map_images::map_image(&self.map))
+                .map(|(handle, info)| {
+                    let (min, max) = info.bounds();
+                    crate::views::map::Background { handle, min, max }
+                }),
         })
     }
 

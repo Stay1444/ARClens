@@ -11,6 +11,7 @@ mod error;
 mod icons;
 pub mod images;
 pub mod labels;
+pub mod map_images;
 pub mod metaforge;
 mod name_match;
 pub mod presets;

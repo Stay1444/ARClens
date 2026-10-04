@@ -84,6 +84,12 @@ _Last researched: 2026-10-03. Re-verify before relying on anything marked
     table or endpoint (unknown yet), which label anchoring needs.
   - Some subcategories mark spawn **areas**, not spots: e.g. 884
     `raider_cache` records form dense blobs of candidate positions.
+- **Map images** (2026-10-04): RaidTheory's map tiles,
+  `images/maps/<map>/v2/{low,high}/{z}/{x}/{y}.webp` in its repository
+  (MIT), fetched on demand from `raw.githubusercontent.com/RaidTheory/
+  arcraiders-data/` (only that path is allowed in `ImageCache`) and cached
+  on disk; the zoom-1 set is 16 small tiles per map. Alignment with
+  MetaForge coordinates: `docs/research/map-images.md`.
 - **What MetaForge's own map page loads (2026-10-03, maintainer's HAR of
   `metaforge.app/arc-raiders/map/dam`):**
   - `events-schedule?region=europe` (and `&includeAll=true`): the
