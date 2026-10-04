@@ -27,16 +27,24 @@ pub struct StationLevel {
     pub level: u32,
 }
 
-/// Parses `GUNSMITH — LEVEL 02` (OCR slips such as `O2` for `02` allowed).
+/// The word before the level number: English, and (guessed, **unverified**
+/// against the game set to Spanish, 2026-10-04) Spanish.
+const LEVEL_WORDS: [&str; 2] = ["LEVEL", "NIVEL"];
+
+/// Parses `GUNSMITH — LEVEL 02` (OCR slips such as `O2` for `02` allowed),
+/// or the Spanish game's `ARMERO — NIVEL 02`.
 pub fn parse_station_header(text: &str) -> Option<StationLevel> {
     let upper = text.to_uppercase();
-    let at = upper.find("LEVEL")?;
+    let (at, word) = LEVEL_WORDS
+        .iter()
+        .filter_map(|w| upper.find(w).map(|at| (at, *w)))
+        .min_by_key(|&(at, _)| at)?;
     let station: String = upper[..at]
         .trim()
         .trim_end_matches(|c: char| !c.is_alphanumeric())
         .trim()
         .to_owned();
-    let digits: String = upper[at + "LEVEL".len()..]
+    let digits: String = upper[at + word.len()..]
         .chars()
         .filter(|c| !c.is_whitespace())
         .take_while(|c| c.is_ascii_digit() || matches!(c, 'O' | 'I' | 'L'))
@@ -174,6 +182,11 @@ mod tests {
         assert_eq!(
             parse("EXPLOSIVES STATION — LEVEL 01"),
             Some(("EXPLOSIVES STATION".into(), 1))
+        );
+        assert_eq!(parse("ARMERO — NIVEL 02"), Some(("ARMERO".into(), 2)));
+        assert_eq!(
+            parse("Banco de equipo - Nivel O1"),
+            Some(("BANCO DE EQUIPO".into(), 1))
         );
         assert_eq!(parse("PLAY WORKSHOP RAIDER"), None);
         assert_eq!(parse("— LEVEL 02"), None);
