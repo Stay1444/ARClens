@@ -1,25 +1,28 @@
 # Packaging and releases
 
-Two formats are built by `.github/workflows/release.yml`:
+Three packages are built by `.github/workflows/release.yml`:
 
 | Format | Built on | Notes |
 |---|---|---|
 | AppImage (`ARClens-<version>-x86_64.AppImage`) | Ubuntu 24.04 (22.04's PipeWire 0.3.48 headers are too old for the `pipewire` crate) | glibc ≥ 2.39 (Fedora 40+, Ubuntu 24.04+). Wayland, xkbcommon and Vulkan are loaded from the host at runtime; `libpipewire-0.3` is linked but deliberately not bundled (it must match the host's PipeWire). Smoke-tested headlessly 2026-10-03: app and overlay start from the AppImage and connect. |
 | Flatpak bundle (`ARClens-x86_64.flatpak`) | Freedesktop 25.08 SDK + rust-stable and llvm20 extensions | App id `io.github.Stay1444.ARClens`. Install with `flatpak install --user ARClens-x86_64.flatpak`. |
+| Windows zip (`ARClens-<version>-windows-x86_64.zip`) | `windows-latest` | `arclens.exe` and `arclens-overlay.exe` side by side, plus the README. |
 
-Both ship the app and the overlay side by side in one `bin/`; the app
-starts the overlay from its own directory.
+Each ships the app and the overlay side by side (one `bin/` on Linux);
+the app starts the overlay from its own directory.
 
 ## Making a release
 
 1. Bump `version` in the workspace `Cargo.toml` and the `<release>` entry in
    `packaging/io.github.Stay1444.ARClens.metainfo.xml`.
-2. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
-3. The workflow builds both formats and attaches them to a GitHub release
-   with generated notes.
+2. Optionally write `packaging/release-notes/v0.2.0.md`: it becomes the
+   top of the release's description.
+3. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+4. The workflow builds all three packages and attaches them to a GitHub
+   release, the notes above the generated list of changes.
 
-A manual run (Actions → Release → Run workflow) builds both and keeps them
-as workflow artifacts, without a release.
+A manual run (Actions → Release → Run workflow) builds all three and keeps
+them as workflow artifacts, without a release.
 
 ## Building locally
 
