@@ -5,7 +5,7 @@ Three packages are built by `.github/workflows/release.yml`:
 | Format | Built on | Notes |
 |---|---|---|
 | AppImage (`ARClens-<version>-x86_64.AppImage`) | Ubuntu 24.04 (22.04's PipeWire 0.3.48 headers are too old for the `pipewire` crate) | glibc ≥ 2.39 (Fedora 40+, Ubuntu 24.04+). Wayland, xkbcommon and Vulkan are loaded from the host at runtime; `libpipewire-0.3` is linked but deliberately not bundled (it must match the host's PipeWire). Smoke-tested headlessly 2026-10-03: app and overlay start from the AppImage and connect. |
-| Flatpak bundle (`ARClens-x86_64.flatpak`) | Freedesktop 25.08 SDK + rust-stable and llvm20 extensions | App id `io.github.Stay1444.ARClens`. Install with `flatpak install --user ARClens-x86_64.flatpak`. |
+| Flatpak bundle (`ARClens-<version>-x86_64.flatpak`) | Freedesktop 25.08 SDK + rust-stable and llvm20 extensions | App id `io.github.Stay1444.ARClens`. Install with `flatpak install --user ARClens-<version>-x86_64.flatpak`. To upgrade, quit the running copy first (`flatpak kill io.github.Stay1444.ARClens`) and install into the same installation (user or system) as before, or the old one may keep starting. |
 | Windows zip (`ARClens-<version>-windows-x86_64.zip`) | `windows-latest` | `arclens.exe` and `arclens-overlay.exe` side by side, plus the README. |
 
 Each ships the app and the overlay side by side (one `bin/` on Linux);

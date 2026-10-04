@@ -52,16 +52,22 @@ jobs:
       options: --privileged
     steps:
     - uses: actions/checkout@v4
+    # Versioned file name, so an old download is easy to tell from a new one.
+    - name: Bundle name
+      run: |
+        version="${RELEASE_TAG#v}"
+        if [ -z "${RELEASE_TAG}" ]; then version="${GITHUB_SHA::7}"; fi
+        echo "FLATPAK_BUNDLE=ARClens-$version-x86_64.flatpak" >> "$GITHUB_ENV"
     - uses: flathub-infra/flatpak-github-actions/flatpak-builder@master
       with:
-        bundle: ARClens-x86_64.flatpak
+        bundle: ${{ env.FLATPAK_BUNDLE }}
         manifest-path: packaging/flatpak/io.github.Stay1444.ARClens.yml
         cache-key: flatpak-builder-${{ github.sha }}
         upload-artifact: false
     - uses: actions/upload-artifact@v4
       with:
         name: flatpak
-        path: ARClens-x86_64.flatpak
+        path: ${{ env.FLATPAK_BUNDLE }}
         if-no-files-found: error
 
   windows:

@@ -35,7 +35,7 @@ Roadmap: "Verify both packages on Fedora/KDE".
 1. Tag a release (`git tag v0.x.y && git push --tags`) or take the
    artifacts of the release workflow.
 2. AppImage: `chmod +x ARClens-*.AppImage && ./ARClens-*.AppImage`.
-3. Flatpak: `flatpak install --user ARClens-x86_64.flatpak && flatpak run io.github.Stay1444.ARClens`.
+3. Flatpak: `flatpak install --user ARClens-<version>-x86_64.flatpak && flatpak run io.github.Stay1444.ARClens`.
 4. In each: the screen-share dialog appears on "Detect items", the
    global-shortcuts dialog appears on first start, the overlay starts.
 

@@ -105,7 +105,7 @@ Each release on the
 | File | For | Notes |
 |---|---|---|
 | `ARClens-<version>-x86_64.AppImage` | Linux | Needs glibc 2.39+ (Fedora 40+, Ubuntu 24.04+) and PipeWire on the host. `chmod +x` and run. |
-| `ARClens-x86_64.flatpak` | Linux | `flatpak install --user ARClens-x86_64.flatpak`, then `flatpak run io.github.Stay1444.ARClens`. |
+| `ARClens-<version>-x86_64.flatpak` | Linux | `flatpak install --user ARClens-<version>-x86_64.flatpak`, then `flatpak run io.github.Stay1444.ARClens`. |
 | `ARClens-<version>-windows-x86_64.zip` | Windows | Unzip and run `arclens.exe`. |
 
 Not on Flathub or COPR yet. The packages haven't been fully checked on a
