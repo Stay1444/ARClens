@@ -249,18 +249,23 @@ fn status_badge(state: &Overlay) -> Element<'_, Message> {
     } else {
         ""
     };
-    container(text(format!("ARClens · {mode}{hint}")).size(12))
-        .padding([4, 10])
-        .style(|_| container::Style {
-            background: Some(Color::from_rgba8(0x10, 0x12, 0x16, 0.75).into()),
-            border: iced::Border {
-                radius: 10.0.into(),
-                ..Default::default()
-            },
-            text_color: Some(Color::from_rgb8(0xc8, 0xcc, 0xd4)),
-            ..Default::default()
-        })
-        .into()
+    container(
+        text(format!("ARCLENS · {mode}{hint}").to_uppercase())
+            .size(arclens_ui::theme::size::TINY)
+            .font(arclens_ui::theme::DISPLAY_SEMI),
+    )
+    .padding([4, 12])
+    .style(|_| container::Style {
+        background: Some(arclens_ui::palette::with_alpha(arclens_ui::theme::PANEL, 0.85).into()),
+        border: iced::Border {
+            radius: 12.0.into(),
+            width: 1.0,
+            color: arclens_ui::palette::BORDER,
+        },
+        text_color: Some(arclens_ui::palette::TEXT),
+        ..Default::default()
+    })
+    .into()
 }
 
 #[cfg(test)]

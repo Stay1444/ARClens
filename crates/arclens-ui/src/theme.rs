@@ -119,6 +119,8 @@ pub fn panel<'a, M: 'a>(
                 },
                 ..container::Style::default()
             }),
+        // The game's colours, as a thin line under the header.
+        stripe_band(3.0),
         container(body)
             .padding(space::PANEL)
             .width(Length::Fill)
@@ -311,4 +313,78 @@ pub fn iced_theme() -> iced::Theme {
             danger: Color::from_rgb8(0xe5, 0x48, 0x4d),
         },
     )
+}
+
+/// The game's stripe colours: red, yellow, green, cyan.
+pub const STRIPES: [Color; 4] = [
+    Color::from_rgb(1.0, 0.10, 0.10),
+    Color::from_rgb(1.0, 0.80, 0.05),
+    Color::from_rgb(0.12, 0.88, 0.48),
+    Color::from_rgb(0.50, 0.94, 0.88),
+];
+
+/// The game's diagonal colour stripes, as in its logo and key art, filling
+/// a `width × height` box (stripes run bottom-left to top-right).
+pub fn stripes<'a, M: 'a>(width: f32, height: f32) -> Element<'a, M> {
+    iced::widget::canvas(Stripes)
+        .width(width)
+        .height(height)
+        .into()
+}
+
+/// A thin horizontal band of the four colours, e.g. under a header.
+pub fn stripe_band<'a, M: 'a>(height: f32) -> Element<'a, M> {
+    STRIPES
+        .iter()
+        .fold(row![].height(height).width(Length::Fill), |r, &color| {
+            r.push(
+                container(
+                    iced::widget::Space::new()
+                        .width(Length::Fill)
+                        .height(height),
+                )
+                .style(move |_| container::Style {
+                    background: Some(color.into()),
+                    ..container::Style::default()
+                }),
+            )
+        })
+        .into()
+}
+
+struct Stripes;
+
+impl<M> iced::widget::canvas::Program<M> for Stripes {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &(),
+        renderer: &iced::Renderer,
+        _theme: &iced::Theme,
+        bounds: iced::Rectangle,
+        _cursor: iced::mouse::Cursor,
+    ) -> Vec<iced::widget::canvas::Geometry> {
+        use iced::Point;
+        use iced::widget::canvas::{Frame, Path};
+        let mut frame = Frame::new(renderer, bounds.size());
+        let (w, h) = (bounds.width, bounds.height);
+        // Four bands with dark gaps, slanted like the game's.
+        let band = w / 6.0;
+        let gap = band * 0.28;
+        let slant = h * 0.55;
+        for (i, &color) in STRIPES.iter().enumerate() {
+            #[allow(clippy::cast_precision_loss, reason = "four stripes")]
+            let x = i as f32 * (band + gap) - slant / 2.0 + band * 0.4;
+            let path = Path::new(|p| {
+                p.move_to(Point::new(x + slant, 0.0));
+                p.line_to(Point::new(x + slant + band, 0.0));
+                p.line_to(Point::new(x + band, h));
+                p.line_to(Point::new(x, h));
+                p.close();
+            });
+            frame.fill(&path, color);
+        }
+        vec![frame.into_geometry()]
+    }
 }

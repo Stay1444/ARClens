@@ -26,6 +26,10 @@ const WEAK_FIT_SCALE_SPAN: f32 = 0.3;
 const SEARCH_HITS: usize = 8;
 const SEARCH_ID: &str = "search";
 const LIST_WIDTH: f32 = 420.0;
+/// Window widths where the top bar shortens its buttons, and where the
+/// item search moves to its own row.
+const TOP_BAR_COMPACT: f32 = 1500.0;
+const TOP_BAR_NARROW: f32 = 1240.0;
 const BOLD: Font = Font {
     weight: font::Weight::Bold,
     ..Font::DEFAULT
@@ -67,6 +71,8 @@ pub struct App {
     event_map_filter: Option<String>,
     /// Wall clock in Unix ms, advanced by the 1 s tick while it matters.
     now_ms: i64,
+    /// Window width (logical pixels), for the top bar's layout.
+    window_width: f32,
     paths: Paths,
     /// Map tab: selected map (MetaForge id) and markers per map.
     map: String,
@@ -216,6 +222,7 @@ pub enum Message {
     ToggleVision,
     GameRunning(bool),
     SetTab(Tab),
+    WindowResized(f32),
     /// Typing in the Home search box: look it up on the Items tab.
     HomeSearch(String),
     /// Open the Map tab on this map.
@@ -296,6 +303,7 @@ impl App {
             events_loaded_at: None,
             event_map_filter: None,
             now_ms: now_ms(),
+            window_width: 1180.0,
             map: arclens_data::metaforge::MAPS[0].0.to_owned(),
             markers: std::collections::HashMap::new(),
             marker_filter: crate::store::load(&paths.marker_filter()).unwrap_or_default(),
@@ -328,6 +336,9 @@ impl App {
             // Also while the search box has focus (it captures every key).
             iced::event::listen_with(|event, _, _| match event {
                 iced::Event::Keyboard(key) => tab_shortcut(key),
+                iced::Event::Window(
+                    iced::window::Event::Resized(size) | iced::window::Event::Opened { size, .. },
+                ) => Some(Message::WindowResized(size.width)),
                 _ => None,
             }),
             overlay_link::subscription().map(Message::Overlay),
@@ -416,6 +427,7 @@ impl App {
                 self.capture_changed(was);
             }
             Message::SetTab(tab) => return self.set_tab(tab),
+            Message::WindowResized(width) => self.window_width = width,
             Message::HomeSearch(query) => return self.home_search(query),
             Message::OpenMap(map) => return self.open_map(map),
             Message::EventsLoaded(result) => return self.on_events_loaded(result),
@@ -1654,7 +1666,10 @@ impl App {
     }
 
     fn view_top_bar(&self) -> Element<'_, Message> {
-        let status = self.overlay_status();
+        // Below these widths the bar drops the shortcut hints and short
+        // labels, then moves the search box to a row of its own.
+        let compact = self.window_width < TOP_BAR_COMPACT;
+        let narrow = self.window_width < TOP_BAR_NARROW;
         let tabs = [
             ("Home", Tab::Home),
             ("Items", Tab::Items),
@@ -1667,7 +1682,7 @@ impl App {
         .fold(row![].spacing(2), |r, (label, tab)| {
             r.push(tab_button(label, self.tab == tab, Message::SetTab(tab)))
         });
-        let middle: Element<'_, Message> = if self.tab == Tab::Items {
+        let search = (self.tab == Tab::Items).then(|| {
             text_input("Search items…", &self.query)
                 .id(SEARCH_ID)
                 .on_input(Message::QueryChanged)
@@ -1676,62 +1691,92 @@ impl App {
                 .size(theme::size::BODY)
                 .width(Length::Fill)
                 .style(theme::input_style)
-                .into()
-        } else {
-            Space::new().width(Length::Fill).into()
-        };
-        let bar = row![
-            iced::widget::svg(self.logo.clone()).width(36).height(36),
+        });
+        let mut bar = row![
+            theme::stripes(44.0, 36.0),
             text("ARCLENS").size(theme::size::H1).font(theme::DISPLAY),
-            Space::new().width(8),
+            Space::new().width(4),
             tabs,
-            middle,
-            status,
-            pill_button(
-                "Game capture",
-                match (self.capture, self.game_running) {
-                    (CaptureMode::Auto, true) => "auto · game running",
-                    (CaptureMode::Auto, false) => "auto · waiting for game",
-                    (CaptureMode::Always, _) => "always",
-                    (CaptureMode::Off, _) => "off",
-                },
-                Message::ToggleVision,
-            ),
-            pill_button(
-                if self.overlay_visible {
-                    "Hide overlay"
-                } else {
-                    "Show overlay"
-                },
-                "Ctrl+Shift+O",
-                Message::ToggleOverlay,
-            ),
-            pill_button(
-                if self.overlay_interactive {
-                    "Click-through"
-                } else {
-                    "Interactive"
-                },
-                "Ctrl+Shift+I",
-                Message::ToggleInteractive,
-            ),
         ]
-        .spacing(16)
+        .spacing(12)
         .align_y(Alignment::Center);
+        let inline_search = !narrow && search.is_some();
+        bar = match search {
+            Some(search) if !narrow => {
+                bar.push(container(search).max_width(560).width(Length::Fill))
+            }
+            _ => bar.push(Space::new().width(Length::Fill)),
+        };
+        if !compact {
+            bar = bar.push(self.overlay_status());
+        }
+        bar = bar.extend(self.top_bar_buttons(compact));
 
-        container(bar)
-            .padding([12, 24])
-            .width(Length::Fill)
-            .style(|_| container::Style {
-                background: Some(Color::BLACK.into()),
-                border: Border {
-                    color: palette::BORDER,
-                    width: 1.0,
-                    radius: 0.0.into(),
-                },
-                ..container::Style::default()
+        let mut column = column![bar].spacing(10);
+        if !inline_search
+            && let Some(search) = (self.tab == Tab::Items).then(|| {
+                text_input("Search items…", &self.query)
+                    .id(SEARCH_ID)
+                    .on_input(Message::QueryChanged)
+                    .on_submit(Message::SelectFirst)
+                    .padding([10, 16])
+                    .size(theme::size::BODY)
+                    .width(Length::Fill)
+                    .style(theme::input_style)
             })
-            .into()
+        {
+            column = column.push(search);
+        }
+        column![
+            container(column)
+                .padding([12, 24])
+                .width(Length::Fill)
+                .style(|_| container::Style {
+                    background: Some(Color::BLACK.into()),
+                    ..container::Style::default()
+                }),
+            theme::stripe_band(3.0),
+        ]
+        .into()
+    }
+
+    /// Capture, overlay and interactive toggles; shorter when `compact`.
+    fn top_bar_buttons(&self, compact: bool) -> Vec<Element<'_, Message>> {
+        let capture = match (self.capture, self.game_running) {
+            (CaptureMode::Auto, true) => "auto · game running",
+            (CaptureMode::Auto, false) => "auto · waiting for game",
+            (CaptureMode::Always, _) => "always",
+            (CaptureMode::Off, _) => "off",
+        };
+        let (overlay, interactive) = (
+            if self.overlay_visible {
+                "Hide overlay"
+            } else {
+                "Show overlay"
+            },
+            if self.overlay_interactive {
+                "Click-through"
+            } else {
+                "Interactive"
+            },
+        );
+        if compact {
+            vec![
+                pill_button("Capture", capture, Message::ToggleVision),
+                pill_button(
+                    if self.overlay_visible { "Hide" } else { "Show" },
+                    "overlay",
+                    Message::ToggleOverlay,
+                ),
+                pill_button(interactive, "mode", Message::ToggleInteractive),
+            ]
+        } else {
+            vec![
+                pill_button("Game capture", capture, Message::ToggleVision),
+                pill_button(overlay, "Ctrl+Shift+O", Message::ToggleOverlay),
+                pill_button(interactive, "Ctrl+Shift+I", Message::ToggleInteractive),
+            ]
+        }
     }
 
     fn view_catalog<'a>(&'a self, catalog: &'a Catalog) -> Element<'a, Message> {

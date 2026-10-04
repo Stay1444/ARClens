@@ -4,25 +4,21 @@ use crate::app::Message;
 use crate::views::events::{pill, region_pills};
 use arclens_ipc::{Corner, OverlaySettings};
 use arclens_ui::palette::{self, with_alpha};
+use arclens_ui::theme::{self, size, space};
 use iced::widget::{Space, column, container, row, scrollable, text};
-use iced::{Alignment, Border, Element, Font, Length, font};
-
-const BOLD: Font = Font {
-    weight: font::Weight::Bold,
-    ..Font::DEFAULT
-};
+use iced::{Alignment, Border, Element, Length};
 
 pub fn view(overlay: OverlaySettings, region: Option<&str>) -> Element<'_, Message> {
     let scales = OverlaySettings::SCALES
         .iter()
-        .fold(row![].spacing(6), |r, &scale| {
+        .fold(row![].spacing(8), |r, &scale| {
             r.push(pill(
                 percent(scale),
                 (overlay.scale - scale).abs() < 0.01,
                 Message::SetOverlayScale(scale),
             ))
         });
-    let corners = Corner::ALL.iter().fold(row![].spacing(6), |r, &corner| {
+    let corners = Corner::ALL.iter().fold(row![].spacing(8), |r, &corner| {
         r.push(pill(
             corner.label(),
             overlay.corner == corner,
@@ -30,21 +26,24 @@ pub fn view(overlay: OverlaySettings, region: Option<&str>) -> Element<'_, Messa
         ))
     });
     let content = column![
-        text("Settings").size(24).font(BOLD),
+        theme::heading("Settings", size::TITLE),
         section(
             "Overlay size",
             "Scales everything the overlay draws: cards, the map panel, markers and \
              the quick search.",
-            scales.into(),
+            scales.wrap().vertical_spacing(8).into(),
         ),
         section(
             "Pinned item card",
             "Where the card of the item you pick (in the app or the overlay's quick \
              search) sits while the overlay is shown.",
-            row![corners, corner_preview(overlay.corner)]
-                .spacing(24)
-                .align_y(Alignment::Center)
-                .into(),
+            row![
+                container(corners.wrap().vertical_spacing(8)).width(Length::Fill),
+                corner_preview(overlay.corner)
+            ]
+            .spacing(space::SECTION)
+            .align_y(Alignment::Center)
+            .into(),
         ),
         section(
             "Server region",
@@ -52,20 +51,19 @@ pub fn view(overlay: OverlaySettings, region: Option<&str>) -> Element<'_, Messa
             region_pills(region),
         ),
     ]
-    .spacing(28)
-    .padding(24)
+    .spacing(space::SECTION)
+    .padding(theme::PAGE_PADDING)
     .max_width(900);
     scrollable(content).height(Length::Fill).into()
 }
 
+/// One setting: a panel with the help line over the controls.
 fn section<'a>(title: &'a str, help: &'a str, body: Element<'a, Message>) -> Element<'a, Message> {
-    column![
-        text(title).size(16).font(BOLD),
-        text(help).size(13).color(palette::TEXT_MUTED),
-        body,
-    ]
-    .spacing(8)
-    .into()
+    theme::panel(
+        title,
+        None,
+        column![text(help).size(size::BODY).color(palette::TEXT_MUTED), body,].spacing(space::GAP),
+    )
 }
 
 /// "125 %" style label for one of [`OverlaySettings::SCALES`].
@@ -77,26 +75,37 @@ fn percent(scale: f32) -> &'static str {
         .map_or("custom", |i| LABELS[i])
 }
 
-/// A tiny screen with the card in the chosen corner.
+/// A small screen with the card in the chosen corner: a cream card with
+/// a yellow header line, like the overlay's.
 fn corner_preview<'a>(corner: Corner) -> Element<'a, Message> {
-    let card = container(Space::new().width(22).height(28)).style(|_| container::Style {
-        background: Some(with_alpha(palette::COIN, 0.8).into()),
-        border: Border {
-            radius: 3.0.into(),
-            ..Border::default()
-        },
-        ..container::Style::default()
-    });
-    let screen = container(card)
-        .width(128)
-        .height(72)
-        .padding(6)
-        .style(|_| container::Style {
-            background: Some(with_alpha(palette::TEXT, 0.05).into()),
+    let card = column![
+        container(Space::new().width(30).height(6)).style(|_| container::Style {
+            background: Some(theme::ACCENT.into()),
             border: Border {
-                color: palette::BORDER,
+                radius: iced::border::Radius::default().top(3.0),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        }),
+        container(Space::new().width(30).height(30)).style(|_| container::Style {
+            background: Some(theme::CREAM.into()),
+            border: Border {
+                radius: iced::border::Radius::default().bottom(3.0),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        }),
+    ];
+    let screen = container(card)
+        .width(176)
+        .height(99)
+        .padding(8)
+        .style(|_| container::Style {
+            background: Some(theme::BG.into()),
+            border: Border {
+                color: with_alpha(theme::CREAM, 0.35),
                 width: 1.0,
-                radius: 4.0.into(),
+                radius: theme::RADIUS.into(),
             },
             ..container::Style::default()
         });

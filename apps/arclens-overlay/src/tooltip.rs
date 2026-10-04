@@ -3,17 +3,13 @@
 use crate::{Message, Overlay};
 use arclens_core::{MapPoint, Marker, MarkerArea, Transform, humanize};
 use arclens_ui::palette::{self, with_alpha};
+use arclens_ui::theme::{self, CREAM, DISPLAY, INK, RADIUS};
 use iced::widget::{column, container, row, text};
-use iced::{Border, Element, Font, Point, Size, font};
-
-const BOLD: Font = Font {
-    weight: font::Weight::Bold,
-    ..Font::DEFAULT
-};
+use iced::{Alignment, Border, Element, Length, Point, Size};
 /// A badge counts as hovered within this distance of its centre (logical
 /// pixels): its radius plus some slack.
 const HIT: f32 = 15.0;
-const WIDTH: f32 = 240.0;
+const WIDTH: f32 = 280.0;
 /// Gap between the pointer and the tooltip.
 const OFFSET: f32 = 18.0;
 
@@ -79,78 +75,64 @@ pub fn view(state: &Overlay) -> Option<Element<'_, Message>> {
             return None;
         }
     }
-    let content = match hovered(&state.markers, &state.areas, transform, screen, pointer)? {
-        Hovered::Marker(marker) => {
-            let kind = match &marker.subcategory {
-                Some(sub) => format!("{} · {}", humanize(&marker.category), humanize(sub)),
-                None => humanize(&marker.category),
-            };
-            let mut col = column![
-                row![
+    let (badge, title, body) =
+        match hovered(&state.markers, &state.areas, transform, screen, pointer)? {
+            Hovered::Marker(marker) => {
+                let kind = match &marker.subcategory {
+                    Some(sub) => format!("{} · {}", humanize(&marker.category), humanize(sub)),
+                    None => humanize(&marker.category),
+                };
+                let mut col = column![
+                    text(kind)
+                        .size(theme::size::SMALL)
+                        .color(palette::TEXT_MUTED)
+                ]
+                .spacing(4);
+                if marker.locked {
+                    col = col.push(
+                        text("Behind a locked door")
+                            .size(theme::size::SMALL)
+                            .color(palette::TEXT_MUTED),
+                    );
+                }
+                (
                     arclens_ui::markers::badge(
                         &marker.category,
                         marker.subcategory.as_deref(),
-                        22.0
+                        24.0,
                     ),
-                    text(marker.title()).size(14).font(BOLD),
-                ]
-                .spacing(8)
-                .align_y(iced::Alignment::Center),
-                text(kind).size(12).color(palette::TEXT_MUTED),
-            ]
-            .spacing(4);
-            if marker.locked {
-                col = col.push(
-                    text("Behind a locked door")
-                        .size(12)
-                        .color(palette::TEXT_MUTED),
-                );
+                    marker.title(),
+                    col,
+                )
             }
-            col
-        }
-        Hovered::Area(area) => {
-            let kind = area
-                .subcategory
-                .as_deref()
-                .map_or_else(|| humanize(&area.category), humanize);
-            column![
-                row![
-                    arclens_ui::markers::badge(&area.category, area.subcategory.as_deref(), 22.0),
-                    text(format!("{} × {kind}", area.count)).size(14).font(BOLD),
-                ]
-                .spacing(8)
-                .align_y(iced::Alignment::Center),
-                text("Possible spots in this area: not all are there every raid.")
-                    .size(12)
-                    .color(palette::TEXT_MUTED),
-            ]
-            .spacing(4)
-        }
-    };
+            Hovered::Area(area) => {
+                let kind = area
+                    .subcategory
+                    .as_deref()
+                    .map_or_else(|| humanize(&area.category), humanize);
+                (
+                    arclens_ui::markers::badge(&area.category, area.subcategory.as_deref(), 24.0),
+                    format!("{} × {kind}", area.count),
+                    column![
+                        text("Possible spots in this area: not all are there every raid.")
+                            .size(theme::size::SMALL)
+                            .color(palette::TEXT_MUTED)
+                    ],
+                )
+            }
+        };
     // Right of and below the pointer, flipped near the screen's edges.
     let x = if pointer.x + OFFSET + WIDTH > screen.width {
         pointer.x - OFFSET - WIDTH
     } else {
         pointer.x + OFFSET
     };
-    let y = if pointer.y + OFFSET + 90.0 > screen.height {
-        pointer.y - OFFSET - 90.0
+    let y = if pointer.y + OFFSET + 110.0 > screen.height {
+        pointer.y - OFFSET - 110.0
     } else {
         pointer.y + OFFSET
     };
-    let card = container(content)
-        .padding([8, 10])
-        .width(WIDTH)
-        .style(|_| container::Style {
-            background: Some(with_alpha(palette::SURFACE, 0.95).into()),
-            border: Border {
-                color: palette::BORDER,
-                width: 1.0,
-                radius: 6.0.into(),
-            },
-            text_color: Some(palette::TEXT),
-            ..container::Style::default()
-        });
+    let card = card(badge, &title, body);
     Some(
         container(card)
             .padding(iced::Padding {
@@ -160,6 +142,51 @@ pub fn view(state: &Overlay) -> Option<Element<'_, Message>> {
             })
             .into(),
     )
+}
+
+/// The game's look: a cream header with the badge and the name in
+/// condensed capitals, over a dark body.
+fn card<'a>(
+    badge: Element<'a, Message>,
+    title: &str,
+    body: iced::widget::Column<'a, Message>,
+) -> Element<'a, Message> {
+    let header = container(
+        row![
+            badge,
+            text(title.to_uppercase())
+                .size(theme::size::H2)
+                .font(DISPLAY)
+                .color(INK)
+                .width(Length::Fill),
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center),
+    )
+    .padding([5, 10])
+    .width(Length::Fill)
+    .style(|_| container::Style {
+        background: Some(CREAM.into()),
+        border: Border {
+            radius: iced::border::Radius::default().top(RADIUS),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    });
+    let body = container(body)
+        .padding([8, 12])
+        .width(Length::Fill)
+        .style(|_| container::Style {
+            background: Some(with_alpha(theme::PANEL, 0.94).into()),
+            border: Border {
+                radius: iced::border::Radius::default().bottom(RADIUS),
+                width: 1.0,
+                color: palette::BORDER,
+            },
+            text_color: Some(palette::TEXT),
+            ..container::Style::default()
+        });
+    column![header, body].width(WIDTH).into()
 }
 
 #[cfg(test)]

@@ -6,6 +6,7 @@ use crate::Message;
 use arclens_core::{ItemId, Rarity};
 use arclens_ipc::{SearchHit, ToApp};
 use arclens_ui::palette::{self, with_alpha};
+use arclens_ui::theme::{self, CREAM, DISPLAY, DISPLAY_SEMI, INK, RADIUS, STRONG};
 use iced::widget::{Space, button, column, container, image, row, text, text_input};
 use iced::{Alignment, Border, Element, Length};
 
@@ -88,89 +89,102 @@ pub fn view(state: &SearchState, screen: iced::Size) -> Element<'_, Message> {
         .id(INPUT_ID)
         .on_input(|q| Message::Search(SearchMessage::Query(q)))
         .on_submit(Message::Search(SearchMessage::Submit))
-        .padding([8, 12])
-        .size(16)
-        .style(input_style);
+        .padding([10, 14])
+        .size(theme::size::BODY)
+        .font(theme::BODY)
+        .style(theme::input_style);
     let mut body = column![input].spacing(6);
     if state.query.trim().is_empty() {
         body = body.push(
             text("Type an item name · Enter shows the top result")
-                .size(12)
+                .size(theme::size::SMALL)
                 .color(palette::TEXT_MUTED),
         );
     } else if state.hits.is_empty() {
-        body = body.push(text("No matches").size(12).color(palette::TEXT_MUTED));
+        body = body.push(
+            text("No matches")
+                .size(theme::size::SMALL)
+                .color(palette::TEXT_MUTED),
+        );
     }
     for hit in &state.hits {
         body = body.push(hit_row(hit));
     }
-    let panel = container(body)
-        .width(WIDTH)
-        .padding(10)
+
+    let header = container(
+        row![
+            text("QUICK SEARCH")
+                .size(theme::size::H2)
+                .font(DISPLAY)
+                .color(INK)
+                .width(Length::Fill),
+            text("ARCLENS")
+                .size(theme::size::TINY)
+                .font(DISPLAY)
+                .color(with_alpha(INK, 0.55)),
+        ]
+        .align_y(Alignment::Center),
+    )
+    .padding([6, 14])
+    .width(Length::Fill)
+    .style(|_| container::Style {
+        background: Some(CREAM.into()),
+        border: Border {
+            radius: iced::border::Radius::default().top(RADIUS),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    });
+    let body = container(body)
+        .padding([12, 14])
+        .width(Length::Fill)
         .style(|_| container::Style {
-            background: Some(with_alpha(palette::SURFACE, 0.96).into()),
+            background: Some(with_alpha(theme::PANEL, 0.94).into()),
             border: Border {
-                radius: 10.0.into(),
+                radius: iced::border::Radius::default().bottom(RADIUS),
                 width: 1.0,
                 color: palette::BORDER,
             },
-            ..Default::default()
+            text_color: Some(palette::TEXT),
+            ..container::Style::default()
         });
     column![
         Space::new().height(screen.height * TOP),
-        container(panel).center_x(Length::Fill),
+        container(column![header, body].width(WIDTH)).center_x(Length::Fill),
     ]
     .into()
-}
-
-fn input_style(_: &iced::Theme, status: text_input::Status) -> text_input::Style {
-    let focused = matches!(status, text_input::Status::Focused { .. });
-    text_input::Style {
-        background: palette::SURFACE_RAISED.into(),
-        border: Border {
-            radius: 6.0.into(),
-            width: 1.0,
-            color: if focused {
-                with_alpha(palette::TEXT, 0.35)
-            } else {
-                palette::BORDER
-            },
-        },
-        icon: palette::TEXT_MUTED,
-        placeholder: palette::TEXT_MUTED,
-        value: palette::TEXT,
-        selection: with_alpha(palette::COIN, 0.35),
-    }
 }
 
 fn hit_row(hit: &Hit) -> Element<'_, Message> {
     let color = palette::rarity(hit.rarity);
     let icon: Element<'_, Message> = match &hit.icon {
-        Some(handle) => image(handle.clone()).width(32).height(32).into(),
-        None => Space::new().width(32).height(32).into(),
+        Some(handle) => image(handle.clone()).width(36).height(36).into(),
+        None => Space::new().width(36).height(36).into(),
     };
     button(
         row![
             icon,
             text(&hit.name)
-                .size(14)
+                .size(theme::size::BODY)
+                .font(STRONG)
                 .color(palette::TEXT)
                 .width(Length::Fill),
-            text(palette::rarity_label(hit.rarity))
-                .size(11)
+            text(palette::rarity_label(hit.rarity).to_uppercase())
+                .size(theme::size::SMALL)
+                .font(DISPLAY_SEMI)
                 .color(color),
         ]
-        .spacing(10)
+        .spacing(12)
         .align_y(Alignment::Center),
     )
     .on_press(Message::Search(SearchMessage::Pick(hit.id.clone())))
-    .padding([4, 8])
+    .padding([5, 8])
     .width(Length::Fill)
     .style(move |_, status| button::Style {
         background: matches!(status, button::Status::Hovered | button::Status::Pressed)
             .then(|| with_alpha(color, 0.18).into()),
         border: Border {
-            radius: 6.0.into(),
+            radius: RADIUS.into(),
             ..Default::default()
         },
         text_color: palette::TEXT,

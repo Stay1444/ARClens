@@ -4,22 +4,16 @@
 use crate::app::Message;
 use arclens_core::{Marker, MarkerFilter, Preset, humanize, marker_counts};
 use arclens_ui::markers::{badge, draw_area, draw_badge};
-use arclens_ui::palette::{self, with_alpha};
+use arclens_ui::palette;
+use arclens_ui::theme::{self, size, space};
 use iced::widget::canvas::{self, Frame, Geometry, Path, Stroke};
 use iced::widget::{
     Canvas, Space, button, checkbox, column, container, row, scrollable, text, text_input,
 };
-use iced::{
-    Alignment, Border, Color, Element, Font, Length, Point, Rectangle, Renderer, Size, Theme, font,
-    mouse,
-};
+use iced::{Alignment, Color, Element, Length, Point, Rectangle, Renderer, Size, Theme, mouse};
 use std::collections::BTreeSet;
 
-const BOLD: Font = Font {
-    weight: font::Weight::Bold,
-    ..Font::DEFAULT
-};
-const PANEL_WIDTH: f32 = 340.0;
+const PANEL_WIDTH: f32 = 400.0;
 /// Marker icon diameter on the plot.
 const ICON: f32 = 16.0;
 pub const SEARCH_ID: &str = "marker-search";
@@ -135,54 +129,18 @@ pub struct PresetsView<'a> {
 }
 
 pub fn view<'a>(map: &MapView<'a>) -> Element<'a, Message> {
-    let pills = map
-        .maps
-        .iter()
-        .fold(row![].spacing(6), |r, &(id, name)| {
-            r.push(pill(
-                name,
-                id == map.selected,
-                Message::SelectMap(id.to_owned()),
-            ))
-        })
-        .wrap();
-
-    let conditions = (!map.conditions.is_empty()).then(|| {
-        map.conditions
-            .iter()
-            .fold(
-                row![
-                    text("CONDITION")
-                        .size(11)
-                        .color(palette::TEXT_MUTED)
-                        .width(80),
-                    pill(
-                        "Any",
-                        map.condition.is_none(),
-                        Message::SelectCondition(None)
-                    ),
-                ]
-                .spacing(6)
-                .align_y(Alignment::Center),
-                |r, &(name, _)| {
-                    r.push(pill(
-                        name,
-                        map.condition == Some(name),
-                        Message::SelectCondition(Some(name)),
-                    ))
-                },
-            )
-            .wrap()
-    });
-
     let body: Element<'a, Message> = match map.markers {
-        Markers::Loading => centered(text("Loading markers…").color(palette::TEXT_MUTED)),
+        Markers::Loading => centered(
+            text("Loading markers…")
+                .size(size::BODY)
+                .color(palette::TEXT_MUTED),
+        ),
         Markers::Failed(error) => centered(
             column![
-                text("Could not load markers").size(20).font(BOLD),
-                text(error).color(palette::TEXT_MUTED),
+                theme::heading("Could not load markers", size::H1),
+                text(error).size(size::BODY).color(palette::TEXT_MUTED),
             ]
-            .spacing(6)
+            .spacing(space::GAP)
             .align_x(Alignment::Center),
         ),
         Markers::Ready(markers) => row![
@@ -197,205 +155,288 @@ pub fn view<'a>(map: &MapView<'a>) -> Element<'a, Message> {
                 .width(Length::Fill)
                 .height(Length::Fill)
             )
-            .padding(16)
             .width(Length::Fill)
             .height(Length::Fill),
         ]
+        .spacing(space::SECTION)
         .height(Length::Fill)
         .into(),
     };
 
+    column![top_bar(map), body]
+        .spacing(space::SECTION)
+        .padding(theme::PAGE_PADDING)
+        .height(Length::Fill)
+        .into()
+}
+
+/// Map chips, then (if the map has any) its conditions.
+fn top_bar<'a>(map: &MapView<'a>) -> Element<'a, Message> {
+    let maps = map
+        .maps
+        .iter()
+        .fold(row![].spacing(space::GAP / 2.0), |r, &(id, name)| {
+            r.push(pill(
+                name,
+                id == map.selected,
+                Message::SelectMap(id.to_owned()),
+            ))
+        })
+        .wrap();
+
+    let conditions = (!map.conditions.is_empty()).then(|| {
+        map.conditions
+            .iter()
+            .fold(
+                row![
+                    container(theme::label("Condition")).width(100),
+                    pill(
+                        "Any",
+                        map.condition.is_none(),
+                        Message::SelectCondition(None)
+                    ),
+                ]
+                .spacing(space::GAP / 2.0)
+                .align_y(Alignment::Center),
+                |r, &(name, _)| {
+                    r.push(pill(
+                        name,
+                        map.condition == Some(name),
+                        Message::SelectCondition(Some(name)),
+                    ))
+                },
+            )
+            .wrap()
+    });
+
     column![
-        container(column![pills].push(conditions).spacing(8)).padding([12, 16]),
-        body
+        row![
+            container(theme::heading("Map", size::TITLE)).padding([0.0, space::GAP]),
+            maps
+        ]
+        .spacing(space::GAP)
+        .align_y(Alignment::Center),
     ]
-    .height(Length::Fill)
+    .push(conditions)
+    .spacing(space::GAP)
     .into()
 }
 
-/// Left panel: search, show/hide all, categories with icons and counts.
+/// Left side: presets, search, then the categories with icons and counts.
 fn panel<'a>(map: &MapView<'a>, markers: &'a [Marker]) -> Element<'a, Message> {
     let summary = map.summary;
     let searching = !map.query.trim().is_empty();
 
-    let mut categories = column![].spacing(2);
-    for category in &summary.categories {
-        let open = searching || map.expanded.contains(&category.id);
-        let has_subs = !category.subcategories.is_empty();
-        categories = categories.push(category_row(category, has_subs.then_some(open)));
-        if open {
-            for (sub, label, count, shown) in &category.subcategories {
-                let (c, s) = (category.id.clone(), sub.clone());
-                categories = categories.push(
-                    row![
-                        Space::new().width(20),
-                        badge(&category.id, Some(sub), 18.0),
-                        checkbox(*shown)
-                            .label(label.clone())
-                            .text_size(13)
-                            .size(14)
-                            .on_toggle(move |_| Message::ToggleMarkerSubcategory(
-                                c.clone(),
-                                s.clone()
-                            ))
-                            .width(Length::Fill),
-                        text(count.to_string()).size(12).color(palette::TEXT_MUTED),
-                    ]
-                    .spacing(8)
-                    .align_y(Alignment::Center)
-                    .padding([2, 8]),
-                );
-            }
-        }
-    }
+    let count = text(format!(
+        "{} / {} shown",
+        summary.visible.len(),
+        summary.matching.len()
+    ))
+    .size(size::SMALL)
+    .font(theme::DISPLAY_SEMI)
+    .color(theme::INK);
 
-    let header = row![
-        text(format!(
-            "{} OF {} MARKERS SHOWN",
-            summary.visible.len(),
-            summary.matching.len()
-        ))
-        .size(11)
-        .color(palette::TEXT_MUTED)
-        .width(Length::Fill),
+    let actions = row![
         small_button("Show all", Message::ShowAllMarkers),
         small_button("Hide all", Message::HideAllMarkers),
     ]
-    .spacing(6)
-    .align_y(Alignment::Center);
+    .spacing(space::GAP / 2.0);
 
-    // Named places only: unnamed markers are covered by the counts above.
-    let matches = (searching && !summary.named.is_empty()).then(|| {
-        summary
-            .named
-            .iter()
-            .take(50)
-            .fold(column![].spacing(4), |col, &i| {
-                let m = &markers[i];
-                col.push(
-                    row![
-                        badge(&m.category, m.subcategory.as_deref(), 18.0),
-                        text(m.title()).size(13).width(Length::Fill),
-                        text(humanize(&m.category))
-                            .size(11)
-                            .color(palette::TEXT_MUTED),
-                    ]
-                    .spacing(8)
-                    .align_y(Alignment::Center),
-                )
-            })
-    });
-
-    container(
-        column![
-            presets(&map.presets, map.condition),
-            text_input("Search markers…", map.query)
-                .id(SEARCH_ID)
-                .on_input(Message::MarkerQuery)
-                .padding([8, 12])
-                .size(14),
-            header,
-            scrollable(
-                column![categories]
-                    .push(matches.map(|m| {
-                        column![text("MATCHES").size(11).color(palette::TEXT_MUTED), m]
-                            .spacing(6)
-                            .padding([12, 8])
-                    }))
-                    .padding([0, 8])
-            )
-            .height(Length::Fill),
-        ]
-        .spacing(10),
+    let list = scrollable(
+        column![categories(map)]
+            .push(matches(summary, markers, searching))
+            .spacing(space::SECTION)
+            .padding(iced::Padding::default().right(space::GAP)),
     )
-    .padding([0, 16])
+    .height(Length::Fill);
+
+    column![
+        theme::panel("Preset", None, presets(&map.presets, map.condition)),
+        text_input("Search markers…", map.query)
+            .id(SEARCH_ID)
+            .on_input(Message::MarkerQuery)
+            .padding([10, 16])
+            .size(size::BODY)
+            .style(theme::input_style),
+        theme::panel(
+            "Markers",
+            Some(count.into()),
+            column![actions, list].spacing(space::GAP)
+        ),
+    ]
+    .spacing(space::GAP)
     .width(PANEL_WIDTH)
     .height(Length::Fill)
     .into()
 }
 
-/// Preset pills, then saving: update the active one, or save as new.
+/// Every category, opened ones (or all, while searching) with their
+/// subcategories.
+fn categories<'a>(map: &MapView<'a>) -> Element<'a, Message> {
+    let searching = !map.query.trim().is_empty();
+    let mut list = column![].spacing(4);
+    for category in &map.summary.categories {
+        let open = searching || map.expanded.contains(&category.id);
+        let has_subs = !category.subcategories.is_empty();
+        list = list.push(category_row(category, has_subs.then_some(open)));
+        if open {
+            for (sub, label, count, shown) in &category.subcategories {
+                list = list.push(subcategory_row(&category.id, sub, label, *count, *shown));
+            }
+        }
+    }
+    list.into()
+}
+
+fn subcategory_row<'a>(
+    category: &str,
+    sub: &str,
+    label: &str,
+    count: usize,
+    shown: bool,
+) -> Element<'a, Message> {
+    let (c, s) = (category.to_owned(), sub.to_owned());
+    row![
+        Space::new().width(28),
+        badge(category, Some(sub), 20.0),
+        checkbox(shown)
+            .label(label.to_owned())
+            .text_size(size::SMALL)
+            .size(16)
+            .on_toggle(move |_| Message::ToggleMarkerSubcategory(c.clone(), s.clone()))
+            .width(Length::Fill),
+        text(count.to_string())
+            .size(size::TINY)
+            .color(palette::TEXT_MUTED),
+    ]
+    .spacing(10)
+    .align_y(Alignment::Center)
+    .padding([3, 4])
+    .into()
+}
+
+/// Named places matching the search; unnamed markers are covered by the
+/// category counts.
+fn matches<'a>(
+    summary: &MapSummary,
+    markers: &'a [Marker],
+    searching: bool,
+) -> Option<Element<'a, Message>> {
+    (searching && !summary.named.is_empty()).then(|| {
+        let list = summary
+            .named
+            .iter()
+            .take(50)
+            .fold(column![].spacing(8), |col, &i| {
+                let m = &markers[i];
+                col.push(
+                    row![
+                        badge(&m.category, m.subcategory.as_deref(), 20.0),
+                        text(m.title())
+                            .size(size::SMALL)
+                            .font(theme::STRONG)
+                            .width(Length::Fill),
+                        text(humanize(&m.category))
+                            .size(size::TINY)
+                            .color(palette::TEXT_MUTED),
+                    ]
+                    .spacing(10)
+                    .align_y(Alignment::Center),
+                )
+            });
+        column![theme::label("Matches"), list]
+            .spacing(space::GAP / 2.0)
+            .into()
+    })
+}
+
+/// Preset chips, then saving: update the active one, or save as new.
 fn presets<'a>(view: &PresetsView<'a>, condition: Option<&'static str>) -> Element<'a, Message> {
     let book = view.presets;
     let active = book.active();
     let pills = view
         .suited
         .iter()
-        .fold(row![].spacing(6), |r, p| {
+        .fold(row![].spacing(space::GAP / 2.0), |r, p| {
             let active = active.is_some_and(|a| a.id == p.id);
             let label = if active && book.edited {
                 format!("{} *", p.name)
             } else {
                 p.name.clone()
             };
-            r.push(pill_owned(
-                label,
-                active,
-                Message::ApplyPreset(p.id.clone()),
-            ))
+            r.push(pill(&label, active, Message::ApplyPreset(p.id.clone())))
         })
         .wrap();
 
     let description = active
         .map(|p| p.description.as_str())
         .filter(|d| !d.is_empty())
-        .map(|d| text(d).size(12).color(palette::TEXT_MUTED));
+        .map(|d| text(d).size(size::SMALL).color(palette::TEXT_MUTED));
 
-    let mut actions = row![].spacing(6).align_y(Alignment::Center);
+    let mut actions = row![].spacing(space::GAP / 2.0).align_y(Alignment::Center);
     if let Some(active) = active {
         if book.edited {
-            actions = actions.push(small_button_owned(
-                format!("Save to \"{}\"", active.name),
+            actions = actions.push(small_button(
+                &format!("Save to \"{}\"", active.name),
                 Message::UpdatePreset,
             ));
         }
         if book.is_customised(&active.id) {
-            actions = actions.push(small_button_owned(
+            actions = actions.push(small_button(
                 if crate::presets::Presets::is_builtin(&active.id) {
-                    "Reset to default".to_owned()
+                    "Reset to default"
                 } else {
-                    "Delete".to_owned()
+                    "Delete"
                 },
                 Message::DeletePreset(active.id.clone()),
             ));
         }
     }
 
-    let mut scope = row![
-        checkbox(book.for_map)
-            .label("This map only")
-            .text_size(12)
-            .size(13)
-            .on_toggle(Message::PresetForMap)
-    ]
-    .spacing(12);
-    if let Some(condition) = condition {
-        scope = scope.push(
-            checkbox(book.for_condition)
-                .label(format!("{condition} only"))
-                .text_size(12)
-                .size(13)
-                .on_toggle(Message::PresetForCondition),
-        );
-    }
     let save_as = row![
         text_input("New preset name…", &book.draft)
             .on_input(Message::PresetDraft)
             .on_submit(Message::SavePresetAs)
-            .padding([5, 8])
-            .size(13),
+            .padding([10, 16])
+            .size(size::SMALL)
+            .style(theme::input_style),
         small_button("Save as new", Message::SavePresetAs),
     ]
-    .spacing(6)
+    .spacing(space::GAP / 2.0)
     .align_y(Alignment::Center);
 
-    column![text("PRESET").size(11).color(palette::TEXT_MUTED), pills]
+    column![pills]
         .push(description)
         .push(actions)
         .push(save_as)
-        .push(scope)
-        .spacing(8)
+        .push(preset_scope(book, condition))
+        .spacing(space::GAP)
         .into()
+}
+
+/// Where a saved preset applies: this map, this condition.
+fn preset_scope<'a>(
+    book: &crate::presets::Presets,
+    condition: Option<&'static str>,
+) -> Element<'a, Message> {
+    let mut scope = row![
+        checkbox(book.for_map)
+            .label("This map only")
+            .text_size(size::SMALL)
+            .size(16)
+            .on_toggle(Message::PresetForMap)
+    ]
+    .spacing(space::GAP);
+    if let Some(condition) = condition {
+        scope = scope.push(
+            checkbox(book.for_condition)
+                .label(format!("{condition} only"))
+                .text_size(size::SMALL)
+                .size(16)
+                .on_toggle(Message::PresetForCondition),
+        );
+    }
+    scope.wrap().into()
 }
 
 /// A category: icon, toggle, name, count and (if it has subcategories) an
@@ -404,31 +445,36 @@ fn category_row<'a>(category: &CategorySummary, open: Option<bool>) -> Element<'
     let name = category.id.clone();
     let toggle = checkbox(category.shown)
         .label(category.label.clone())
-        .text_size(14)
-        .size(16)
+        .text_size(size::BODY)
+        .font(theme::STRONG)
+        .size(18)
         .on_toggle(move |_| Message::ToggleMarkerCategory(name.clone()))
         .width(Length::Fill);
     let expander: Element<'a, Message> = match open {
-        Some(open) => button(text(if open { "▾" } else { "▸" }).size(13))
-            .padding([0, 6])
+        Some(open) => button(text(if open { "▾" } else { "▸" }).size(size::BODY))
+            .padding([2, 8])
             .on_press(Message::ExpandMarkerCategory(category.id.clone()))
-            .style(|_, _| button::Style {
-                text_color: palette::TEXT_MUTED,
+            .style(|_, status| button::Style {
+                text_color: if matches!(status, button::Status::Hovered) {
+                    theme::ACCENT
+                } else {
+                    palette::TEXT_MUTED
+                },
                 ..button::Style::default()
             })
             .into(),
-        None => Space::new().width(22).into(),
+        None => Space::new().width(28).into(),
     };
     row![
-        badge(&category.id, None, 22.0),
+        badge(&category.id, None, 26.0),
         toggle,
         text(category.count.to_string())
-            .size(12)
+            .size(size::SMALL)
             .color(palette::TEXT_MUTED),
         expander,
     ]
-    .spacing(8)
-    .padding([4, 8])
+    .spacing(10)
+    .padding([5, 4])
     .align_y(Alignment::Center)
     .into()
 }
@@ -469,7 +515,7 @@ impl Plot<'_> {
                 // Ring the matches so they stand out.
                 frame.stroke(
                     &Path::circle(at, ICON / 2.0 + 1.5),
-                    Stroke::default().with_color(Color::WHITE).with_width(1.5),
+                    Stroke::default().with_color(theme::ACCENT).with_width(2.0),
                 );
             }
         }
@@ -480,8 +526,8 @@ impl Plot<'_> {
                 content: marker.title(),
                 position,
                 color,
-                size: 12.0.into(),
-                font: BOLD,
+                size: 15.0.into(),
+                font: theme::DISPLAY,
                 align_x: iced::alignment::Horizontal::Center.into(),
                 align_y: iced::alignment::Vertical::Center,
                 ..canvas::Text::default()
@@ -509,8 +555,8 @@ impl canvas::Program<Message> for Plot<'_> {
         let fit = Fit::new(self.markers, bounds.size());
         let markers = self.cache.draw(renderer, bounds.size(), |frame| {
             frame.fill(
-                &Path::rounded_rectangle(Point::ORIGIN, bounds.size(), 8.0.into()),
-                Color::from_rgb8(0x12, 0x15, 0x1a),
+                &Path::rounded_rectangle(Point::ORIGIN, bounds.size(), theme::RADIUS.into()),
+                theme::PANEL,
             );
             if let Some(fit) = &fit {
                 self.draw_markers(frame, fit);
@@ -547,7 +593,8 @@ impl canvas::Program<Message> for Plot<'_> {
                 content: label,
                 position: Point::new(at.x + ICON / 2.0 + 6.0, at.y),
                 color: Color::WHITE,
-                size: 13.0.into(),
+                size: 16.0.into(),
+                font: theme::STRONG,
                 align_y: iced::alignment::Vertical::Center,
                 ..canvas::Text::default()
             });
@@ -629,68 +676,12 @@ impl Fit {
     }
 }
 
-fn pill(label: &str, active: bool, on_press: Message) -> Element<'_, Message> {
-    pill_owned(label.to_owned(), active, on_press)
+fn pill<'a>(label: &str, active: bool, on_press: Message) -> Element<'a, Message> {
+    theme::chip(label, active, on_press)
 }
 
-fn pill_owned<'a>(label: String, active: bool, on_press: Message) -> Element<'a, Message> {
-    button(text(label).size(13))
-        .padding([5, 12])
-        .on_press(on_press)
-        .style(move |_, status| {
-            let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
-            let alpha = match (active, hovered) {
-                (true, _) => 0.18,
-                (false, true) => 0.10,
-                (false, false) => 0.04,
-            };
-            button::Style {
-                background: Some(with_alpha(palette::TEXT, alpha).into()),
-                text_color: if active {
-                    palette::TEXT
-                } else {
-                    palette::TEXT_MUTED
-                },
-                border: Border {
-                    color: palette::BORDER,
-                    width: 1.0,
-                    radius: 6.0.into(),
-                },
-                ..button::Style::default()
-            }
-        })
-        .into()
-}
-
-fn small_button(label: &str, on_press: Message) -> Element<'_, Message> {
-    small_button_owned(label.to_owned(), on_press)
-}
-
-fn small_button_owned<'a>(label: String, on_press: Message) -> Element<'a, Message> {
-    button(text(label).size(12))
-        .padding([3, 8])
-        .on_press(on_press)
-        .style(|_, status| button::Style {
-            background: Some(
-                with_alpha(
-                    palette::TEXT,
-                    if matches!(status, button::Status::Hovered) {
-                        0.12
-                    } else {
-                        0.06
-                    },
-                )
-                .into(),
-            ),
-            text_color: palette::TEXT,
-            border: Border {
-                color: palette::BORDER,
-                width: 1.0,
-                radius: 5.0.into(),
-            },
-            ..button::Style::default()
-        })
-        .into()
+fn small_button<'a>(label: &str, on_press: Message) -> Element<'a, Message> {
+    theme::secondary_button(label, Some(on_press))
 }
 
 fn centered<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
