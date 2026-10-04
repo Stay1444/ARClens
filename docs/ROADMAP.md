@@ -26,7 +26,8 @@ green CI.
       region is clickable, so the panel's search box takes typing after a
       click.
 - [ ] Verify clicks and typing in the map panel on KDE (the headless seat
-      has no pointer).
+      has no pointer). Steps for this and the other open manual checks:
+      `docs/manual-tests.md`.
 - [x] **Quick item search in the overlay** (2026-10-03): in interactive
       mode a search box sits at the top of the screen and takes the
       keyboard (exclusive on Linux until interactive mode is toggled off).
