@@ -73,6 +73,36 @@ impl Icons {
         })
     }
 
+    /// Every item's image on disk, downloading the missing ones (a few at
+    /// a time, once: they stay cached). For recognising stash slots.
+    pub fn fetch_all(
+        &self,
+        items: Vec<Item>,
+    ) -> impl Future<Output = Vec<(ItemId, PathBuf)>> + use<> {
+        use futures::StreamExt;
+        let cache = self.cache.clone();
+        async move {
+            futures::stream::iter(items)
+                .map(|item| {
+                    let cache = cache.clone();
+                    async move {
+                        match cache.fetch(&item).await {
+                            Ok(Some(path)) => Some((item.id, path)),
+                            Ok(None) => None,
+                            Err(error) => {
+                                tracing::debug!(%error, item = %item.id, "item image unavailable");
+                                None
+                            }
+                        }
+                    }
+                })
+                .buffer_unordered(4)
+                .filter_map(std::future::ready)
+                .collect()
+                .await
+        }
+    }
+
     pub fn insert(&mut self, id: ItemId, icon: Option<Icon>) {
         if let Some(icon) = icon {
             self.loaded.insert(id, icon);

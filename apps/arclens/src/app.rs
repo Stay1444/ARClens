@@ -116,6 +116,12 @@ pub struct App {
         Vec<arclens_ipc::NormRect>,
     )>,
     status: Vec<String>,
+    /// Finished stash scans.
+    stash_history: crate::stash::History,
+    /// The stash scan in progress (or just finished).
+    stash_scan: Option<crate::stash_worker::ScanState>,
+    /// The stash slots on screen now, for the overlay's badges.
+    stash_view: Vec<crate::stash_worker::VisibleSlot>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -269,6 +275,8 @@ type MapImageKey = (String, Option<u32>);
 #[derive(Debug, Clone)]
 pub enum Message {
     CatalogLoaded(Result<Arc<Catalog>, String>),
+    /// Every item image is on disk (for recognising stash slots).
+    StashIcons(Vec<(ItemId, std::path::PathBuf)>),
     /// `None`: follow the system.
     SetLanguage(Option<arclens_i18n::Lang>),
     QueryChanged(String),
@@ -372,6 +380,9 @@ impl App {
             },
             game_running: false,
             hover: None,
+            stash_history: crate::stash::History::load(&paths.stash_history()),
+            stash_scan: None,
+            stash_view: Vec::new(),
             progress: crate::progress::load(&paths.progress()),
             progress_path: paths.progress(),
             tab: Tab::Home,
@@ -480,6 +491,7 @@ impl App {
                 }
             }
             Message::IconLoaded(id, icon) => self.on_icon_loaded(id, icon),
+            Message::StashIcons(icons) => self.on_stash_icons(icons),
             Message::ToggleOverlay
             | Message::Hotkey(hotkeys::Event::Pressed(Action::ToggleOverlay)) => {
                 self.overlay_visible = !self.overlay_visible;
@@ -655,51 +667,7 @@ impl App {
 
     fn on_vision_event(&mut self, event: vision::Event) -> Task<Message> {
         match event {
-            vision::Event::Hover(hover) => {
-                let Load::Ready(catalog) = &self.catalog else {
-                    return Task::none();
-                };
-                let Some((item, confidence)) =
-                    arclens_data::match_name(&hover.name, &catalog.items)
-                else {
-                    tracing::debug!(text = %hover.name, "no catalogue match");
-                    self.hover = None;
-                    self.send(ToOverlay::ClearHover);
-                    return Task::none();
-                };
-                tracing::info!(text = %hover.name, item = %item.id, confidence, "hovered item");
-                let norm = |[x, y, width, height]: [f32; 4]| arclens_ipc::NormRect {
-                    x,
-                    y,
-                    width,
-                    height,
-                };
-                let anchor = norm(hover.panel_normalized());
-                let avoid = hover
-                    .others
-                    .iter()
-                    .map(|&rect| norm(hover.normalize(rect)))
-                    .collect();
-                let load = self.icons.request(item);
-                let situation = hover.footer.map_or_else(Situation::default, |f| Situation {
-                    place: if f.in_raid {
-                        Place::Raid
-                    } else {
-                        Place::Workshop
-                    },
-                    sell_value: f.sell_value,
-                });
-                let side = match hover.item_side {
-                    arclens_vision::Side::Left => arclens_ipc::ItemSide::Left,
-                    arclens_vision::Side::Right => arclens_ipc::ItemSide::Right,
-                };
-                self.hover = Some((item.id.clone(), anchor, situation, side, avoid));
-                self.push_hover_to_overlay();
-                // The icon arrives later; `IconLoaded` resends the card.
-                if let Some(load) = load {
-                    return Task::perform(load, |(id, icon)| Message::IconLoaded(id, icon));
-                }
-            }
+            vision::Event::Hover(hover) => return self.on_hover(&hover),
             vision::Event::Monitor(monitor) => {
                 // Hover anchors are relative to the captured monitor, so the
                 // overlay must live there, not where the app was launched.
@@ -754,6 +722,8 @@ impl App {
             vision::Event::ActiveQuests(titles) => self.on_active_quests(&titles),
             vision::Event::MainMenu(shown) => self.on_main_menu(shown),
             vision::Event::MapPointer(at) => self.send(ToOverlay::Pointer { at }),
+            vision::Event::StashView(slots) => self.on_stash_view(slots),
+            vision::Event::StashScan(state) => self.on_stash_scan(state),
             vision::Event::Unavailable(reason) => {
                 tracing::info!(%reason, "item detection off");
                 self.status
@@ -1019,11 +989,113 @@ impl App {
         self.progress_changed();
     }
 
+    /// A tooltip was read in game: show our card for its item.
+    fn on_hover(&mut self, hover: &arclens_vision::Hover) -> Task<Message> {
+        let Load::Ready(catalog) = &self.catalog else {
+            return Task::none();
+        };
+        let Some((item, confidence)) = arclens_data::match_name(&hover.name, &catalog.items) else {
+            tracing::debug!(text = %hover.name, "no catalogue match");
+            self.hover = None;
+            self.send(ToOverlay::ClearHover);
+            return Task::none();
+        };
+        tracing::info!(text = %hover.name, item = %item.id, confidence, "hovered item");
+        let norm = |[x, y, width, height]: [f32; 4]| arclens_ipc::NormRect {
+            x,
+            y,
+            width,
+            height,
+        };
+        let anchor = norm(hover.panel_normalized());
+        let avoid = hover
+            .others
+            .iter()
+            .map(|&rect| norm(hover.normalize(rect)))
+            .collect();
+        let load = self.icons.request(item);
+        let situation = hover.footer.map_or_else(Situation::default, |f| Situation {
+            place: if f.in_raid {
+                Place::Raid
+            } else {
+                Place::Workshop
+            },
+            sell_value: f.sell_value,
+        });
+        let side = match hover.item_side {
+            arclens_vision::Side::Left => arclens_ipc::ItemSide::Left,
+            arclens_vision::Side::Right => arclens_ipc::ItemSide::Right,
+        };
+        self.hover = Some((item.id.clone(), anchor, situation, side, avoid));
+        self.push_hover_to_overlay();
+        // The icon arrives later; `IconLoaded` resends the card.
+        if let Some(load) = load {
+            return Task::perform(load, |(id, icon)| Message::IconLoaded(id, icon));
+        }
+        Task::none()
+    }
+
+    fn on_stash_scan(&mut self, state: crate::stash_worker::ScanState) {
+        if state.complete && self.stash_history.push(state.snapshot.clone()) {
+            self.stash_history.save(&self.paths.stash_history());
+            tracing::info!(
+                slots = state.snapshot.slots,
+                likely = state.snapshot.likely,
+                unknown = state.snapshot.unknown,
+                "stash scan saved"
+            );
+        }
+        self.stash_scan = Some(state);
+    }
+
+    fn on_stash_icons(&self, icons: Vec<(ItemId, std::path::PathBuf)>) {
+        if let Load::Ready(catalog) = &self.catalog {
+            tracing::info!(icons = icons.len(), "item images ready for the stash scan");
+            crate::stash_worker::set_context(crate::stash_worker::Context {
+                items: Arc::new(catalog.items.clone()),
+                icons,
+            });
+        }
+    }
+
+    fn on_stash_view(&mut self, slots: Vec<crate::stash_worker::VisibleSlot>) {
+        self.stash_view = slots;
+        self.push_stash_badges();
+    }
+
+    /// Verdict badges on the stash slots shown in game.
+    fn push_stash_badges(&self) {
+        let Load::Ready(catalog) = &self.catalog else {
+            return;
+        };
+        let badges = self
+            .stash_view
+            .iter()
+            .filter_map(|slot| {
+                let (id, certainty) = slot.item.as_ref()?;
+                let item = catalog.item(id)?;
+                let [x, y, width, height] = slot.rect;
+                Some(arclens_ipc::StashBadge {
+                    slot: arclens_ipc::NormRect {
+                        x,
+                        y,
+                        width,
+                        height,
+                    },
+                    verdict: self.advice(item, catalog, Situation::default()).verdict,
+                    likely: *certainty == crate::stash::Certainty::Likely,
+                })
+            })
+            .collect();
+        self.send(ToOverlay::ShowStashBadges { badges });
+    }
+
     fn progress_changed(&self) {
         crate::progress::save(&self.progress_path, self.progress.as_ref());
         // Verdicts depend on progress: refresh what the overlay shows.
         self.push_overlay_items(false);
         self.push_hover_to_overlay();
+        self.push_stash_badges();
     }
 
     fn advice(&self, item: &Item, catalog: &Catalog, situation: Situation) -> arclens_core::Advice {
@@ -1704,8 +1776,14 @@ impl App {
         self.push_map_panel();
         self.push_overlay_items(false);
         self.push_menu_card();
+        // Every item image, once, so stash slots can be recognised.
+        let images = self.icons.fetch_all(catalog_items(&self.catalog));
         // The catalogue carries fallback event icons.
-        Task::batch([self.refresh_results(), self.request_event_icons()])
+        Task::batch([
+            self.refresh_results(),
+            self.request_event_icons(),
+            Task::perform(images, Message::StashIcons),
+        ])
     }
 
     /// Switches the interface language, then reloads game data in it.
@@ -2424,4 +2502,12 @@ fn now_ms() -> i64 {
 
 fn centered<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     container(content).center(Length::Fill).padding(24).into()
+}
+
+/// The catalogue's items (none while it loads).
+fn catalog_items(catalog: &Load<Arc<Catalog>>) -> Vec<Item> {
+    match catalog {
+        Load::Ready(catalog) => catalog.items.clone(),
+        _ => Vec::new(),
+    }
 }

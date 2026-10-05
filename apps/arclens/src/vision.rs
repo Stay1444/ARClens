@@ -370,6 +370,10 @@ pub enum Event {
     /// Where the pointer is over the open map, normalised to the screen
     /// (`None`: unknown). Sent when it moves.
     MapPointer(Option<(f32, f32)>),
+    /// The stash's visible slots and what they hold (empty: hide badges).
+    StashView(Vec<crate::stash_worker::VisibleSlot>),
+    /// The stash scan so far.
+    StashScan(crate::stash_worker::ScanState),
     /// Vision isn't running; why.
     Unavailable(String),
 }
@@ -471,6 +475,7 @@ fn run(output: mpsc::Sender<Event>) {
     let mut map_view = MapView::default();
     let mut station = StationWatch::default();
     let mut menu = MenuWatch::default();
+    let mut stash = StashWatch::spawn(model.as_ref().ok(), &paths, &out);
     let labels = model.ok().and_then(|model| LabelWorker::spawn(&model));
     while let Some(frame) = source.next_frame() {
         // Capture turned off (the UI dropped the subscription): stop, which
@@ -513,10 +518,11 @@ fn run(output: mpsc::Sender<Event>) {
                 None
             }
         };
-        let game_screen = arclens_vision::classify(&frame) != arclens_vision::Screen::Unknown;
+        let screen = arclens_vision::classify(&frame);
+        let stash_open = stash.check(&frame, screen, hover.as_ref());
         source.set_interval(pace.next(
-            hover.is_some() || last.is_some(),
-            game_screen || hover.is_some(),
+            hover.is_some() || last.is_some() || stash_open,
+            screen != arclens_vision::Screen::Unknown || hover.is_some(),
             Instant::now(),
         ));
 
@@ -531,6 +537,84 @@ fn run(output: mpsc::Sender<Event>) {
         if !out.send(event) {
             return; // UI gone or hopelessly behind.
         }
+    }
+}
+
+/// How long the stash grid must be gone before it counts as closed.
+const STASH_CLOSE_GRACE: Duration = Duration::from_millis(1500);
+
+/// Feeds the stash worker still frames of the stash grid.
+#[derive(Default)]
+struct StashWatch {
+    worker: Option<crate::stash_worker::Worker>,
+    /// Slot rows' tops in the previous frame.
+    rows: Vec<u32>,
+    /// The worker was told the grid moves (badges hidden).
+    moving: bool,
+    /// When the grid was last seen; `None` when closed.
+    seen: Option<Instant>,
+}
+
+impl StashWatch {
+    /// Starts the worker (none without an OCR model).
+    fn spawn(model: Option<&PathBuf>, paths: &Paths, out: &Outbox) -> Self {
+        Self {
+            worker: model.and_then(|model| {
+                crate::stash_worker::Worker::spawn(model, paths.stash_exemplars(), out.0.clone())
+            }),
+            ..Self::default()
+        }
+    }
+
+    /// Hands the worker this frame if it shows the stash grid holding
+    /// still. `true` while the stash is open.
+    fn check(
+        &mut self,
+        frame: &RgbImage,
+        screen: arclens_vision::Screen,
+        hover: Option<&Hover>,
+    ) -> bool {
+        use crate::stash_worker::Job;
+        let Some(worker) = &self.worker else {
+            return false;
+        };
+        let slots = if screen == arclens_vision::Screen::Inventory {
+            arclens_vision::stash_slots(frame)
+        } else {
+            Vec::new()
+        };
+        if slots.is_empty() {
+            if self
+                .seen
+                .is_some_and(|at| at.elapsed() >= STASH_CLOSE_GRACE)
+                && worker.offer(Job::Closed)
+            {
+                *self = Self::default();
+            }
+            return self.seen.is_some();
+        }
+        self.seen = Some(Instant::now());
+        let rows: Vec<u32> = slots
+            .iter()
+            .step_by(crate::stash::COLUMNS)
+            .map(|s| s.y)
+            .collect();
+        let still = rows == self.rows;
+        self.rows = rows;
+        if !still {
+            if !self.moving && worker.offer(Job::Moving) {
+                self.moving = true;
+            }
+            return true;
+        }
+        let tooltip = hover.map(|h| (h.name.clone(), h.panel));
+        if worker.offer(Job::Frame {
+            frame: frame.clone(),
+            tooltip,
+        }) {
+            self.moving = false;
+        }
+        true
     }
 }
 

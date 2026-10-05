@@ -22,6 +22,13 @@ pub fn view(state: &Overlay) -> Element<'_, Message> {
                 .height(Length::Fill),
         );
     }
+    if !state.stash_badges.is_empty() {
+        layers = layers.push(
+            Canvas::new(StashLayer { state })
+                .width(Length::Fill)
+                .height(Length::Fill),
+        );
+    }
     if let Some(panel) = panel {
         layers = layers.push(panel);
     }
@@ -176,6 +183,57 @@ pub fn place(
         .or_else(|| sides.iter().copied().find(|&x| fits(x)))
         .unwrap_or(at_left.max(0.0));
     Point::new(x, y)
+}
+
+/// Verdict tags in the stash slots' top-left corners.
+struct StashLayer<'a> {
+    state: &'a Overlay,
+}
+
+/// Tag text size and padding, layout pixels.
+const STASH_TAG_TEXT: f32 = 11.0;
+const STASH_TAG_PAD: f32 = 3.0;
+
+impl canvas::Program<Message> for StashLayer<'_> {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &(),
+        renderer: &Renderer,
+        _theme: &Theme,
+        bounds: Rectangle,
+        _cursor: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        let mut frame = Frame::new(renderer, bounds.size());
+        for badge in &self.state.stash_badges {
+            let colour = arclens_ui::palette::verdict(badge.verdict);
+            let mut label = arclens_ui::palette::verdict_label(badge.verdict);
+            if badge.likely {
+                label.push('?');
+            }
+            let at = Point::new(
+                badge.slot.x * bounds.width + 4.0,
+                badge.slot.y * bounds.height + 4.0,
+            );
+            // Roughly the text's width: the tag font is condensed caps.
+            #[allow(clippy::cast_precision_loss, reason = "a short label")]
+            let width = label.chars().count() as f32 * STASH_TAG_TEXT * 0.62 + 2.0 * STASH_TAG_PAD;
+            let height = STASH_TAG_TEXT + 2.0 * STASH_TAG_PAD;
+            let tag = Path::rounded_rectangle(at, iced::Size::new(width, height), 3.0.into());
+            let alpha = if badge.likely { 0.78 } else { 0.95 };
+            frame.fill(&tag, arclens_ui::palette::with_alpha(colour, alpha));
+            frame.fill_text(canvas::Text {
+                content: label,
+                position: Point::new(at.x + STASH_TAG_PAD, at.y + STASH_TAG_PAD - 1.0),
+                color: Color::from_rgb8(0x10, 0x12, 0x16),
+                size: STASH_TAG_TEXT.into(),
+                font: arclens_ui::theme::DISPLAY,
+                ..canvas::Text::default()
+            });
+        }
+        vec![frame.into_geometry()]
+    }
 }
 
 struct MarkerLayer<'a> {

@@ -128,6 +128,8 @@ pub struct Overlay {
     search: search::SearchState,
     /// The main-menu card, while the game shows its main menu.
     menu_card: Option<arclens_ipc::MenuCard>,
+    /// Verdict tags on the stash slots the game shows.
+    stash_badges: Vec<arclens_ipc::StashBadge>,
     /// Its condition icons, decoded once.
     menu_icons: menu_card::Icons,
     /// Wall clock (Unix ms) for the card's countdowns.
@@ -159,6 +161,7 @@ impl Overlay {
             || !self.details.is_empty()
             || self.panel.panel.is_some()
             || self.menu_card.is_some()
+            || !self.stash_badges.is_empty()
             || ((!self.markers.is_empty() || !self.areas.is_empty()) && self.transform.is_some())
     }
 
@@ -454,6 +457,7 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
         }
         ToOverlay::HideMenuCard => state.menu_card = None,
         ToOverlay::SearchResults { query, hits } => state.search.results(&query, hits),
+        ToOverlay::ShowStashBadges { badges } => state.stash_badges = badges,
         ToOverlay::HideMapPanel => {
             state.pointer = None;
             state.panel.panel = None;

@@ -309,3 +309,16 @@ fn reads_the_slot_count() {
         assert_eq!(count, Some((75, 280)), "{name}");
     }
 }
+
+#[test]
+fn the_scrollbar_moves_down_with_the_grid() {
+    use arclens_vision::stash_scroll;
+    // scroll_0 is the top of the stash; the others are further down, in
+    // recording order.
+    let tops: Vec<f32> = (0..5)
+        .map(|i| stash_scroll(&frame(&format!("scroll_{i}.jpg"))).expect("scrollbar"))
+        .collect();
+    assert!((tops[0] - 362.0).abs() <= 2.0, "{tops:?}");
+    assert!(tops.windows(2).all(|w| w[1] >= w[0]), "{tops:?}");
+    assert!(tops[4] > tops[0] + 100.0, "{tops:?}");
+}

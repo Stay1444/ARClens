@@ -93,6 +93,31 @@ fn rows(frame: &RgbImage, x: u32, s: f32) -> Vec<(u32, u32)> {
     runs
 }
 
+/// The stash's scrollbar: a 7-px light bar at x ≈ 778–784 (1440p), the
+/// thumb ≥ 80 bright, between the grid's top and bottom.
+const SCROLLBAR_X: [f32; 2] = [778.0, 785.0];
+const SCROLL_THUMB_MIN: u8 = 80;
+
+/// Where the scrollbar's thumb starts (pixels from the frame top): grows
+/// as the grid scrolls down. `None` without a scrollbar.
+pub fn stash_scroll(frame: &RgbImage) -> Option<f32> {
+    let (s, offset) = scale(frame);
+    let x0 = (offset.max(0.0) + SCROLLBAR_X[0] * s) as u32;
+    let x1 = ((offset.max(0.0) + SCROLLBAR_X[1] * s) as u32).min(frame.width());
+    let top = ((GRID_TOP + 40.0) * s) as u32;
+    let bottom = ((GRID_BOTTOM + 20.0) * s) as u32;
+    (top..bottom.min(frame.height()))
+        .find(|&y| {
+            let lit = (x0..x1)
+                .filter(|&x| {
+                    frame.get_pixel(x, y).0.iter().max().copied().unwrap_or(0) >= SCROLL_THUMB_MIN
+                })
+                .count() as u32;
+            lit * 2 >= (x1 - x0).max(1)
+        })
+        .map(|y| y as f32)
+}
+
 /// The "75/280" under the STASH title: slots used and capacity. Measured
 /// at x 233–305, y 232–255 (1440p).
 const COUNT_BOX: [f32; 4] = [228.0, 228.0, 84.0, 32.0];
@@ -155,6 +180,10 @@ pub const THUMB_SIDE: u32 = 24;
 
 /// Thumbs closer than this ([`thumb_distance`]) show the same thing.
 pub const SAME_SLOT: f32 = 2.0;
+
+/// Looser: the same slot at another scroll position (JPEG noise and
+/// sub-pixel shifts reach ~3.3 in a recording; other rows are ≥ 17).
+pub const SAME_ROW_SLOT: f32 = 6.0;
 
 pub fn slot_thumb(frame: &RgbImage, slot: Rect) -> SlotThumb {
     let inset = (slot.width / 30).max(1);

@@ -17,6 +17,8 @@ mod paths;
 mod platform;
 mod presets;
 mod progress;
+mod stash;
+mod stash_worker;
 mod store;
 mod views;
 mod vision;

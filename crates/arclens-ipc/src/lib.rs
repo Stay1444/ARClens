@@ -18,7 +18,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 mod transport;
 pub use transport::{Endpoint, Listener};
 
-pub const PROTOCOL_VERSION: u32 = 16;
+pub const PROTOCOL_VERSION: u32 = 17;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hello {
@@ -129,6 +129,11 @@ pub enum ToOverlay {
     SearchResults {
         query: String,
         hits: Vec<SearchHit>,
+    },
+    /// Verdict tags on the stash slots the game shows (empty: none). Sent
+    /// when the grid stops scrolling; cleared while it moves.
+    ShowStashBadges {
+        badges: Vec<StashBadge>,
     },
 }
 
@@ -359,6 +364,16 @@ pub enum ItemSide {
     #[default]
     Left,
     Right,
+}
+
+/// One stash slot's verdict tag.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StashBadge {
+    /// The slot, normalised to the screen.
+    pub slot: NormRect,
+    pub verdict: arclens_core::Verdict,
+    /// Recognised from its icon only (not from a tooltip): may be wrong.
+    pub likely: bool,
 }
 
 /// A rectangle normalised to the screen: `0..=1` on both axes, origin

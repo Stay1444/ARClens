@@ -72,6 +72,16 @@ impl Paths {
         self.cache.join("map-data").join(format!("{map}.json"))
     }
 
+    /// Pictures of stash slots the player hovered, by item.
+    pub fn stash_exemplars(&self) -> PathBuf {
+        self.state.join("stash-exemplars.json")
+    }
+
+    /// Finished stash scans.
+    pub fn stash_history(&self) -> PathBuf {
+        self.state.join("stash-history.json")
+    }
+
     pub fn raidtheory_dir(&self) -> PathBuf {
         self.cache.join("raidtheory")
     }
