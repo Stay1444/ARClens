@@ -54,6 +54,11 @@ first, with Windows support too.
   LEARN. A "?" means it was matched from the icon alone; hover the item
   once and ARClens knows that slot for sure from then on.
   ![Verdict tags on the stash](docs/assets/overlay-stash-badges.jpg)
+  A bar above the stash counts the slots seen ("28 / 75") and turns green
+  once the whole stash has been read and the scan saved. Scan from the
+  first filter tab (all items): other tabs still get tags, but the bar
+  asks for the first tab and the scan waits until you're back on it.
+  ![Scan progress above the stash](docs/assets/overlay-stash-progress.jpg)
 
 ### In the companion app
 
@@ -102,8 +107,9 @@ first, with Windows support too.
 - **LEARN** for a blueprint you haven't learned yet.
 - **SELL** otherwise, with a hint when its parts would help.
 
-ARClens can't see your stash, so it can't count how many of something you
-already have.
+Advice doesn't count what you already have: an item stays KEEP while an
+upgrade still needs it, even if your stash holds enough. Progress → Stash
+compares your last stash scan with what's still needed.
 
 ## Install
 
