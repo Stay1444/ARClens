@@ -54,8 +54,28 @@ Accuracy is not measured: there is no ground truth for most slots yet.
 - The stash header already shows the stash's total value (`183,678`), so
   the audit's value is the per-item advice, not the total.
 
+## Ground truth and the Rust matcher (verified, same day)
+
+- **Ground truth:** a second recording hovering each slot. The tooltip
+  names (read by our OCR) were paired with the same slots in the scroll
+  recording, so the labelled crops have **no cursor in them** (the hover
+  frames show KDE's or the game's pointer over the slot, which must not
+  be learned). 42 slots, 5 frames: `crates/arclens-vision/tests/fixtures/stash/`.
+- **Rust port** (`arclens_vision::{stash_slots, slot_features, IconIndex}`):
+  on those 42 slots the right item *family* (tiers and blueprints share
+  an image) comes first **88 %** of the time, in the top three **95 %**.
+  Misses: augment marks (Combat Mk. 2 vs Looting Mk. 1, Looting Mk. 2 vs
+  Mk. 3), Heavy Shield vs "ruined riot shield", Hornet Driver vs its
+  damaged variant.
+- **Tier numerals** (`slot_tier`) read by counting stems, with a shape
+  test for the V of "IV": all 9 tiered slots right, no OCR.
+- **Stack sizes** (`read_badge`) by OCR of the slot's corner; OCR drops a
+  lone "1" after the "×" and sometimes reads "×" as "?", both handled.
+- The grid's rows come from the first column's outline (tooltips open to
+  the right, so it's never covered); the gap between rows can be as
+  bright as ~50, so outlines need ≥ 55.
+
 ## Next
 
-Ground truth (a full scroll of a known stash), then a matcher in Rust in
-`arclens-vision` with fixture tests, combining the icon score with the
-numeral and the category glyph.
+In the app: learn exact slot images from hovered tooltips (after the
+cursor has left the slot), merge rows across scrolling, and save scans.
