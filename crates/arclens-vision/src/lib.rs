@@ -53,7 +53,8 @@ pub use screens::{Screen, classify, is_inventory, is_main_menu, map_from_title};
 pub use stash::{
     SAME_ROW_SLOT, SAME_SLOT, SlotBadge, SlotThumb, THUMB_SIDE, badge_box, hovered_slot,
     parse_count, parse_quantity, read_badge, read_stash_count, slot_is_empty, slot_thumb,
-    slot_tier, stash_count_box, stash_scroll, stash_slots, thumb_distance,
+    slot_tier, stash_count_box, stash_filter, stash_panel, stash_scroll, stash_slots,
+    thumb_distance,
 };
 pub use text::{name_line, name_lines};
 pub use workshop::{StationLevel, parse_station_header, read_station_header, station_header_box};

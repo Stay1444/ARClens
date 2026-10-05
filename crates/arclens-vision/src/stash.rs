@@ -118,6 +118,78 @@ pub fn stash_scroll(frame: &RgbImage) -> Option<f32> {
         .map(|y| y as f32)
 }
 
+/// The STASH panel's box (title, count, tabs and grid), 1440p.
+const PANEL: [f32; 4] = [64.0, 148.0, 756.0, 1142.0];
+
+/// The STASH panel on the INVENTORY tab, for placing things beside it.
+pub fn stash_panel(frame: &RgbImage) -> Rect {
+    let (s, offset) = scale(frame);
+    let [left, top, width, height] = PANEL;
+    Rect::new(
+        (offset.max(0.0) + left * s) as u32,
+        (top * s) as u32,
+        (width * s) as u32,
+        (height * s) as u32,
+    )
+}
+
+/// The filter tabs left of the grid (all, augments, shields, …): discs
+/// centred at x = 133, y = 393 + 67·i (1440p). The selected tab is a white
+/// disc (rim ≥ 240 measured), the others dark grey (≈ 65). Measured on the
+/// 2026-10-05 screenshots (`tests/fixtures/stash/filter_*.jpg`).
+const FILTER_TAB_X: f32 = 133.0;
+const FILTER_TAB_TOP: f32 = 393.0;
+const FILTER_TAB_PITCH: f32 = 67.0;
+const FILTER_TABS: usize = 10;
+/// Sampled on this circle: inside the disc, outside its glyph.
+const FILTER_RIM_RADIUS: f32 = 24.5;
+const FILTER_SELECTED_MIN: f32 = 180.0;
+const FILTER_IDLE_MAX: f32 = 120.0;
+
+/// Which filter tab the stash shows: `Some(0)` for "all", `None` when no
+/// single tab reads as selected (no stash, or something covers the tabs).
+pub fn stash_filter(frame: &RgbImage) -> Option<usize> {
+    let (s, offset) = scale(frame);
+    if offset < 0.0 {
+        return None;
+    }
+    let rim = |i: usize| {
+        let (cx, cy) = (
+            offset + FILTER_TAB_X * s,
+            (FILTER_TAB_TOP + FILTER_TAB_PITCH * i as f32) * s,
+        );
+        let samples = 32;
+        let sum: f32 = (0..samples)
+            .filter_map(|k| {
+                let a = k as f32 * std::f32::consts::TAU / samples as f32;
+                let (x, y) = (
+                    (cx + a.cos() * FILTER_RIM_RADIUS * s).round(),
+                    (cy + a.sin() * FILTER_RIM_RADIUS * s).round(),
+                );
+                (x >= 0.0 && y >= 0.0 && (x as u32) < frame.width() && (y as u32) < frame.height())
+                    .then(|| {
+                        f32::from(
+                            *frame
+                                .get_pixel(x as u32, y as u32)
+                                .0
+                                .iter()
+                                .max()
+                                .unwrap_or(&0),
+                        )
+                    })
+            })
+            .sum();
+        sum / samples as f32
+    };
+    let rims: Vec<f32> = (0..FILTER_TABS).map(rim).collect();
+    let tab = rims.iter().position(|&r| r >= FILTER_SELECTED_MIN)?;
+    let others_idle = rims
+        .iter()
+        .enumerate()
+        .all(|(i, &r)| i == tab || r <= FILTER_IDLE_MAX);
+    others_idle.then_some(tab)
+}
+
 /// The "75/280" under the STASH title: slots used and capacity. Measured
 /// at x 233–305, y 232–255 (1440p).
 const COUNT_BOX: [f32; 4] = [228.0, 228.0, 84.0, 32.0];

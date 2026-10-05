@@ -20,7 +20,8 @@
 )]
 
 use arclens_vision::{
-    IconIndex, NameReader, Rect, SlotBadge, read_badge, slot_features, slot_tier, stash_slots,
+    IconIndex, NameReader, Rect, SlotBadge, read_badge, slot_features, slot_tier, stash_filter,
+    stash_slots,
 };
 use image::RgbImage;
 use std::collections::HashMap;
@@ -77,6 +78,35 @@ fn finds_every_labelled_slot() {
         // Five to seven full rows of four are visible.
         assert!((20..=28).contains(&slots.len()), "{} slots", slots.len());
         assert!(slots.iter().all(|s| (115..=130).contains(&s.height)));
+    }
+}
+
+#[test]
+fn reads_the_selected_filter_tab() {
+    // Screenshots at 2000×1125: the tabs scale with the frame.
+    assert_eq!(stash_filter(&frame("filter_all.jpg")), Some(0));
+    assert_eq!(stash_filter(&frame("filter_augments.jpg")), Some(1));
+    assert_eq!(stash_filter(&frame("filter_shields.jpg")), Some(2));
+    assert_eq!(stash_filter(&frame("scroll_0.jpg")), Some(0));
+    let frames = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/frames");
+    for name in ["raid_none_1", "trader_none", "workshop_overview"] {
+        let f = image::open(frames.join(format!("{name}.jpg")))
+            .unwrap()
+            .into_rgb8();
+        assert_eq!(stash_filter(&f), None, "{name}");
+    }
+}
+
+#[test]
+fn filtered_tabs_still_show_the_grid() {
+    for name in [
+        "filter_all.jpg",
+        "filter_augments.jpg",
+        "filter_shields.jpg",
+    ] {
+        let slots = stash_slots(&frame(name));
+        assert_eq!(slots.len() % 4, 0, "{name}");
+        assert!(slots.len() >= 20, "{name}: {}", slots.len());
     }
 }
 
