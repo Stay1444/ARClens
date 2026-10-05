@@ -59,7 +59,13 @@ With game capture on and the overlay running:
    scan with the stash's slot count once the last row has been seen.
 3. Hover a slot tagged with "?" so its tooltip shows, then move to another
    slot: the "?" goes away. Close and reopen the stash: still no "?" on it.
-4. Report slots whose tag is for the wrong item (a screenshot with the
+4. Above the stash, a bar says "Scroll down to scan your stash" with a
+   count ("28 / 75") that grows as you scroll; at the end it turns green
+   ("Stash scanned").
+5. Pick another filter tab (augments, shields…): the bar asks for the
+   first tab and stops counting; the shown slots still get tags. Back on
+   the first tab, the count carries on where it was.
+6. Report slots whose tag is for the wrong item (a screenshot with the
    tooltip shown helps).
 
 ## 6. Screenshots for fixtures

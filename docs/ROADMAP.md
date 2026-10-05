@@ -400,6 +400,9 @@ recycle or keep. Feasibility notes:
       stored once the cursor has left it and matches exactly afterwards.
 - [x] Verdict tags on the visible slots in the overlay ("?" for icon-only).
 - [x] Progress → Stash: latest scan, have vs need, scan history.
+- [x] Filter tabs (2026-10-05): only the "all" tab feeds the scan; other
+      tabs still get tags. A bar above the stash shows the scan's progress
+      ("scroll down", "pick the first tab", "stash scanned").
 - [ ] Check in game: tags line up, scans complete, learning sticks
       (`docs/manual-tests.md`).
 - [ ] Other resolutions and aspect ratios (layout measured at 2560×1440).

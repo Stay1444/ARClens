@@ -13,7 +13,7 @@ use crate::vision::Event;
 use arclens_core::{Item, ItemId};
 use arclens_vision::{
     NameReader, Rect, hovered_slot, read_badge, read_stash_count, slot_features, slot_is_empty,
-    slot_thumb, stash_slots,
+    slot_thumb, stash_filter, stash_panel, stash_slots,
 };
 use futures::channel::mpsc;
 use image::RgbImage;
@@ -55,6 +55,15 @@ pub struct VisibleSlot {
     pub rect: [f32; 4],
     pub item: Option<(ItemId, Certainty)>,
     pub quantity: u32,
+}
+
+/// The stash as shown: which tab, and where its panel is.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StashShown {
+    /// A filter tab other than "all" is selected: the scan waits.
+    pub filtered: bool,
+    /// The STASH panel, normalised to the frame.
+    pub panel: [f32; 4],
 }
 
 /// The scan so far.
@@ -134,6 +143,19 @@ struct State {
     to_learn: Vec<(usize, usize, ItemId)>,
     last_sent: Option<Snapshot>,
     badges_shown: bool,
+    /// Last reported tab and panel.
+    shown: Option<StashShown>,
+    /// The slots of a filtered tab, read for its badges (the scan only
+    /// takes the "all" tab).
+    filtered: Option<FilteredView>,
+}
+
+/// A filtered tab's visible slots, identified on their own.
+struct FilteredView {
+    tab: Option<usize>,
+    /// Row tops when read.
+    tops: Vec<u32>,
+    slots: Vec<Slot>,
 }
 
 /// Frames that fit nowhere before the scan starts over.
@@ -153,6 +175,8 @@ impl State {
             to_learn: Vec::new(),
             last_sent: None,
             badges_shown: false,
+            shown: None,
+            filtered: None,
         }
     }
 
@@ -160,13 +184,18 @@ impl State {
     fn handle(&mut self, job: Job) -> bool {
         match job {
             Job::Frame { frame, tooltip } => self.on_frame(&frame, tooltip),
-            Job::Moving => self.hide_badges(),
+            Job::Moving => {
+                self.filtered = None;
+                self.hide_badges()
+            }
             Job::Closed => {
                 self.scan = Scan::default();
                 self.to_learn.clear();
                 self.misfits = 0;
                 self.last_sent = None;
-                self.hide_badges()
+                self.filtered = None;
+                self.shown = None;
+                self.hide_badges() && self.send(Event::StashClosed)
             }
         }
     }
@@ -192,6 +221,15 @@ impl State {
         if slots.is_empty() {
             return true;
         }
+        let tab = stash_filter(frame);
+        if !self.report_shown(frame, tab) {
+            return false;
+        }
+        // Only the "all" tab holds the whole stash; others get badges only.
+        if tab != Some(0) {
+            return self.on_filtered(frame, &slots, tab, tooltip.as_ref(), &context);
+        }
+        self.filtered = None;
         let rows: Vec<&[Rect]> = slots.chunks(crate::stash::COLUMNS).collect();
         let top = slots[0].y as f32;
         let pitch = rows
@@ -247,6 +285,82 @@ impl State {
             return false;
         }
         self.send_scan()
+    }
+
+    /// Tells the app which tab shows and where the panel is, on change.
+    fn report_shown(&mut self, frame: &RgbImage, tab: Option<usize>) -> bool {
+        let panel = stash_panel(frame);
+        let (w, h) = (frame.width() as f32, frame.height() as f32);
+        let shown = StashShown {
+            filtered: tab != Some(0),
+            panel: [
+                panel.x as f32 / w,
+                panel.y as f32 / h,
+                panel.width as f32 / w,
+                panel.height as f32 / h,
+            ],
+        };
+        if self.shown == Some(shown) {
+            return true;
+        }
+        self.shown = Some(shown);
+        self.send(Event::StashShown(shown))
+    }
+
+    /// A filtered tab: identify its visible slots for badges, leaving the
+    /// scan alone (it continues when the "all" tab is back).
+    fn on_filtered(
+        &mut self,
+        frame: &RgbImage,
+        slots: &[Rect],
+        tab: Option<usize>,
+        tooltip: Option<&(String, Rect)>,
+        context: &Context,
+    ) -> bool {
+        let tops: Vec<u32> = slots
+            .iter()
+            .step_by(crate::stash::COLUMNS)
+            .map(|s| s.y)
+            .collect();
+        let fresh = self
+            .filtered
+            .as_ref()
+            .is_some_and(|f| f.tab == tab && f.tops == tops && f.slots.len() == slots.len());
+        // A tooltip covers slots: read them once it's gone.
+        if !fresh && tooltip.is_none() {
+            let (reader, exemplars, identifier) = (&self.reader, &self.exemplars, &self.identifier);
+            self.filtered = Some(FilteredView {
+                tab,
+                tops,
+                slots: slots
+                    .iter()
+                    .map(|slot| {
+                        Slot::from_read(read_slot(reader, frame, *slot), exemplars, identifier)
+                    })
+                    .collect(),
+            });
+        }
+        let panel = tooltip.map(|(_, panel)| *panel);
+        let Some(view) = self
+            .filtered
+            .as_mut()
+            .filter(|_| fresh || tooltip.is_none())
+        else {
+            return self.hide_badges();
+        };
+        if let Some((name, panel)) = tooltip
+            && let Some(hovered) = hovered_slot(frame, slots, Some(*panel))
+            && let Some(index) = slots.iter().position(|s| *s == hovered)
+            && let Some((item, _)) = arclens_data::match_name(name, &context.items)
+            && let Some(slot) = view.slots.get_mut(index)
+            && !slot.empty
+        {
+            slot.item = Some((item.id.clone(), Certainty::Sure));
+        }
+        let shown: Vec<Option<&Slot>> = view.slots.iter().map(Some).collect();
+        let view = visible_slots(frame, slots, panel, |i| shown[i]);
+        self.badges_shown = !view.is_empty();
+        self.send(Event::StashView(view))
     }
 
     /// Builds (or rebuilds, when more images arrived) the icon index.
@@ -356,33 +470,11 @@ impl State {
         let Some(first) = self.scan.view_first(top) else {
             return self.hide_badges();
         };
-        let (w, h) = (frame.width() as f32, frame.height() as f32);
-        let covered = |s: &Rect| {
-            panel.is_some_and(|p| {
-                s.right() > p.x && s.x < p.right() && s.bottom() > p.y && s.y < p.bottom()
-            })
-        };
-        let view: Vec<VisibleSlot> = slots
-            .iter()
-            .enumerate()
-            .filter(|(_, s)| !covered(s))
-            .filter_map(|(i, s)| {
-                let slot = self
-                    .scan
-                    .row(first + i / crate::stash::COLUMNS)?
-                    .get(i % crate::stash::COLUMNS)?;
-                (!slot.empty).then(|| VisibleSlot {
-                    rect: [
-                        s.x as f32 / w,
-                        s.y as f32 / h,
-                        s.width as f32 / w,
-                        s.height as f32 / h,
-                    ],
-                    item: slot.item.clone(),
-                    quantity: slot.quantity,
-                })
-            })
-            .collect();
+        let scan = &self.scan;
+        let view = visible_slots(frame, slots, panel, |i| {
+            scan.row(first + i / crate::stash::COLUMNS)?
+                .get(i % crate::stash::COLUMNS)
+        });
         self.badges_shown = !view.is_empty();
         self.send(Event::StashView(view))
     }
@@ -405,6 +497,40 @@ impl State {
         };
         self.send(Event::StashScan(state))
     }
+}
+
+/// Badges for the visible `slots` (none under the tooltip `panel`), with
+/// what `slot_at(i)` says the i-th one holds.
+fn visible_slots<'a>(
+    frame: &RgbImage,
+    slots: &[Rect],
+    panel: Option<Rect>,
+    slot_at: impl Fn(usize) -> Option<&'a Slot>,
+) -> Vec<VisibleSlot> {
+    let (w, h) = (frame.width() as f32, frame.height() as f32);
+    let covered = |s: &Rect| {
+        panel.is_some_and(|p| {
+            s.right() > p.x && s.x < p.right() && s.bottom() > p.y && s.y < p.bottom()
+        })
+    };
+    slots
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| !covered(s))
+        .filter_map(|(i, s)| {
+            let slot = slot_at(i)?;
+            (!slot.empty).then(|| VisibleSlot {
+                rect: [
+                    s.x as f32 / w,
+                    s.y as f32 / h,
+                    s.width as f32 / w,
+                    s.height as f32 / h,
+                ],
+                item: slot.item.clone(),
+                quantity: slot.quantity,
+            })
+        })
+        .collect()
 }
 
 /// Reads one slot: its picture, icon features and corner badge.

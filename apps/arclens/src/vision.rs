@@ -374,6 +374,10 @@ pub enum Event {
     StashView(Vec<crate::stash_worker::VisibleSlot>),
     /// The stash scan so far.
     StashScan(crate::stash_worker::ScanState),
+    /// The stash is open: which tab, and where.
+    StashShown(crate::stash_worker::StashShown),
+    /// The stash closed.
+    StashClosed,
     /// Vision isn't running; why.
     Unavailable(String),
 }

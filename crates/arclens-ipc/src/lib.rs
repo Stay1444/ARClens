@@ -18,7 +18,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 mod transport;
 pub use transport::{Endpoint, Listener};
 
-pub const PROTOCOL_VERSION: u32 = 17;
+pub const PROTOCOL_VERSION: u32 = 18;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hello {
@@ -134,6 +134,11 @@ pub enum ToOverlay {
     /// when the grid stops scrolling; cleared while it moves.
     ShowStashBadges {
         badges: Vec<StashBadge>,
+    },
+    /// How far the stash scan got, shown above the stash while it is open
+    /// (`None`: the stash closed).
+    ShowStashProgress {
+        progress: Option<StashProgress>,
     },
 }
 
@@ -374,6 +379,21 @@ pub struct StashBadge {
     pub verdict: arclens_core::Verdict,
     /// Recognised from its icon only (not from a tooltip): may be wrong.
     pub likely: bool,
+}
+
+/// The stash scan's progress, for the bar above the stash.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct StashProgress {
+    /// The game's STASH panel; the bar sits just above it.
+    pub panel: NormRect,
+    /// A filter tab is selected: the scan needs the "all" tab.
+    pub filtered: bool,
+    /// Used slots seen so far.
+    pub seen: u32,
+    /// Used slots in the stash, once read from its header.
+    pub total: Option<u32>,
+    /// Every used slot was seen; the scan is saved.
+    pub complete: bool,
 }
 
 /// A rectangle normalised to the screen: `0..=1` on both axes, origin

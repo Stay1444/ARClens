@@ -29,6 +29,13 @@ pub fn view(state: &Overlay) -> Element<'_, Message> {
                 .height(Length::Fill),
         );
     }
+    if state.stash_progress.is_some() {
+        layers = layers.push(
+            Canvas::new(StashProgressLayer { state })
+                .width(Length::Fill)
+                .height(Length::Fill),
+        );
+    }
     if let Some(panel) = panel {
         layers = layers.push(panel);
     }
@@ -233,6 +240,177 @@ impl canvas::Program<Message> for StashLayer<'_> {
             });
         }
         vec![frame.into_geometry()]
+    }
+}
+
+/// The stash scan's progress: a bar just above the game's STASH panel.
+struct StashProgressLayer<'a> {
+    state: &'a Overlay,
+}
+
+/// Redraws while the scroll hint animates.
+pub const STASH_HINT_TICK: std::time::Duration = std::time::Duration::from_millis(50);
+/// One bounce of the scroll hint's chevrons.
+const STASH_HINT_PERIOD_MS: i64 = 1_200;
+const STASH_BAR_HEIGHT: f32 = 46.0;
+const STASH_BAR_GAP: f32 = 10.0;
+/// The game's highlight blue.
+const STASH_SCANNING: Color = Color::from_rgb(0.36, 0.78, 0.90);
+
+impl canvas::Program<Message> for StashProgressLayer<'_> {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &(),
+        renderer: &Renderer,
+        _theme: &Theme,
+        bounds: Rectangle,
+        _cursor: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        use iced::widget::canvas::Stroke;
+        let Some(progress) = self.state.stash_progress else {
+            return Vec::new();
+        };
+        let mut frame = Frame::new(renderer, bounds.size());
+        let panel = progress.panel;
+        let (x, width) = (panel.x * bounds.width, panel.width * bounds.width);
+        let y = (panel.y * bounds.height - STASH_BAR_GAP - STASH_BAR_HEIGHT).max(4.0);
+        let size = iced::Size::new(width, STASH_BAR_HEIGHT);
+        let card = Path::rounded_rectangle(Point::new(x, y), size, 6.0.into());
+        frame.fill(&card, arclens_ui::palette::SURFACE);
+        frame.stroke(
+            &card,
+            Stroke::default()
+                .with_color(arclens_ui::palette::BORDER)
+                .with_width(1.0),
+        );
+
+        let accent = if progress.complete {
+            arclens_ui::palette::verdict(arclens_core::Verdict::Keep)
+        } else if progress.filtered {
+            arclens_ui::palette::COIN
+        } else {
+            STASH_SCANNING
+        };
+        let icon = Point::new(x + STASH_BAR_HEIGHT / 2.0, y + STASH_BAR_HEIGHT / 2.0);
+        stash_icon(&mut frame, progress, icon, accent, self.state.now_ms);
+
+        let text_x = x + STASH_BAR_HEIGHT;
+        let right = x + width - 14.0;
+        let title = if progress.complete {
+            t!("overlay-stash-done")
+        } else if progress.filtered {
+            t!("overlay-stash-filtered")
+        } else {
+            t!("overlay-stash-scroll")
+        };
+        frame.fill_text(canvas::Text {
+            content: title.to_uppercase(),
+            position: Point::new(text_x, y + 9.0),
+            color: arclens_ui::palette::TEXT,
+            size: 14.0.into(),
+            font: arclens_ui::theme::DISPLAY,
+            ..canvas::Text::default()
+        });
+        if !progress.filtered {
+            let count = match progress.total {
+                Some(total) => t!("overlay-stash-count", seen = progress.seen, total = total),
+                None => t!("overlay-stash-seen", seen = progress.seen),
+            };
+            frame.fill_text(canvas::Text {
+                content: count,
+                position: Point::new(right, y + 9.0),
+                color: accent,
+                size: 14.0.into(),
+                font: arclens_ui::theme::DISPLAY,
+                align_x: iced::widget::text::Alignment::Right,
+                ..canvas::Text::default()
+            });
+        }
+
+        // The bar along the bottom.
+        let track = Rectangle {
+            x: text_x,
+            y: y + STASH_BAR_HEIGHT - 13.0,
+            width: (right - text_x).max(0.0),
+            height: 4.0,
+        };
+        let pill = |x: f32, w: f32| {
+            Path::rounded_rectangle(
+                Point::new(x, track.y),
+                iced::Size::new(w.max(0.0), track.height),
+                2.0.into(),
+            )
+        };
+        // A filtered tab doesn't count towards the scan: no bar.
+        if !progress.filtered {
+            frame.fill(
+                &pill(track.x, track.width),
+                Color::from_rgba(1.0, 1.0, 1.0, 0.10),
+            );
+            #[allow(clippy::cast_precision_loss, reason = "slot counts")]
+            let done = match progress.total {
+                _ if progress.complete => 1.0,
+                Some(total) if total > 0 => (progress.seen as f32 / total as f32).min(1.0),
+                _ => 0.0,
+            };
+            frame.fill(&pill(track.x, track.width * done), accent);
+        }
+        vec![frame.into_geometry()]
+    }
+}
+
+/// The progress bar's icon: bouncing chevrons while scanning, a tick when
+/// done, a funnel when a filter hides part of the stash.
+fn stash_icon(
+    frame: &mut Frame,
+    progress: arclens_ipc::StashProgress,
+    icon: Point,
+    accent: Color,
+    now_ms: i64,
+) {
+    use iced::widget::canvas::Stroke;
+    let line = Stroke::default()
+        .with_color(accent)
+        .with_width(2.5)
+        .with_line_cap(canvas::LineCap::Round)
+        .with_line_join(canvas::LineJoin::Round);
+    if progress.complete {
+        let tick = Path::new(|p| {
+            p.move_to(Point::new(icon.x - 8.0, icon.y));
+            p.line_to(Point::new(icon.x - 2.5, icon.y + 6.0));
+            p.line_to(Point::new(icon.x + 8.0, icon.y - 6.0));
+        });
+        frame.stroke(&tick, line);
+    } else if progress.filtered {
+        let funnel = Path::new(|p| {
+            p.move_to(Point::new(icon.x - 9.0, icon.y - 7.0));
+            p.line_to(Point::new(icon.x + 9.0, icon.y - 7.0));
+            p.line_to(Point::new(icon.x + 2.0, icon.y + 1.0));
+            p.line_to(Point::new(icon.x + 2.0, icon.y + 8.0));
+            p.line_to(Point::new(icon.x - 2.0, icon.y + 6.0));
+            p.line_to(Point::new(icon.x - 2.0, icon.y + 1.0));
+            p.close();
+        });
+        frame.stroke(&funnel, line);
+    } else {
+        #[allow(clippy::cast_precision_loss, reason = "a phase in 0..1")]
+        let phase = now_ms.rem_euclid(STASH_HINT_PERIOD_MS) as f32 / STASH_HINT_PERIOD_MS as f32;
+        // Slides down and fades, then starts again from the top.
+        let drop = phase * 8.0;
+        for (k, alpha) in [(0.0, 1.0 - phase * 0.6), (7.0, 0.4 + phase * 0.6)] {
+            let top = icon.y - 8.0 + k + drop - 4.0;
+            let chevron = Path::new(|p| {
+                p.move_to(Point::new(icon.x - 7.0, top));
+                p.line_to(Point::new(icon.x, top + 6.0));
+                p.line_to(Point::new(icon.x + 7.0, top));
+            });
+            frame.stroke(
+                &chevron,
+                line.with_color(arclens_ui::palette::with_alpha(accent, alpha)),
+            );
+        }
     }
 }
 

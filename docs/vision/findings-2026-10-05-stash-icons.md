@@ -75,6 +75,18 @@ Accuracy is not measured: there is no ground truth for most slots yet.
   the right, so it's never covered); the gap between rows can be as
   bright as ~50, so outlines need ≥ 55.
 
+## Filter tabs (verified on screenshots, same day)
+
+- The stash has ten filter tabs in a column left of the grid (all,
+  augments, shields, weapons, …), discs centred at x = 133,
+  y = 393 + 67·i (1440p). The selected one is a white disc (rim ≥ 240),
+  the rest dark grey (≈ 65): `arclens_vision::stash_filter` reads it,
+  tested at 2000×1125 and 2560×1440 (`fixtures/stash/filter_*.jpg`).
+- On a filtered tab the header shows only that tab's slot count ("5",
+  no "/280"), and the grid is the same 4-column layout, padded with empty
+  slots. Only the "all" tab is stitched into a scan; filtered tabs get
+  tags slot by slot.
+
 ## Next
 
 In the app: learn exact slot images from hovered tooltips (after the

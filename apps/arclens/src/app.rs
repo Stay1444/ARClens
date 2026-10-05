@@ -122,6 +122,8 @@ pub struct App {
     stash_scan: Option<crate::stash_worker::ScanState>,
     /// The stash slots on screen now, for the overlay's badges.
     stash_view: Vec<crate::stash_worker::VisibleSlot>,
+    /// The stash is open in game: which tab, and where.
+    stash_shown: Option<crate::stash_worker::StashShown>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -383,6 +385,7 @@ impl App {
             stash_history: crate::stash::History::load(&paths.stash_history()),
             stash_scan: None,
             stash_view: Vec::new(),
+            stash_shown: None,
             progress: crate::progress::load(&paths.progress()),
             progress_path: paths.progress(),
             tab: Tab::Home,
@@ -615,6 +618,7 @@ impl App {
                 self.push_map_panel();
                 self.push_map_markers();
                 self.push_menu_card();
+                self.push_stash_progress();
             }
             overlay_link::Event::Disconnected => self.overlay = None,
             overlay_link::Event::Message(arclens_ipc::ToApp::Search { query }) => {
@@ -724,6 +728,16 @@ impl App {
             vision::Event::MapPointer(at) => self.send(ToOverlay::Pointer { at }),
             vision::Event::StashView(slots) => self.on_stash_view(slots),
             vision::Event::StashScan(state) => self.on_stash_scan(state),
+            vision::Event::StashShown(shown) => {
+                self.stash_shown = Some(shown);
+                self.push_stash_progress();
+            }
+            vision::Event::StashClosed => {
+                self.stash_shown = None;
+                // An unfinished scan is dropped with the stash.
+                self.stash_scan = None;
+                self.push_stash_progress();
+            }
             vision::Event::Unavailable(reason) => {
                 tracing::info!(%reason, "item detection off");
                 self.status
@@ -1046,6 +1060,28 @@ impl App {
             );
         }
         self.stash_scan = Some(state);
+        self.push_stash_progress();
+    }
+
+    /// The scan's progress bar above the stash.
+    fn push_stash_progress(&self) {
+        let progress = self.stash_shown.map(|shown| {
+            let [x, y, width, height] = shown.panel;
+            let scan = self.stash_scan.as_ref();
+            arclens_ipc::StashProgress {
+                panel: arclens_ipc::NormRect {
+                    x,
+                    y,
+                    width,
+                    height,
+                },
+                filtered: shown.filtered,
+                seen: scan.map_or(0, |s| s.snapshot.slots),
+                total: scan.and_then(|s| s.used),
+                complete: scan.is_some_and(|s| s.complete),
+            }
+        });
+        self.send(ToOverlay::ShowStashProgress { progress });
     }
 
     fn on_stash_icons(&self, icons: Vec<(ItemId, std::path::PathBuf)>) {

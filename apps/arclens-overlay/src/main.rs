@@ -130,6 +130,8 @@ pub struct Overlay {
     menu_card: Option<arclens_ipc::MenuCard>,
     /// Verdict tags on the stash slots the game shows.
     stash_badges: Vec<arclens_ipc::StashBadge>,
+    /// The stash scan's progress bar, while the stash is open.
+    stash_progress: Option<arclens_ipc::StashProgress>,
     /// Its condition icons, decoded once.
     menu_icons: menu_card::Icons,
     /// Wall clock (Unix ms) for the card's countdowns.
@@ -162,6 +164,7 @@ impl Overlay {
             || self.panel.panel.is_some()
             || self.menu_card.is_some()
             || !self.stash_badges.is_empty()
+            || self.stash_progress.is_some()
             || ((!self.markers.is_empty() || !self.areas.is_empty()) && self.transform.is_some())
     }
 
@@ -237,6 +240,12 @@ fn subscription(state: &Overlay) -> Subscription<Message> {
         shell::subscription(state),
         if state.menu_card.is_some() {
             iced::time::every(menu_card::tick_interval(state.now_ms)).map(|_| Message::Tick)
+        } else if state
+            .stash_progress
+            .is_some_and(|p| !p.complete && !p.filtered)
+        {
+            // The scroll hint's animation.
+            iced::time::every(view::STASH_HINT_TICK).map(|_| Message::Tick)
         } else {
             Subscription::none()
         },
@@ -458,6 +467,10 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
         ToOverlay::HideMenuCard => state.menu_card = None,
         ToOverlay::SearchResults { query, hits } => state.search.results(&query, hits),
         ToOverlay::ShowStashBadges { badges } => state.stash_badges = badges,
+        ToOverlay::ShowStashProgress { progress } => {
+            state.now_ms = now_ms();
+            state.stash_progress = progress;
+        }
         ToOverlay::HideMapPanel => {
             state.pointer = None;
             state.panel.panel = None;
