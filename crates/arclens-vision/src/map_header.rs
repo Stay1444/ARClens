@@ -42,13 +42,15 @@ pub struct MapHeader {
     pub condition: Option<String>,
 }
 
-/// Whether `frame` shows the map screen: the "MAP" tab is outlined and the
-/// map panel has a title. Cheap (no OCR); run it every frame.
+/// Whether `frame` shows the map screen: the "MAP" tab is outlined (a pill
+/// of its size between two tab labels) and the map panel has a title.
+/// Cheap (no OCR); run it every frame.
 pub fn is_map_screen(frame: &RgbImage) -> bool {
     bright_share(frame, MAP_TAB_EDGE) >= MAP_TAB_MIN_BRIGHT
         && bright_share(frame, MAP_TAB_RIGHT_EDGE) >= MAP_TAB_MIN_BRIGHT
         && dark_share(frame, TITLE) >= TITLE_MIN_DARK
         && bright_text(frame, TITLE).is_some()
+        && crate::screens::has_map_pill(frame)
 }
 
 /// Whether the quest panel covers the left of the map (markers must not

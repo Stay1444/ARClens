@@ -79,8 +79,9 @@ const PILL_TOP: [f32; 2] = [0.006, 0.03];
 /// Rows a pill's bottom border may be on: measured 0.0465 in the menus,
 /// 0.0576 in raid.
 const PILL_BOTTOM: [f32; 2] = [0.036, 0.066];
-/// Shortest straight border run of a pill (the MAP tab's is ≈ 0.034).
-const PILL_MIN_RUN: f32 = 0.03;
+/// Shortest straight border run of a pill. The in-raid MAP tab's is the
+/// shortest measured: ≈ 0.026 (66 px at 2560, 2026-10-05).
+const PILL_MIN_RUN: f32 = 0.02;
 /// Share of a label window that must be ink for "a tab label is there"
 /// (a grey label ≈ 14–19 %, the empty bar 0 %).
 const MIN_LABEL_INK: f32 = 0.04;
@@ -97,6 +98,14 @@ const LABEL_FAR: f32 = 0.06;
 /// WORKSHOP's 0.071, but at centre 0.135 with PLAY before it.
 const INVENTORY_WIDTH: [f32; 2] = [0.058, 0.08];
 const INVENTORY_CENTRE: [f32; 2] = [0.25, 0.5];
+
+/// The MAP pill: straight border ≈ 0.026 wide at centre ≈ 0.509 in raid
+/// (outline ends at x 0.486–0.534, see `map_header`), between CRAFTING and
+/// LOGBOOK, and between two tabs in the pause menu too. A browser's
+/// address bar there is a far wider pill with no tab labels beside it
+/// (field report 2026-10-05).
+const MAP_WIDTH: [f32; 2] = [0.02, 0.05];
+const MAP_CENTRE: [f32; 2] = [0.49, 0.53];
 
 /// The TRADES pill: measured width 0.050 at centre 0.236 (Tian Wen),
 /// with GUN SHOP on its left and QUESTS on its right.
@@ -135,6 +144,14 @@ pub fn is_inventory(frame: &RgbImage) -> bool {
     })
 }
 
+/// Whether the top bar has the MAP tab's outlined pill, with a tab label on
+/// each side.
+pub(crate) fn has_map_pill(frame: &RgbImage) -> bool {
+    pills(frame).into_iter().any(|pill| {
+        pill.fits(frame, MAP_WIDTH, MAP_CENTRE) && pill.labels_beside(frame) == (true, true)
+    })
+}
+
 /// Whether `frame` shows a trader's TRADES tab: a pill between two tab
 /// labels, and the cream purchase panel.
 fn is_trader(frame: &RgbImage) -> bool {
@@ -155,7 +172,7 @@ fn yellow_share(frame: &RgbImage, fraction: [f32; 4]) -> f32 {
 /// Share of the tooltips' and panels' cream in the region.
 fn cream_share(frame: &RgbImage, fraction: [f32; 4]) -> f32 {
     share(frame, fraction, |[r, g, b]| {
-        r >= 220 && g >= 210 && b >= 180 && r - b <= 50
+        r >= 220 && g >= 210 && b >= 180 && r >= b && r - b <= 50
     })
 }
 

@@ -188,3 +188,39 @@ fn rejects_non_map_titles() {
         assert_eq!(map_from_title(title), None, "{title}");
     }
 }
+
+/// A browser's address bar where the game's MAP tab would be: one long
+/// outlined pill with no tab labels beside it. Field report 2026-10-05: a
+/// `YouTube` page opened the map panel. Built from a real map frame (so the
+/// map title is there) with the top bar replaced.
+#[test]
+fn address_bar_is_not_the_map_tab() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/map/dam_zoom_mid.jpg");
+    let mut frame = image::open(path).expect("fixture").into_rgb8();
+    assert_eq!(classify(&frame), Screen::Map);
+
+    let (w, h) = frame.dimensions();
+    let dark = image::Rgb([20, 20, 28]);
+    let light = image::Rgb([235, 235, 235]);
+    for y in 0..h * 8 / 100 {
+        for x in 0..w {
+            frame.put_pixel(x, y, dark);
+        }
+    }
+    // Address bar: x 0.36–0.64, y 0.025–0.058, a 3-px outline.
+    let (x0, x1) = (w * 36 / 100, w * 64 / 100);
+    let (y0, y1) = (h * 25 / 1000, h * 58 / 1000);
+    for x in x0..x1 {
+        for t in 0..3 {
+            frame.put_pixel(x, y0 + t, light);
+            frame.put_pixel(x, y1 - t, light);
+        }
+    }
+    for y in y0..y1 {
+        for t in 0..3 {
+            frame.put_pixel(x0 + t, y, light);
+            frame.put_pixel(x1 - 1 - t, y, light);
+        }
+    }
+    assert_ne!(classify(&frame), Screen::Map);
+}
