@@ -47,7 +47,22 @@ The licence is in place (GPL-3.0-or-later); this needs the maintainer's
 Flathub and Fedora accounts. `packaging/flathub/` already
 builds offline in CI.
 
-## 5. Screenshots for fixtures
+## 5. Stash scan
+
+With game capture on and the overlay running:
+
+1. Open the stash (Inventory tab) and wait a second: tags (KEEP, SELL,
+   RECYCLE, LEARN) appear in the visible slots' top-left corners, inside
+   the slots.
+2. Scroll down step by step to the end: tags hide while the grid moves
+   and come back on the new rows. In the app, Progress → Stash shows a new
+   scan with the stash's slot count once the last row has been seen.
+3. Hover a slot tagged with "?" so its tooltip shows, then move to another
+   slot: the "?" goes away. Close and reopen the stash: still no "?" on it.
+4. Report slots whose tag is for the wrong item (a screenshot with the
+   tooltip shown helps).
+
+## 6. Screenshots for fixtures
 
 Full-resolution PNGs, game in the foreground, nothing over it (Spectacle's
 "Full screen" or Steam's screenshot key). They go to

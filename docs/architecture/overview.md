@@ -41,7 +41,7 @@ overlay state (visibility, interactivity, current item).
 | `arclens-hotkeys` | lib | Global hotkeys, stable action ids (portal / `RegisterHotKey`) | ashpd / global-hotkey |
 | `arclens-ui` | lib | Design tokens, the shared item card and game names in the interface language, used by app and overlay | core, i18n, iced |
 | `arclens-i18n` | lib | Interface translations: Fluent messages per language, the current language, `t!` | fluent-bundle, sys-locale |
-| `arclens-vision` | lib | Frame → tooltip panels → name lines → OCR text (`Analyzer`); map labels, header, pan/zoom tracking | image, ocrs, rustfft |
+| `arclens-vision` | lib | Frame → tooltip panels → name lines → OCR text (`Analyzer`); map labels, header, pan/zoom tracking; stash slots, tiers, stack sizes and icon matching (`stash_slots`, `IconIndex`) | image, ocrs, rustfft |
 | `arclens-capture` | lib | Screen → RGB frames at a set pace (portal + PipeWire / Graphics Capture) | ashpd, pipewire / windows-capture |
 | `arclens` | bin | Companion app: owns state, wires everything | all libs, iced |
 | `arclens-overlay` | bin | Overlay renderer: platform-free core + `shell` per OS | core, ipc, iced (+ iced_layershell on Linux) |
@@ -88,6 +88,18 @@ map→screen transform, and the overlay applies it per marker.
    show an error.
 4. `ARCLENS_RAIDTHEORY_DIR=/path/to/checkout` bypasses steps 1–3 (offline
    development).
+5. Once the catalog is ready, every item's image is fetched into the icon
+   cache (only missing ones) for the stash scan.
+
+## Stash scan
+
+The vision thread hands still frames of the stash grid to a worker thread
+(`apps/arclens/src/stash_worker.rs`), which reads new rows, stitches them
+to the rows seen so far and reports the visible slots (→ overlay tags)
+and the scan (→ Progress, and the history in
+`$XDG_STATE_HOME/arclens/stash-history.json` once complete). Pictures of
+slots the player hovered are kept in `stash-exemplars.json` next to it.
+How slots are identified: `apps/arclens/src/stash.rs`.
 
 ## IPC protocol
 

@@ -387,13 +387,22 @@ recycle or keep. Feasibility notes:
 - [x] Prototype: slot icons vs the dataset's item images (2026-10-05).
       Ammo, consumables and some augments match clearly; weapons match
       their family but not reliably; tiers and blueprints share an image.
-- [ ] Ground truth: a recording scrolling the whole stash, plus the names
-      of what's in it (hovering each slot, or a list), to measure accuracy.
-- [ ] Slot grid detection and the quantity / tier numeral reader.
-- [ ] Icon matcher in `arclens-vision`, with fixture tests.
-- [ ] Merge rows across scrolling; the stash header's `73/280` says when
-      everything has been seen.
-- [ ] Audit view in the app (and a summary card in the overlay).
+- [x] Ground truth (2026-10-05): the maintainer's scroll and hover
+      recordings; 42 slots labelled from tooltips, cursor-free
+      (`crates/arclens-vision/tests/fixtures/stash/`).
+- [x] Slot grid, tier numerals (stems, no OCR) and stack sizes (OCR).
+- [x] Icon matcher in `arclens-vision`: right item family first on 88 %
+      of the labelled slots, top three 95 %.
+- [x] Rows stitched across scrolling (slot pictures, the scrollbar for
+      rows of identical stacks); complete when the header's "75/280" is
+      reached. Replaying the recording: 75 of 75 slots.
+- [x] Learning: a hovered slot is what its tooltip says; its picture is
+      stored once the cursor has left it and matches exactly afterwards.
+- [x] Verdict tags on the visible slots in the overlay ("?" for icon-only).
+- [x] Progress → Stash: latest scan, have vs need, scan history.
+- [ ] Check in game: tags line up, scans complete, learning sticks
+      (`docs/manual-tests.md`).
+- [ ] Other resolutions and aspect ratios (layout measured at 2560×1440).
 
 ## Later
 

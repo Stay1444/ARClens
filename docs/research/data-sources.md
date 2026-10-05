@@ -192,6 +192,13 @@ _Last researched: 2026-10-03. Re-verify before relying on anything marked
 
 ## Image hosts (2026-10-03)
 
+- **Item images** (2026-10-05): each item's `imageFilename`
+  (`cdn.arctracker.io/items/v2/<id>.png`, RaidTheory's own CDN, the same
+  images as the repository's `images/items/`). ARClens downloads every
+  item's image once, four at a time, into its icon cache: the stash scan
+  compares slot icons against all of them. Already-cached images are not
+  fetched again.
+
 - ARClens downloads map-condition icons once and caches them
   (`arclens_data::ImageCache`, `~/.cache/arclens/images/`). Only these
   hosts are fetched:

@@ -48,6 +48,12 @@ first, with Windows support too.
   needs it. Open several side by side; ✕ or Esc closes them, and Esc with none
   open closes the search.
   ![Item windows next to the quick search](docs/assets/overlay-item-windows.jpg)
+- **Stash scan.** Open your stash and scroll through it once: ARClens
+  reads every slot from the screen, recognises the item by its icon (its
+  tier numeral and stack size too) and tags it with KEEP, SELL, RECYCLE or
+  LEARN. A "?" means it was matched from the icon alone; hover the item
+  once and ARClens knows that slot for sure from then on.
+  ![Verdict tags on the stash](docs/assets/overlay-stash-badges.jpg)
 
 ### In the companion app
 
@@ -74,6 +80,10 @@ first, with Windows support too.
   before them are done).
   ![Progress: workshop](docs/assets/progress.png)
   ![Progress: quests](docs/assets/progress-quests.png)
+  Its **Stash** section shows your latest stash scan, what your remaining
+  upgrades, quests and projects still need against what you have, and
+  earlier scans with what changed.
+  ![Progress: stash](docs/assets/progress-stash.png)
 - **Settings**: language (English or Spanish; follows the system by
   default), overlay size (80–150 %), background opacity, which corner the
   pinned card uses, how often data is refreshed, and server region.
