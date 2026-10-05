@@ -20,6 +20,11 @@ pub struct PanelParams {
     /// Minimum panel size as a fraction of the frame's width / height.
     pub min_width_frac: f32,
     pub min_height_frac: f32,
+    /// A shorter panel still counts if a tooltip footer (weight, value)
+    /// sits right below it: ammo's tooltip body is only ~0.11 H, while
+    /// cream boxes that aren't tooltips (a project page's selected row,
+    /// ~0.09 H) have no footer.
+    pub min_footed_height_frac: f32,
     /// Minimum share of the bounding box that must be cream. Text, icons and
     /// stat rows make up the rest.
     pub min_fill: f32,
@@ -29,10 +34,12 @@ impl Default for PanelParams {
     fn default() -> Self {
         Self {
             step: 4,
-            // Tooltips are ~0.20 W wide and ≥ 0.22 H tall at 1440p; buttons
-            // and selected item tiles are far smaller.
+            // Tooltips are ~0.20 W wide and ≥ 0.22 H tall at 1440p (ammo's
+            // ~0.11 H, see `min_footed_height_frac`); buttons and selected
+            // item tiles are far smaller.
             min_width_frac: 0.12,
             min_height_frac: 0.12,
+            min_footed_height_frac: 0.08,
             min_fill: 0.55,
         }
     }
@@ -65,6 +72,7 @@ pub fn find_panels(frame: &RgbImage, params: &PanelParams) -> Vec<Rect> {
 
     let min_w = (params.min_width_frac * gw as f32) as u32;
     let min_h = (params.min_height_frac * gh as f32) as u32;
+    let min_footed_h = (params.min_footed_height_frac * gh as f32) as u32;
     // Component label per grid cell (0 = unlabelled).
     let mut labels = vec![0u32; mask.len()];
     let mut next_label = 0u32;
@@ -102,7 +110,7 @@ pub fn find_panels(frame: &RgbImage, params: &PanelParams) -> Vec<Rect> {
         }
 
         let (w, h) = (x1 - x0 + 1, y1 - y0 + 1);
-        if w < min_w || h < min_h {
+        if w < min_w || h < min_footed_h {
             continue;
         }
         let component = Rect::new(x0, y0, w, h);
@@ -119,7 +127,7 @@ pub fn find_panels(frame: &RgbImage, params: &PanelParams) -> Vec<Rect> {
         let bodies: Vec<Rect> = split_by_left_edge(&member, component)
             .into_iter()
             .filter_map(|part| trim_to_body(&member, part))
-            .filter(|body| body.height >= min_h)
+            .filter(|body| body.height >= min_footed_h)
             .collect();
         let was_split = bodies.len() > 1;
         for mut body in bodies {
@@ -134,13 +142,17 @@ pub fn find_panels(frame: &RgbImage, params: &PanelParams) -> Vec<Rect> {
                 body.width = tooltip_w;
             }
             let fill = cream_fraction(&member, body);
-            if body.width >= min_w && body.height >= min_h && fill >= params.min_fill {
-                panels.push(Rect::new(
-                    body.x * step,
-                    body.y * step,
-                    body.width * step,
-                    body.height * step,
-                ));
+            if body.width < min_w || fill < params.min_fill {
+                continue;
+            }
+            let rect = Rect::new(
+                body.x * step,
+                body.y * step,
+                body.width * step,
+                body.height * step,
+            );
+            if body.height >= min_h || crate::footer::footer(frame, rect).is_some() {
+                panels.push(rect);
             }
         }
     }

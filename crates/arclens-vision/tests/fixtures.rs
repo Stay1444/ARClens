@@ -29,6 +29,13 @@ const CASES: &[(&str, &[Expected])] = &[
         &[("COMBAT MK. 3 (AGGRESSIVE)", [385, 159, 229, 63])],
     ),
     ("stash_energy_clip", &[("ENERGY CLIP", [663, 852, 196, 23])]),
+    // Short tooltip (one line of text, no stats): the body is ~0.11 H.
+    ("stash_heavy_ammo", &[("HEAVY AMMO", [524, 920, 226, 23])]),
+    // The chip's glyph has a dark speck above the name.
+    (
+        "stash_looting_mk2",
+        &[("LOOTING MK. 2", [524, 197, 231, 23])],
+    ),
     (
         "stash_medium_ammo",
         &[("MEDIUM AMMO", [1650, 929, 249, 23])],

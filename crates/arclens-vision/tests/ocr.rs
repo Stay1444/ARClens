@@ -24,6 +24,8 @@ const CASES: &[(&str, &[&str])] = &[
         &["COMBAT MK. 3 (AGGRESSIVE)"],
     ),
     ("stash_energy_clip", &["ENERGY CLIP"]),
+    ("stash_heavy_ammo", &["HEAVY AMMO"]),
+    ("stash_looting_mk2", &["LOOTING MK. 2"]),
     ("stash_medium_ammo", &["MEDIUM AMMO"]),
     // "II" vs "I" is decided by stroke counting, not the OCR model.
     ("stash_osprey_ii", &["OSPREY II"]),
@@ -78,6 +80,9 @@ const FOOTERS: &[(&str, Option<u32>)] = &[
     ("raid_renegade_iv", None),
     ("stash_combat_mk3_aggressive", Some(2_000)),
     ("stash_energy_clip", Some(1_000)),
+    // Three footer cells: stack (60/60), weight, value.
+    ("stash_heavy_ammo", Some(720)),
+    ("stash_looting_mk2", Some(2_000)),
     ("stash_medium_ammo", Some(480)),
     ("stash_osprey_ii", Some(18_431)),
     ("stash_shield_recharger", Some(2_080)),

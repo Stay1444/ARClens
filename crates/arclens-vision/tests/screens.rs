@@ -45,6 +45,8 @@ const LABELS: &[(&str, Screen)] = &[
     ("frames/raid_renegade_iv.jpg", Screen::Inventory),
     ("frames/stash_combat_mk3_aggressive.jpg", Screen::Inventory),
     ("frames/stash_energy_clip.jpg", Screen::Inventory),
+    ("frames/stash_heavy_ammo.jpg", Screen::Inventory),
+    ("frames/stash_looting_mk2.jpg", Screen::Inventory),
     ("frames/stash_medium_ammo.jpg", Screen::Inventory),
     ("frames/stash_none_1.jpg", Screen::Inventory),
     ("frames/stash_none_2.jpg", Screen::Inventory),

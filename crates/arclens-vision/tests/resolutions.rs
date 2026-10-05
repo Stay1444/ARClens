@@ -325,9 +325,15 @@ fn assert_same_answers(width: u32, height: u32, expected: &[(&str, &str)]) {
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
 
+/// The hovered slot's outline here is purple, not white: the side check
+/// sees nothing on that side, and below 1440p the white "EQUIPMENT"
+/// heading beside the tooltip outweighs it. A tallest-column test fixes
+/// this frame but loses the trader's blurred outline at 720p.
+const LOOTING_SIDE: (&str, &str) = ("frames/stash_looting_mk2", "item_side");
+
 #[test]
 fn same_answers_at_1080p() {
-    assert_same_answers(1920, 1080, &[]);
+    assert_same_answers(1920, 1080, &[LOOTING_SIDE]);
 }
 
 #[test]
@@ -336,6 +342,7 @@ fn same_answers_at_720p() {
         1280,
         720,
         &[
+            LOOTING_SIDE,
             // Map labels are ≈ 9 px tall at 720p, with 1-px strokes: few
             // pixels stay near-white after scaling (≈ 1/3 of the share at
             // 1440p), so most labels are lost. Lowering the white

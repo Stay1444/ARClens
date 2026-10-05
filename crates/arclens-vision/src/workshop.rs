@@ -107,8 +107,11 @@ pub fn station_header_box(frame: &RgbImage) -> Option<Rect> {
             }
         }
     }
-    // Text, not a stray highlight: enough pixels, and wider than tall.
-    (count >= min_text_pixels(frame) && end > start + 2 * (low - top))
+    // Text, not a stray highlight: enough pixels, wider than tall, and
+    // taller than a thin line (the header is ~3.5 % of the frame height).
+    (count >= min_text_pixels(frame)
+        && end > start + 2 * (low - top)
+        && low - top + 1 >= frame.height() / 120)
         .then(|| Rect::new(start, top, end - start + 1, low - top + 1))
 }
 

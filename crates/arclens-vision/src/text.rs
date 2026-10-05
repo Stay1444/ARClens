@@ -97,8 +97,12 @@ pub fn name_lines(frame: &RgbImage, panel: Rect) -> Vec<Rect> {
         }
         cream * 10 >= (cream + other) * 7
     };
+    // Name text is ~4.5 % of the panel width tall; a band far shorter than
+    // that is a speck (a chip glyph's dark pixel), not a line.
+    let min_line = ((x1 - x0) / 80).max(3);
     let bands: Vec<(u32, u32)> = ink_bands(panel.y + margin..y_end, row_has_ink)
         .into_iter()
+        .filter(|&(y0, y1)| y1 - y0 >= min_line)
         .filter(on_cream)
         .collect();
     let Some(&first) = bands.first() else {
