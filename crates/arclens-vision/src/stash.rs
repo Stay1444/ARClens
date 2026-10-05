@@ -93,6 +93,173 @@ fn rows(frame: &RgbImage, x: u32, s: f32) -> Vec<(u32, u32)> {
     runs
 }
 
+/// The "75/280" under the STASH title: slots used and capacity. Measured
+/// at x 233–305, y 232–255 (1440p).
+const COUNT_BOX: [f32; 4] = [228.0, 228.0, 84.0, 32.0];
+
+/// The box holding the stash's "used/capacity" count.
+pub fn stash_count_box(frame: &RgbImage) -> Rect {
+    let (scale, offset) = scale(frame);
+    let [left, top, width, height] = COUNT_BOX;
+    Rect::new(
+        (offset.max(0.0) + left * scale) as u32,
+        (top * scale) as u32,
+        (width * scale) as u32,
+        (height * scale) as u32,
+    )
+}
+
+/// Reads the stash's "used/capacity" count, e.g. `(75, 280)`.
+pub fn read_stash_count(
+    reader: &NameReader,
+    frame: &RgbImage,
+) -> anyhow::Result<Option<(u32, u32)>> {
+    Ok(reader
+        .read_free_text(frame, stash_count_box(frame))?
+        .as_deref()
+        .and_then(parse_count))
+}
+
+/// "75/280" → (75, 280); used ≤ capacity. OCR sometimes reads the slash
+/// as "1" ("751280"): without a slash, a "1", "l", "|" or "7" before a
+/// three-digit capacity is taken for it.
+pub fn parse_count(text: &str) -> Option<(u32, u32)> {
+    let text: String = text.chars().filter(|c| !c.is_whitespace()).collect();
+    let valid = |used: &str, capacity: &str| -> Option<(u32, u32)> {
+        let used: u32 = used.parse().ok()?;
+        let capacity: u32 = capacity.parse().ok()?;
+        (used <= capacity && capacity > 0).then_some((used, capacity))
+    };
+    if let Some((used, capacity)) = text.split_once('/') {
+        return valid(used, capacity);
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let n = chars.len();
+    (n >= 5 && matches!(chars[n - 4], '1' | 'l' | '|' | '7'))
+        .then(|| {
+            let used: String = chars[..n - 4].iter().collect();
+            let capacity: String = chars[n - 3..].iter().collect();
+            valid(&used, &capacity)
+        })
+        .flatten()
+}
+
+/// A small, fixed-size picture of a slot (icon and corner, inside the
+/// outline), to tell whether two slots show the same thing: the same item
+/// in the same stack across frames, or a slot seen before.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SlotThumb(pub Vec<u8>);
+
+/// [`SlotThumb`] size: 24×24 RGB.
+pub const THUMB_SIDE: u32 = 24;
+
+/// Thumbs closer than this ([`thumb_distance`]) show the same thing.
+pub const SAME_SLOT: f32 = 2.0;
+
+pub fn slot_thumb(frame: &RgbImage, slot: Rect) -> SlotThumb {
+    let inset = (slot.width / 30).max(1);
+    let (x, y) = (slot.x + inset, slot.y + inset);
+    let w = slot
+        .width
+        .saturating_sub(2 * inset)
+        .max(1)
+        .min(frame.width() - x);
+    let h = slot
+        .height
+        .saturating_sub(2 * inset)
+        .max(1)
+        .min(frame.height() - y);
+    let crop = image::imageops::crop_imm(frame, x, y, w, h).to_image();
+    let small = image::imageops::resize(
+        &crop,
+        THUMB_SIDE,
+        THUMB_SIDE,
+        image::imageops::FilterType::Triangle,
+    );
+    SlotThumb(small.into_raw())
+}
+
+/// How different two thumbs look: the mean absolute channel difference
+/// over the 90 % most alike pixels, so a small local change (a cursor
+/// covers ~3 %) doesn't count. Measured on still frames: ≤ 0.7 for the
+/// same slot, ≥ 2 for nearly all other items (identical stacks are, of
+/// course, identical). See [`SAME_SLOT`].
+pub fn thumb_distance(a: &SlotThumb, b: &SlotThumb) -> f32 {
+    let (pa, pb) = (a.0.as_chunks::<3>().0, b.0.as_chunks::<3>().0);
+    let mut diffs: Vec<u16> = pa
+        .iter()
+        .zip(pb)
+        .map(|(p, q)| (0..3).map(|c| u16::from(p[c].abs_diff(q[c]))).sum())
+        .collect();
+    if diffs.is_empty() || a.0.len() != b.0.len() {
+        return f32::MAX;
+    }
+    diffs.sort_unstable();
+    let keep = diffs.len() * 9 / 10;
+    diffs[..keep].iter().map(|&d| f32::from(d)).sum::<f32>() / (keep as f32 * 3.0)
+}
+
+/// Whether `slot` is empty: no item, just the dark background.
+pub fn slot_is_empty(frame: &RgbImage, slot: Rect) -> bool {
+    let inset = slot.width / 8;
+    let area = Rect::new(
+        slot.x + inset,
+        slot.y + inset,
+        slot.width - 2 * inset,
+        slot.height * 7 / 10 - inset,
+    );
+    let mut bright = 0u32;
+    for y in area.y..area.bottom().min(frame.height()) {
+        for x in area.x..area.right().min(frame.width()) {
+            bright += u32::from(frame.get_pixel(x, y).0.iter().any(|&c| c >= 90));
+        }
+    }
+    // Items cover a good part of the slot; an empty one has at most a faint
+    // placeholder glyph.
+    bright * 50 < area.width * area.height
+}
+
+/// The hovered slot: the game draws a bright, coloured outline a few
+/// pixels outside it. Only slots left of the tooltip `panel` are
+/// considered (tooltips open to the right of the hovered slot and may
+/// cover others). `None` when no slot clearly stands out.
+pub fn hovered_slot(frame: &RgbImage, slots: &[Rect], panel: Option<Rect>) -> Option<Rect> {
+    let ring = |slot: &Rect| {
+        let (inner, outer) = ((slot.width / 40).max(1), (slot.width / 17).max(2));
+        let (x0, y0) = (slot.x.saturating_sub(outer), slot.y.saturating_sub(outer));
+        let (x1, y1) = (
+            (slot.right() + outer).min(frame.width()),
+            (slot.bottom() + outer).min(frame.height()),
+        );
+        let inside = |x: u32, y: u32| {
+            x + inner >= slot.x
+                && x < slot.right() + inner
+                && y + inner >= slot.y
+                && y < slot.bottom() + inner
+        };
+        let (mut sum, mut n) = (0u32, 0u32);
+        for y in y0..y1 {
+            for x in x0..x1 {
+                if !inside(x, y) {
+                    sum += u32::from(*frame.get_pixel(x, y).0.iter().max().unwrap_or(&0));
+                    n += 1;
+                }
+            }
+        }
+        sum as f32 / n.max(1) as f32
+    };
+    let mut scored: Vec<(f32, Rect)> = slots
+        .iter()
+        .filter(|s| panel.is_none_or(|p| s.right() < p.x))
+        .map(|s| (ring(s), *s))
+        .collect();
+    scored.sort_by(|a, b| b.0.total_cmp(&a.0));
+    match scored[..] {
+        [(best, slot), (second, _), ..] if best - second >= 8.0 => Some(slot),
+        _ => None,
+    }
+}
+
 /// What a slot's corner says.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SlotBadge {
@@ -313,6 +480,29 @@ mod tests {
         assert_eq!(parse_quantity("×"), None);
         assert_eq!(parse_quantity("II"), None);
         assert_eq!(parse_quantity("×6O"), None);
+    }
+
+    #[test]
+    fn parses_stash_counts() {
+        assert_eq!(parse_count("75/280"), Some((75, 280)));
+        assert_eq!(parse_count(" 73 / 280 "), Some((73, 280)));
+        assert_eq!(parse_count("280/75"), None);
+        assert_eq!(parse_count("751280"), Some((75, 280)));
+        assert_eq!(parse_count("75280"), None);
+        assert_eq!(parse_count("280"), None);
+    }
+
+    #[test]
+    fn thumbs_compare_by_their_most_alike_pixels() {
+        let a = SlotThumb(vec![100; (THUMB_SIDE * THUMB_SIDE * 3) as usize]);
+        let mut b = a.clone();
+        // A small bright patch (a cursor) barely counts.
+        for v in b.0.iter_mut().take(30) {
+            *v = 255;
+        }
+        assert!(thumb_distance(&a, &b) < 1.0);
+        let c = SlotThumb(vec![140; a.0.len()]);
+        assert!(thumb_distance(&a, &c) > 30.0);
     }
 
     #[test]

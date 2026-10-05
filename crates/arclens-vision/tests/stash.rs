@@ -240,3 +240,72 @@ fn icon_matching_accuracy() {
         "first {first:.2}, top 3 {top3:.2}"
     );
 }
+
+#[test]
+fn finds_the_hovered_slot() {
+    use arclens_vision::{PanelParams, find_panels, hovered_slot};
+    let frames = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/frames");
+    // (fixture, hovered slot's top-left)
+    for (name, at) in [
+        ("stash_heavy_ammo", (342, 922)),
+        ("stash_looting_mk2", (342, 367)),
+    ] {
+        let f = image::open(frames.join(format!("{name}.jpg")))
+            .unwrap()
+            .into_rgb8();
+        let slots = stash_slots(&f);
+        let panel = find_panels(&f, &PanelParams::default()).first().copied();
+        let hovered = hovered_slot(&f, &slots, panel).expect(name);
+        assert!(slot_at(&[hovered], at).is_some(), "{name}: {hovered:?}");
+    }
+    // Nothing hovered.
+    let f = frame("scroll_0.jpg");
+    assert_eq!(hovered_slot(&f, &stash_slots(&f), None), None);
+}
+
+#[test]
+fn the_same_slot_looks_the_same_in_another_frame() {
+    use arclens_vision::{slot_thumb, thumb_distance};
+    // The top of the stash in both recordings (one hovering a slot further
+    // down): the first slot holds the same Combat Mk. 2.
+    let a = frame("scroll_0.jpg");
+    let b = image::open(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/frames/stash_heavy_ammo.jpg"),
+    )
+    .unwrap()
+    .into_rgb8();
+    let (sa, sb) = (stash_slots(&a), stash_slots(&b));
+    let same = thumb_distance(&slot_thumb(&a, sa[0]), &slot_thumb(&b, sb[0]));
+    assert!(same < arclens_vision::SAME_SLOT, "same {same}");
+    // Different items (Combat Mk. 2 and Looting Mk. 2) are not.
+    let other = thumb_distance(&slot_thumb(&a, sa[0]), &slot_thumb(&a, sa[1]));
+    assert!(other > arclens_vision::SAME_SLOT * 1.5, "other {other}");
+}
+
+#[test]
+fn empty_slots() {
+    use arclens_vision::slot_is_empty;
+    // The stash ends partway down scroll_4: its last rows are empty.
+    let f = frame("scroll_4.jpg");
+    let slots = stash_slots(&f);
+    let empty: Vec<bool> = slots.iter().map(|s| slot_is_empty(&f, *s)).collect();
+    assert!(!empty[0], "first slot holds an item");
+    assert!(*empty.last().unwrap(), "last slot is empty");
+    // Every labelled slot holds an item.
+    for (name, at, item) in labels() {
+        let f = frame(&name);
+        let slot = slot_at(&stash_slots(&f), at).unwrap();
+        assert!(!slot_is_empty(&f, slot), "{item}");
+    }
+}
+
+#[test]
+#[ignore = "needs ARCLENS_OCR_MODEL"]
+fn reads_the_slot_count() {
+    let model = std::env::var_os("ARCLENS_OCR_MODEL").expect("ARCLENS_OCR_MODEL");
+    let reader = NameReader::from_model_file(Path::new(&model)).unwrap();
+    for name in ["scroll_0.jpg", "scroll_4.jpg"] {
+        let count = arclens_vision::read_stash_count(&reader, &frame(name)).unwrap();
+        assert_eq!(count, Some((75, 280)), "{name}");
+    }
+}
