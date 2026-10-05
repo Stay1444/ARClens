@@ -23,14 +23,16 @@ pub enum Section {
     Quests,
     Projects,
     Blueprints,
+    Stash,
 }
 
 impl Section {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::Workshop,
         Self::Quests,
         Self::Projects,
         Self::Blueprints,
+        Self::Stash,
     ];
 
     fn title(self) -> String {
@@ -39,6 +41,7 @@ impl Section {
             Self::Quests => t!("progress-quests"),
             Self::Projects => t!("progress-projects"),
             Self::Blueprints => t!("progress-blueprints"),
+            Self::Stash => t!("progress-stash"),
         }
     }
 
@@ -83,6 +86,7 @@ impl Section {
                     total = page.blueprints.len()
                 )
             }
+            Self::Stash => crate::views::stash::summary(&page.stash),
         }
     }
 }
@@ -96,6 +100,7 @@ pub struct ProgressView<'a> {
     pub blueprints: Vec<&'a Item>,
     /// `None`: never set.
     pub progress: Option<&'a Progress>,
+    pub stash: crate::views::stash::StashView<'a>,
 }
 
 pub fn view<'a>(page: &ProgressView<'a>) -> Element<'a, Message> {
@@ -111,6 +116,10 @@ pub fn view<'a>(page: &ProgressView<'a>) -> Element<'a, Message> {
         Section::Quests => quests(page),
         Section::Projects => projects(page),
         Section::Blueprints => blueprints(page),
+        Section::Stash => crate::views::stash::view(
+            &page.stash,
+            header(&t!("progress-stash"), t!("progress-stash-help")),
+        ),
     };
     row![
         container(sections).padding(theme::PAGE_PADDING),

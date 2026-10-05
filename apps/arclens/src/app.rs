@@ -2279,7 +2279,46 @@ impl App {
                 blueprints
             },
             progress: self.progress.as_ref(),
+            stash: crate::views::stash::StashView {
+                history: &self.stash_history.scans,
+                live: self.stash_scan.as_ref(),
+                needs: if self.progress_section == crate::views::progress::Section::Stash {
+                    self.stash_needs(catalog)
+                } else {
+                    Vec::new()
+                },
+                catalog,
+            },
         })
+    }
+
+    /// Items the remaining progress needs, with how many the latest stash
+    /// scan found: missing ones first, then by name.
+    fn stash_needs<'a>(&self, catalog: &'a Catalog) -> Vec<crate::views::stash::Shortfall<'a>> {
+        let latest = self.stash_history.latest();
+        let mut needs: Vec<crate::views::stash::Shortfall<'a>> = catalog
+            .items
+            .iter()
+            .filter_map(|item| {
+                let need: u32 = self
+                    .advice(item, catalog, Situation::default())
+                    .needs
+                    .iter()
+                    .map(|r| r.quantity)
+                    .sum();
+                (need > 0).then(|| crate::views::stash::Shortfall {
+                    item,
+                    have: latest.map_or(0, |s| s.count(&item.id)),
+                    needed: need,
+                })
+            })
+            .collect();
+        needs.sort_by(|a, b| {
+            (b.have < b.needed)
+                .cmp(&(a.have < a.needed))
+                .then_with(|| a.item.name.cmp(&b.item.name))
+        });
+        needs
     }
 
     fn view_row<'a>(&'a self, item: &'a Item, catalog: &'a Catalog) -> Element<'a, Message> {

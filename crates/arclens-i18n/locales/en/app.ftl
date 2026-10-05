@@ -207,6 +207,25 @@ progress-next-phase = Next: { $phase }
 progress-projects-help = Set how many phases of each project you've delivered: items for finished phases stop counting as reasons to keep.
 progress-blueprints-help = Blueprints you haven't learned show LEARN instead of a price. Tick the ones you know: a duplicate is then just worth its price.
 
+progress-stash = Stash
+progress-stash-help = Open your stash in the game and scroll through it once: ARClens reads every slot and tags it with what to do. Hover an item to confirm it, and ARClens knows it for sure from then on.
+stash-summary = { $slots } slots · { $date }
+stash-never = Not scanned yet
+stash-never-help = No scan yet. With game capture on, open the stash (Inventory tab) and scroll from top to bottom.
+stash-latest = Latest scan
+stash-scan-line = { $date } · { $slots } slots · { $value } value
+stash-likely = { $count } slots recognised from their icon only (marked "?" in game). Hover them once to confirm.
+stash-scanning = Scanning: { $seen } of { $used } slots seen. Keep scrolling.
+stash-scanning-unknown = Scanning: { $seen } slots seen.
+stash-needed = Still needed
+stash-needed-help = What your remaining workshop upgrades, quests and projects take, against what your latest scan found.
+stash-missing = { $count } short
+stash-have-need = { $have } / { $need }
+stash-needed-none = Nothing left to collect.
+stash-history = History
+stash-no-changes = No changes since the scan before.
+stash-more = , and { $count } more
+
 ## Settings
 
 settings-title = Settings

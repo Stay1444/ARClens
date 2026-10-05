@@ -5,3 +5,4 @@ pub mod home;
 pub mod map;
 pub mod progress;
 pub mod settings;
+pub mod stash;

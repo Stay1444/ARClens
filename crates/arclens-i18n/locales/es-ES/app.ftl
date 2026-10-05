@@ -207,6 +207,25 @@ progress-next-phase = Siguiente: { $phase }
 progress-projects-help = Indica cuántas fases de cada proyecto has entregado: los objetos de las fases terminadas dejan de ser motivo para guardar.
 progress-blueprints-help = Los planos que no has aprendido muestran APRENDER en vez de un precio. Marca los que ya sabes: un duplicado solo vale su precio.
 
+progress-stash = Alijo
+progress-stash-help = Abre tu alijo en el juego y recórrelo una vez: ARClens lee cada casilla y le pone lo que conviene hacer. Pasa el cursor por un objeto para confirmarlo, y a partir de entonces ARClens lo reconoce seguro.
+stash-summary = { $slots } casillas · { $date }
+stash-never = Aún sin leer
+stash-never-help = Aún no hay lectura. Con la captura del juego activada, abre el alijo (pestaña Inventario) y recórrelo de arriba abajo.
+stash-latest = Última lectura
+stash-scan-line = { $date } · { $slots } casillas · valor { $value }
+stash-likely = { $count } casillas reconocidas solo por su icono (con «?» en el juego). Pasa el cursor por ellas una vez para confirmarlas.
+stash-scanning = Leyendo: { $seen } de { $used } casillas vistas. Sigue desplazándote.
+stash-scanning-unknown = Leyendo: { $seen } casillas vistas.
+stash-needed = Aún necesitas
+stash-needed-help = Lo que piden tus mejoras de taller, misiones y proyectos pendientes, frente a lo que encontró tu última lectura.
+stash-missing = faltan { $count }
+stash-have-need = { $have } / { $need }
+stash-needed-none = No te falta nada por reunir.
+stash-history = Historial
+stash-no-changes = Sin cambios desde la lectura anterior.
+stash-more = , y { $count } más
+
 ## Ajustes
 
 settings-title = Ajustes
