@@ -546,7 +546,16 @@ const STASH_CLOSE_GRACE: Duration = Duration::from_millis(1500);
 /// Feeds the stash worker still frames of the stash grid.
 #[derive(Default)]
 struct StashWatch {
+    /// Lives as long as the vision loop: the stash opens and closes many
+    /// times.
     worker: Option<crate::stash_worker::Worker>,
+    /// This opening of the stash.
+    visit: StashVisit,
+}
+
+/// What the watch knows about the stash since it last opened.
+#[derive(Default)]
+struct StashVisit {
     /// Slot rows' tops in the previous frame.
     rows: Vec<u32>,
     /// The worker was told the grid moves (badges hidden).
@@ -574,36 +583,52 @@ impl StashWatch {
         screen: arclens_vision::Screen,
         hover: Option<&Hover>,
     ) -> bool {
-        use crate::stash_worker::Job;
-        let Some(worker) = &self.worker else {
+        if self.worker.is_none() {
             return false;
-        };
+        }
         let slots = if screen == arclens_vision::Screen::Inventory {
             arclens_vision::stash_slots(frame)
         } else {
             Vec::new()
         };
+        self.see(&slots, frame, hover, Instant::now())
+    }
+
+    /// [`Self::check`] with the slots found in `frame`, at `now`.
+    fn see(
+        &mut self,
+        slots: &[arclens_vision::Rect],
+        frame: &RgbImage,
+        hover: Option<&Hover>,
+        now: Instant,
+    ) -> bool {
+        use crate::stash_worker::Job;
+        let Some(worker) = &self.worker else {
+            return false;
+        };
+        let visit = &mut self.visit;
         if slots.is_empty() {
-            if self
+            if visit
                 .seen
-                .is_some_and(|at| at.elapsed() >= STASH_CLOSE_GRACE)
+                .is_some_and(|at| now.duration_since(at) >= STASH_CLOSE_GRACE)
                 && worker.offer(Job::Closed)
             {
-                *self = Self::default();
+                // Keep the worker: the next opening needs it.
+                *visit = StashVisit::default();
             }
-            return self.seen.is_some();
+            return visit.seen.is_some();
         }
-        self.seen = Some(Instant::now());
+        visit.seen = Some(now);
         let rows: Vec<u32> = slots
             .iter()
             .step_by(crate::stash::COLUMNS)
             .map(|s| s.y)
             .collect();
-        let still = rows == self.rows;
-        self.rows = rows;
+        let still = rows == visit.rows;
+        visit.rows = rows;
         if !still {
-            if !self.moving && worker.offer(Job::Moving) {
-                self.moving = true;
+            if !visit.moving && worker.offer(Job::Moving) {
+                visit.moving = true;
             }
             return true;
         }
@@ -612,7 +637,7 @@ impl StashWatch {
             frame: frame.clone(),
             tooltip,
         }) {
-            self.moving = false;
+            visit.moving = false;
         }
         true
     }
@@ -953,6 +978,39 @@ impl FrameSource for Replay {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stash_watch_keeps_its_worker_across_openings() {
+        use crate::stash_worker::{Job, Worker};
+        let (worker, jobs) = Worker::for_test();
+        let mut watch = StashWatch {
+            worker: Some(worker),
+            ..StashWatch::default()
+        };
+        let frame = RgbImage::new(4, 4);
+        let slots: Vec<arclens_vision::Rect> = (0u32..)
+            .take(crate::stash::COLUMNS)
+            .map(|x| arclens_vision::Rect {
+                x: x * 10,
+                y: 0,
+                width: 10,
+                height: 10,
+            })
+            .collect();
+        let mut now = Instant::now();
+        for _ in 0..2 {
+            // Opens: the grid shows up, then holds still.
+            assert!(watch.see(&slots, &frame, None, now));
+            assert!(matches!(jobs.try_recv(), Ok(Job::Moving)));
+            assert!(watch.see(&slots, &frame, None, now));
+            assert!(matches!(jobs.try_recv(), Ok(Job::Frame { .. })));
+            // Closes once the grid is gone for the grace period.
+            now += STASH_CLOSE_GRACE;
+            assert!(!watch.see(&[], &frame, None, now));
+            assert!(matches!(jobs.try_recv(), Ok(Job::Closed)));
+            now += Duration::from_secs(1);
+        }
+    }
 
     #[test]
     fn capture_slows_down_when_no_game_screen_shows() {

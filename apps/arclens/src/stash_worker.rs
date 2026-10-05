@@ -109,6 +109,13 @@ impl Worker {
     pub fn offer(&self, job: Job) -> bool {
         self.jobs.try_send(job).is_ok()
     }
+
+    /// A worker whose jobs land in the returned receiver.
+    #[cfg(test)]
+    pub fn for_test() -> (Self, std::sync::mpsc::Receiver<Job>) {
+        let (jobs, rx) = std::sync::mpsc::sync_channel(1);
+        (Self { jobs }, rx)
+    }
 }
 
 struct State {
