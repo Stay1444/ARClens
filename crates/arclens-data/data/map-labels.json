@@ -1360,6 +1360,208 @@
     "layer": "landmark",
     "anchor": "top-left"
    }
+  ],
+  "pendola-pass": [
+   {
+    "text": "Commissary Supermarket",
+    "lat": 8801.4,
+    "lng": 8302.3,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Railyard",
+    "lat": 9331.3,
+    "lng": 9536.8,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Old Town",
+    "lat": 9481.5,
+    "lng": 6692.5,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Almatera Station",
+    "lat": 7581.2,
+    "lng": 7691.5,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Cielo Sereno Observatory",
+    "lat": 7013.0,
+    "lng": 10323.4,
+    "layer": "lootZone",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Northern Tracks",
+    "lat": 6428.0,
+    "lng": 8509.1,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Fallen Emperor",
+    "lat": 8285.1,
+    "lng": 5984.6,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Southern Pass",
+    "lat": 11567.0,
+    "lng": 9811.8,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Freight Terminal",
+    "lat": 9650.4,
+    "lng": 9295.7,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Almatera Village",
+    "lat": 8370.5,
+    "lng": 6703.3,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Railroad Junction",
+    "lat": 7652.1,
+    "lng": 9123.2,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Loading Platforms",
+    "lat": 10349.2,
+    "lng": 10168.9,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Electrical Substation",
+    "lat": 11562.0,
+    "lng": 10457.1,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Researcher Lodgings",
+    "lat": 5396.4,
+    "lng": 8296.1,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Truck Stop",
+    "lat": 11515.9,
+    "lng": 8997.0,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Frozen River",
+    "lat": 7342.6,
+    "lng": 8560.8,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Transit Tunnel",
+    "lat": 9698.3,
+    "lng": 8339.4,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Dispatch Tower",
+    "lat": 6605.8,
+    "lng": 8059.8,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Weather Station",
+    "lat": 8204.7,
+    "lng": 10309.9,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Frozen River",
+    "lat": 10758.1,
+    "lng": 9386.6,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Old Hamlet",
+    "lat": 11795.8,
+    "lng": 9749.6,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Deep-Space Telescope",
+    "lat": 6282.1,
+    "lng": 10328.9,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Piazza della Rupe",
+    "lat": 8420.7,
+    "lng": 6996.5,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Porta Benvenuti",
+    "lat": 7321.2,
+    "lng": 7255.5,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   },
+   {
+    "text": "Controlled Receiving Facility",
+    "lat": 8923.1,
+    "lng": 9743.6,
+    "layer": "landmark",
+    "anchor": "center",
+    "zlayers": 1
+   }
   ]
  }
 }

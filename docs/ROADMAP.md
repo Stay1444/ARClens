@@ -414,9 +414,14 @@ Research: `docs/research/frozen-trail.md`.
 - [x] Pendola Pass as a map: title OCR, names, schedule (2026-10-11).
 - [x] Redirection, ARC Frigate and Flash Freeze names (en, es).
 - [x] Items and quests RaidTheory lacks, from MetaForge (2026-10-11).
-- [ ] Pendola Pass place names (HAR of MetaForge's map page) and map
-      image (RaidTheory tiles, once published).
-- [ ] Condition bits for Redirection and the ARC Frigate; presets for them.
+- [x] Pendola Pass place names, centre-anchored (verified on screenshots),
+      and condition bits incl. ARC Frigate on five maps (2026-10-11).
+- [x] Loot zones and their kinds (Dam, Buried City, Pendola Pass) for
+      "Where to look" and "Show on map".
+- [ ] Pendola Pass map image (RaidTheory tiles, once published).
+- [ ] Loot zones of Spaceport, Blue Gate, Stella Montis, Riven Tides
+      (screenshots of each map at a middle zoom).
+- [ ] Presets for Redirection and the ARC Frigate.
 - [ ] Re-check vision regions on 2.0 screens: workshop overview tiles,
       stash count box (bigger stashes), main menu (`manual-tests.md` §7).
 - [ ] Reward Points instead of Cred in vendor costs, once the data says so.
@@ -428,7 +433,7 @@ Research: `docs/research/frozen-trail.md`.
 - [x] Items tab: every fact under the card, rarity and type filters,
       linked items (`docs/assets/startup.png` for the new start-up screen).
 - [x] "Show on map": the item's pickups and containers in its loot areas.
-- [ ] Verify the `lootAreas` shape on live data (`manual-tests.md` §7).
+- [x] `lootAreas` shape verified on live data (2026-10-11).
 - [ ] The same in game: pick an item in the overlay search, see its spots
       on the open map.
 

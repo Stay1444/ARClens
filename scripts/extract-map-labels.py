@@ -16,6 +16,12 @@ import json
 import re
 import sys
 
+# Maps whose labels sit at the text centre in game although MetaForge draws
+# them left-aligned (no `center:!0` on their layers). Pendola Pass:
+# verified 2026-10-11 on the maintainer's screenshots at three zooms (rms
+# 0.3-0.4 px centred vs 5-24 px top-left).
+CENTERED_MAPS = {"pendola-pass"}
+
 # A label object: `{lat:…,lng:…,text:"…",zlayers:…}`, fields in any order.
 OBJECT = re.compile(r"\{([^{}]*)\}")
 FIELD = re.compile(r'(\w+):("[^"]*"|-?[\d.e]+)')
@@ -73,7 +79,7 @@ def main():
                 "lat": float(fields["lat"]),
                 "lng": float(fields["lng"]),
                 "layer": layer,
-                "anchor": "center" if centered else "top-left",
+                "anchor": "center" if centered or map_id in CENTERED_MAPS else "top-left",
             }
             if "zlayers" in fields:
                 label["zlayers"] = int(fields["zlayers"])

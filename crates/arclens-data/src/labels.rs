@@ -101,15 +101,8 @@ mod tests {
 
     #[test]
     fn every_map_has_labels() {
-        // Pendola Pass (Frozen Trail, 2026-10-08) waits on a new extraction
-        // from a capture of MetaForge's map page.
-        const AWAITING: &[&str] = &["pendola-pass"];
         for (map, _) in crate::metaforge::MAPS {
-            if AWAITING.contains(map) {
-                assert!(map_labels(map).is_empty(), "{map} has labels now");
-            } else {
-                assert!(map_labels(map).len() >= 15, "{map}");
-            }
+            assert!(map_labels(map).len() >= 15, "{map}");
         }
         assert_eq!(map_labels("nowhere").len(), 0);
     }

@@ -179,7 +179,7 @@ pub const MAPS: &[(&str, &str)] = &[
     ("blue-gate", "The Blue Gate"),
     ("stella-montis", "Stella Montis"),
     ("riven-tides", "Riven Tides"),
-    // Frozen Trail (2.0, 2026-10-08). No labels or map image yet.
+    // Frozen Trail (2.0, 2026-10-08). No map image yet.
     ("pendola-pass", "Pendola Pass"),
 ];
 
@@ -233,7 +233,8 @@ pub fn event_on_map(event_map: &str, map_id: &str) -> bool {
 
 /// Each map's conditions and their bit in a marker's `eventConditionMask`,
 /// from the `eventConditions` lists in MetaForge's map page bundle
-/// (recorded 2026-10-03). The numbering differs per map (Cold Snap is 9 on
+/// (recorded 2026-10-03; Frozen Trail's ARC Frigate and Pendola Pass from a
+/// capture of 2026-10-11). The numbering differs per map (Cold Snap is 9 on
 /// Dam, 11 on the Spaceport). Verified on Dam's data: hurricane caches
 /// carry bit 12 (Hurricane), snow piles bit 9 (Cold Snap), husks bit 4
 /// (Husk Graveyard), probes bit 1, assessors bit 14 (Close Scrutiny).
@@ -253,6 +254,7 @@ pub const CONDITIONS: &[(&str, &[(&str, u8)])] = &[
             ("Cold Snap", 9),
             ("Hurricane", 12),
             ("Close Scrutiny", 14),
+            ("ARC Frigate", 16),
         ],
     ),
     (
@@ -272,6 +274,7 @@ pub const CONDITIONS: &[(&str, &[(&str, u8)])] = &[
             ("Cold Snap", 11),
             ("Hurricane", 12),
             ("Close Scrutiny", 14),
+            ("ARC Frigate", 16),
         ],
     ),
     (
@@ -286,6 +289,7 @@ pub const CONDITIONS: &[(&str, &[(&str, u8)])] = &[
             ("Cold Snap", 8),
             ("Hurricane", 12),
             ("Close Scrutiny", 14),
+            ("ARC Frigate", 16),
         ],
     ),
     (
@@ -303,6 +307,7 @@ pub const CONDITIONS: &[(&str, &[(&str, u8)])] = &[
             ("Hurricane", 12),
             ("Locked Gate", 13),
             ("Close Scrutiny", 14),
+            ("ARC Frigate", 16),
         ],
     ),
     ("stella-montis", &[("No Event", 0), ("Night Raid", 7)]),
@@ -310,13 +315,15 @@ pub const CONDITIONS: &[(&str, &[(&str, u8)])] = &[
         "riven-tides",
         &[("No Event", 0), ("Night Raid", 7), ("Beachcombing", 15)],
     ),
-    // Bit 0 is from the 2026-10-03 bundle (No Event only, before release).
-    // Night Raid is bit 7 on every other map: **unverified** here. The
-    // map's own condition (Redirection) and the ARC Frigate operation are
-    // left out until their bits are known; the map panel then reads them
-    // as "no condition" and keeps every marker
-    // (docs/research/frozen-trail.md).
-    ("pendola-pass", &[("No Event", 0), ("Night Raid", 7)]),
+    (
+        "pendola-pass",
+        &[
+            ("No Event", 0),
+            ("Night Raid", 7),
+            ("ARC Frigate", 16),
+            ("Redirection", 17),
+        ],
+    ),
 ];
 
 /// A map's conditions with their bits (empty for an unknown map).
@@ -663,8 +670,15 @@ mod tests {
             condition_on_map("pendola-pass", "Night Raid"),
             Some(("Night Raid", 7))
         );
-        // Bit not known yet: read as no condition, every marker shown.
-        assert_eq!(condition_on_map("pendola-pass", "Redirection"), None);
+        assert_eq!(
+            condition_on_map("pendola-pass", "Redirection"),
+            Some(("Redirection", 17))
+        );
+        assert_eq!(
+            condition_on_map("dam", "ARC Frigate"),
+            Some(("ARC Frigate", 16))
+        );
+        assert_eq!(condition_on_map("riven-tides", "ARC Frigate"), None);
         assert_eq!(condition_on_map("dam", "??"), None);
         assert_eq!(condition_on_map("nowhere", "Hurricane"), None);
         // Every map we list has a condition table.

@@ -162,9 +162,10 @@ _Last researched: 2026-10-03. Re-verify before relying on anything marked
   The result lives in the catalogue cache. Shapes recorded in
   Getty/p5-www-metaforge's fixtures (2026-10-03), copied to
   `crates/arclens-data/tests/fixtures/metaforge/`.
-- **`lootAreas`** on map markers: present on every record (2026-10-03),
-  shape not recorded. Read leniently (string, list of strings or of
-  objects with a name); **unverified**. Used for "Show on map".
+- **`lootAreas`** on map markers: a comma-separated string of the game's
+  loot kinds ("Industrial, Security"), empty or null on most records
+  (**verified** 2026-10-11 on the maintainer's dumps of Dam and Pendola
+  Pass). Used for "Show on map".
 
 ## ardb.app
 

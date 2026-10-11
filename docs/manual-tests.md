@@ -91,6 +91,12 @@ Full-resolution PNGs, game in the foreground, nothing over it (Spectacle's
 
 ## 7. Frozen Trail captures (asked 2026-10-11)
 
+Received 2026-10-11: 1 (Destinations map, three zooms), 3 (HAR), 4 (dumps),
+7 (Grappling Hook only), 10 (Reward Pass). 5 and 8 look unchanged; 2 is
+parked; 6 and 9 when available. Also useful now: each other map at a
+middle zoom with its loot-zone icons visible (Spaceport, Blue Gate,
+Stella Montis, Riven Tides).
+
 Full-screen PNGs at 2560×1440 like the other fixtures, ARClens overlay
 hidden (Ctrl+Shift+O), unless a step says otherwise.
 

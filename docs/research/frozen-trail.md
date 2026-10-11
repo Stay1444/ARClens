@@ -69,14 +69,53 @@ Sources (2026-10-11): [Forbes](https://www.forbes.com/sites/erikkain/2026/10/09/
   _are_ items (plants, pickups), their containers' `lootAreas`, and each
   item's loot-area types. ARClens combines those ("Show on map").
 
+## Maintainer's captures (2026-10-11)
+
+- **Screenshots** of Pendola Pass on the DESTINATIONS map at the widest,
+  middle and closest zoom (2560×1440, received at 2000×1125).
+- **Loot zones** read off them (icons under each name, the game's legend
+  kinds): Almatera Station (Commercial), Railroad Junction (Mechanical,
+  Electrical), Fallen Emperor (ARC), Commissary Supermarket (Commercial,
+  Medical), Railyard (Industrial, Mechanical), Old Town (Residential, Old
+  World), Loading Platforms (Industrial, Exodus), Cielo Sereno Observatory
+  (Technological, Exodus), Deep-Space Telescope (Exodus). Dam and Buried
+  City zones were read off the older map fixtures. All in
+  `crates/arclens-data/data/loot-zones.json`. **Verified** from the game's
+  own map.
+- **HAR of MetaForge's Pendola Pass page** (`scripts/extract-map-labels.py`):
+  25 place names. Their layers carry no `center:!0`, yet in game the
+  coordinate is the text **centre**: fitting the screenshots' label boxes
+  gives rms 0.4 px (middle zoom, 9 labels), 0.3 px (widest, 4 region
+  names) and ~5 px (closest, 11 labels, hand-measured) centred, against
+  5-24 px top-left. The script now centres Pendola Pass's labels. The
+  other maps' labels are unchanged since 2026-10-03.
+- **Condition bits** from the same bundle: Pendola Pass No Event 0, Night
+  Raid 7, ARC Frigate 16, Redirection 17; ARC Frigate is bit 16 on Dam,
+  Spaceport, Buried City and Blue Gate too (not on Stella Montis or Riven
+  Tides). Everything else unchanged.
+- **Map tiles**: MetaForge draws Pendola Pass from its own tile server
+  (`…/arc-raiders/maps/pendola-pass/20261005b-satellite/{z}/{x}/{y}.webp`,
+  native zoom 4, tile bounds 3162-13220 × 626-15758). Not an allowed image
+  source; the app's Pendola Pass map stays without a background until
+  RaidTheory publishes tiles.
+- **Marker dumps** (`game-map-data`, 2026-10-11): `lootAreas` is a
+  comma-separated string ("Industrial, Security"), empty or null on most
+  records (Dam: 423 of 7 984 set; Pendola Pass: 80 of 5 444). Pendola
+  Pass has 5 444 markers, all `zlayers` 1, no condition masks yet; its
+  nature markers are candleberries, moss, great mullein and mushroom;
+  events include `emperor_payload`, `calibrated_transmitter` (Redirection),
+  `frigate_cargo`, `flash_freeze`, `dig_spot`. Coordinates span lat
+  4 399-12 908, lng 5 497-11 525.
+- **Grappling Hook tooltip** (stash): Quick Use, Uncommon, Range 20 m (news
+  said the Snap Hook went to 18 m; this is the new hook), 100/100
+  durability, 5.0 kg, sells for 1 200, recycles into two items (rope and
+  a tool). The workshop overview and main menu look the same as before
+  2.0 (maintainer); no Outpost, new stash tiers or other new items yet.
+
 ## What ARClens does with it
 
-- Pendola Pass is a known map (`pendola-pass`): title OCR, names, events.
-  Its place-name labels and map image are missing (a new HAR of
-  MetaForge's map page and RaidTheory tiles are needed).
-- Condition bits on Pendola Pass: No Event (0) from the pre-release
-  bundle; Night Raid assumed bit 7 as on every other map (**unverified**).
-  Redirection and Frigate have names but no bit: while they run, every
-  marker shows.
+- Pendola Pass is a known map (`pendola-pass`): title OCR, names, events,
+  place names (label tracking and the app's map), condition bits, loot
+  zones. Missing: the map image (RaidTheory tiles).
 - Cred: vendor costs in RaidTheory's 1.42 data still say `creds`. Whether
   2.0 vendors price in Reward Points is **unverified**.
