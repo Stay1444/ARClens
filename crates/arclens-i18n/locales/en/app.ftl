@@ -38,6 +38,7 @@ status-from-game-marker = (read from the game)
 status-level-from-game = { $station } set to level { $level } (read from the game).
 status-quests-from-game = Quest progress updated (read from the game).
 status-refreshing = Refreshing game data…
+status-refresh-failed = Could not refresh game data; showing the saved copy.
 error-schedule = could not load the event schedule: { $error }
 error-markers = could not load markers: { $error }
 error-overlay-start = could not start { $bin }: { $error }

@@ -277,6 +277,8 @@ type MapImageKey = (String, Option<u32>);
 #[derive(Debug, Clone)]
 pub enum Message {
     CatalogLoaded(Result<Arc<Catalog>, String>),
+    /// The cached catalogue, shown while a refresh runs.
+    CatalogCached(Option<Arc<Catalog>>),
     /// Every item image is on disk (for recognising stash slots).
     StashIcons(Vec<(ItemId, std::path::PathBuf)>),
     /// `None`: follow the system.
@@ -417,13 +419,16 @@ impl App {
             paths: paths.clone(),
             status: Vec::new(),
         };
+        let lang = arclens_i18n::current().data_code();
         let tasks = Task::batch([
+            // Whatever is cached first, so the app is usable at once; then
+            // the refresh if the cache is stale.
             Task::perform(
-                data::load(
-                    paths.clone(),
-                    settings.max_age(),
-                    arclens_i18n::current().data_code(),
-                ),
+                data::load_cached(paths.clone(), lang),
+                Message::CatalogCached,
+            ),
+            Task::perform(
+                data::load(paths.clone(), settings.max_age(), lang),
                 Message::CatalogLoaded,
             ),
             Task::perform(
@@ -477,9 +482,9 @@ impl App {
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::CatalogLoaded(Ok(catalog)) => return self.on_catalog(catalog),
+            Message::CatalogLoaded(result) => return self.on_catalog_loaded(result),
+            Message::CatalogCached(cached) => return self.on_catalog_cached(cached),
             Message::SetLanguage(lang) => return self.set_language(lang),
-            Message::CatalogLoaded(Err(error)) => self.catalog = Load::Failed(error),
             Message::QueryChanged(query) => {
                 self.query = query;
                 return self.refresh_results();
@@ -1380,6 +1385,39 @@ impl App {
         Task::none()
     }
 
+    /// The refreshed (or freshly cached) catalogue, or why it failed. A
+    /// failed refresh keeps the cached catalogue on screen.
+    fn on_catalog_loaded(&mut self, result: Result<Arc<Catalog>, String>) -> Task<Message> {
+        self.clear_refreshing();
+        match result {
+            Ok(catalog) => self.on_catalog(catalog),
+            Err(error) => {
+                if matches!(self.catalog, Load::Ready(_)) {
+                    tracing::warn!(%error, "catalog refresh failed; keeping the cached one");
+                    self.status.push(t!("status-refresh-failed"));
+                } else {
+                    self.catalog = Load::Failed(error);
+                }
+                Task::none()
+            }
+        }
+    }
+
+    /// The cached catalogue read at start: shown unless the real load
+    /// landed first.
+    fn on_catalog_cached(&mut self, cached: Option<Arc<Catalog>>) -> Task<Message> {
+        match cached {
+            Some(catalog) if matches!(self.catalog, Load::Loading) => self.on_catalog(catalog),
+            _ => Task::none(),
+        }
+    }
+
+    /// Drops the "refreshing" note once a load has ended.
+    fn clear_refreshing(&mut self) {
+        let note = t!("status-refreshing");
+        self.status.retain(|s| *s != note);
+    }
+
     /// Refetches game data and the open map's markers, ignoring the cache.
     fn refresh_data(&mut self) -> Task<Message> {
         self.status.push(t!("status-refreshing"));
@@ -1796,6 +1834,13 @@ impl App {
     fn on_catalog(&mut self, catalog: Arc<Catalog>) -> Task<Message> {
         if catalog.lang != arclens_i18n::current().data_code() {
             // Loaded for a language since switched away from.
+            return Task::none();
+        }
+        if let Load::Ready(shown) = &self.catalog
+            && shown.lang == catalog.lang
+            && shown.fetched_at == catalog.fetched_at
+        {
+            // The cache shown at start was fresh: nothing new.
             return Task::none();
         }
         // Quest markers are named by their quest's id.

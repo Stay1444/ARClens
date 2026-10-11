@@ -25,6 +25,27 @@ pub async fn load(
         .map_err(|e| format!("{e:#}"))
 }
 
+/// The cached catalogue for `lang` whatever its age, to show at once while
+/// [`load`] refreshes it. `None` without a readable cache (or with
+/// [`DATA_DIR_ENV`] set, which bypasses the cache).
+pub async fn load_cached(paths: Paths, lang: &'static str) -> Option<Arc<Catalog>> {
+    if std::env::var_os(DATA_DIR_ENV).is_some() {
+        return None;
+    }
+    let cache = DiskCache::new(paths.catalog_cache(lang));
+    match tokio::task::spawn_blocking(move || cache.load()).await {
+        Ok(Ok(catalog)) => catalog.map(Arc::new),
+        Ok(Err(error)) => {
+            tracing::warn!(%error, "ignoring unreadable catalog cache");
+            None
+        }
+        Err(error) => {
+            tracing::warn!(%error, "reading the catalog cache failed");
+            None
+        }
+    }
+}
+
 /// Set to a local checkout of RaidTheory/arcraiders-data to skip the cache
 /// and network entirely (offline development, testing dataset changes).
 pub const DATA_DIR_ENV: &str = "ARCLENS_RAIDTHEORY_DIR";
@@ -109,11 +130,10 @@ pub fn http_client() -> reqwest::Client {
 async fn refresh(paths: &Paths, cache: &DiskCache, lang: &'static str) -> anyhow::Result<Catalog> {
     let client = http_client();
     let dir = paths.raidtheory_dir();
-    download_raidtheory(&client, &dir)
-        .await
-        .context("downloading RaidTheory dataset")?;
+    // Both sources at once; MetaForge is optional.
+    let (download, extra) = tokio::join!(download_raidtheory(&client, &dir), fetch_supplement());
+    download.context("downloading RaidTheory dataset")?;
 
-    let extra = fetch_supplement().await;
     let cache = cache.clone();
     tokio::task::spawn_blocking(move || {
         let mut catalog = RaidTheoryDir::new(dir).in_language(lang).load()?;

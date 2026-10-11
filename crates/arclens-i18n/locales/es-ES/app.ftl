@@ -38,6 +38,7 @@ status-from-game-marker = (leído del juego)
 status-level-from-game = { $station } pasa al nivel { $level } (leído del juego).
 status-quests-from-game = Progreso de misiones actualizado (leído del juego).
 status-refreshing = Actualizando los datos del juego…
+status-refresh-failed = No se pudieron actualizar los datos del juego; se muestra la copia guardada.
 error-schedule = no se ha podido cargar el calendario de eventos: { $error }
 error-markers = no se han podido cargar los marcadores: { $error }
 error-overlay-start = no se ha podido iniciar { $bin }: { $error }
