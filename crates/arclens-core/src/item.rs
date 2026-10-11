@@ -172,6 +172,43 @@ impl ItemDetails {
     }
 }
 
+/// What the item browser narrows to: a rarity and a type ("Topside
+/// Material"), each optional.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ItemFilter {
+    pub rarity: Option<Rarity>,
+    pub category: Option<String>,
+}
+
+impl ItemFilter {
+    pub fn is_empty(&self) -> bool {
+        self.rarity.is_none() && self.category.is_none()
+    }
+
+    pub fn matches(&self, item: &Item) -> bool {
+        self.rarity.is_none_or(|r| item.rarity == Some(r))
+            && self.category.as_deref().is_none_or(|c| {
+                item.category
+                    .as_deref()
+                    .is_some_and(|own| own.eq_ignore_ascii_case(c))
+            })
+    }
+}
+
+/// Every item type in `items`, sorted, each once.
+pub fn categories(items: &[Item]) -> Vec<String> {
+    let mut out: Vec<String> = items
+        .iter()
+        .filter_map(|i| i.category.as_deref())
+        .map(str::trim)
+        .filter(|c| !c.is_empty())
+        .map(str::to_owned)
+        .collect();
+    out.sort_by_key(|c| c.to_lowercase());
+    out.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+    out
+}
+
 /// A trader's offer of the item.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Vendor {
@@ -211,4 +248,55 @@ pub enum RequirementKind {
     WorkshopUpgrade,
     Project,
     Crafting,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn item(id: &str, rarity: Option<Rarity>, category: Option<&str>) -> Item {
+        Item {
+            id: ItemId::new(id),
+            name: id.to_owned(),
+            aliases: Vec::new(),
+            description: None,
+            rarity,
+            category: category.map(str::to_owned),
+            value: None,
+            weight: None,
+            stack_size: None,
+            recycles_into: Vec::new(),
+            salvages_into: Vec::new(),
+            required_for: Vec::new(),
+            ingredient_of: Vec::new(),
+            image_url: None,
+            details: ItemDetails::default(),
+        }
+    }
+
+    #[test]
+    fn filters_by_rarity_and_type() {
+        let gear = item("gear", Some(Rarity::Rare), Some("Recyclable"));
+        let wires = item("wires", Some(Rarity::Common), Some("Topside Material"));
+        let odd = item("odd", None, None);
+        assert!(ItemFilter::default().is_empty());
+        assert!(ItemFilter::default().matches(&odd));
+        let rare = ItemFilter {
+            rarity: Some(Rarity::Rare),
+            category: None,
+        };
+        assert!(rare.matches(&gear));
+        assert!(!rare.matches(&wires));
+        assert!(!rare.matches(&odd));
+        let topside = ItemFilter {
+            rarity: None,
+            category: Some("topside material".into()),
+        };
+        assert!(topside.matches(&wires));
+        assert!(!topside.matches(&gear));
+        assert_eq!(
+            categories(&[gear, wires.clone(), wires, odd]),
+            ["Recyclable", "Topside Material"]
+        );
+    }
 }

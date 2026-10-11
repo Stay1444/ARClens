@@ -4,6 +4,7 @@
 //! [`item_card`], so a player sees the same layout and colours everywhere.
 
 pub mod card;
+pub mod detail;
 pub mod format;
 pub mod markers;
 pub mod names;

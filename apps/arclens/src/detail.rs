@@ -109,6 +109,7 @@ impl Rows<'_> {
                 .catalog
                 .item(id)
                 .map_or_else(|| currency(id.as_str()), |i| i.name.clone()),
+            id: self.catalog.item(id).map(|_| id.clone()),
             icon: self.icons.get(id).map(|i| i.path.clone()),
             quantity,
             note,
@@ -224,7 +225,7 @@ fn needed_for(item: &Item, progress: Option<&Progress>) -> Vec<DetailRow> {
                 RequirementKind::Crafting => t!("kind-crafting"),
             }),
             done: progress.is_some_and(|p| !p.needs(req)),
-            icon: None,
+            ..DetailRow::default()
         })
         .collect()
 }

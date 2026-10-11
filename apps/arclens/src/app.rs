@@ -12,7 +12,7 @@ use arclens_ipc::ToOverlay;
 use arclens_ui::format::thousands;
 use arclens_ui::palette::{self, with_alpha};
 use arclens_ui::theme;
-use arclens_ui::{CardSize, ItemCard, item_card};
+use arclens_ui::{CardSize, ItemCard};
 use iced::widget::{Space, button, column, container, image, row, scrollable, text, text_input};
 use iced::{Alignment, Border, Color, Element, Font, Length, Subscription, Task, Theme, font};
 use std::path::Path;
@@ -45,6 +45,9 @@ pub struct App {
     query: String,
     results: Vec<ItemId>,
     selected: Option<ItemId>,
+    /// Items tab: what the list is narrowed to, and the types to pick from.
+    item_filter: arclens_core::ItemFilter,
+    item_categories: Vec<String>,
     overlay: Option<OverlayHandle>,
     overlay_visible: bool,
     overlay_interactive: bool,
@@ -279,6 +282,7 @@ pub enum Message {
     CatalogLoaded(Result<Arc<Catalog>, String>),
     /// The cached catalogue, shown while a refresh runs.
     CatalogCached(Option<Arc<Catalog>>),
+    SetItemFilter(arclens_core::ItemFilter),
     /// Every item image is on disk (for recognising stash slots).
     StashIcons(Vec<(ItemId, std::path::PathBuf)>),
     /// `None`: follow the system.
@@ -372,6 +376,8 @@ impl App {
             query: String::new(),
             results: Vec::new(),
             selected: None,
+            item_filter: arclens_core::ItemFilter::default(),
+            item_categories: Vec::new(),
             overlay: None,
             overlay_visible: false,
             overlay_interactive: false,
@@ -489,9 +495,10 @@ impl App {
                 self.query = query;
                 return self.refresh_results();
             }
-            Message::Select(id) => {
-                self.tab = Tab::Items;
-                self.selected = Some(id);
+            Message::Select(id) => return self.select_item(&id),
+            Message::SetItemFilter(filter) => {
+                self.item_filter = filter;
+                return self.refresh_results();
             }
             Message::SelectFirst => {
                 if let Some(first) = self.results.first().cloned() {
@@ -960,23 +967,49 @@ impl App {
         let Load::Ready(catalog) = &self.catalog else {
             return Task::none();
         };
+        let filter = &self.item_filter;
+        // A filtered list is short enough to show whole.
+        let limit = if filter.is_empty() {
+            MAX_RESULTS
+        } else {
+            catalog.items.len()
+        };
         self.results = if self.query.trim().is_empty() {
-            let mut all: Vec<&Item> = catalog.items.iter().collect();
+            let mut all: Vec<&Item> = catalog.items.iter().filter(|i| filter.matches(i)).collect();
             all.sort_by(|a, b| a.name.cmp(&b.name));
-            all.into_iter()
-                .take(MAX_RESULTS)
-                .map(|i| i.id.clone())
-                .collect()
+            all.into_iter().take(limit).map(|i| i.id.clone()).collect()
         } else {
             self.search
-                .search(&catalog.items, &self.query, MAX_RESULTS)
+                .search(&catalog.items, &self.query, catalog.items.len())
                 .into_iter()
+                .filter(|item| filter.matches(item))
+                .take(limit)
                 .map(|item| item.id.clone())
                 .collect()
         };
 
         let loads: Vec<_> = self
             .results
+            .iter()
+            .filter_map(|id| catalog.item(id))
+            .filter_map(|item| self.icons.request(item))
+            .map(|load| Task::perform(load, |(id, icon)| Message::IconLoaded(id, icon)))
+            .collect();
+        Task::batch(loads)
+    }
+
+    /// Opens `id` in the Items tab, with the icons of every item its page
+    /// mentions.
+    fn select_item(&mut self, id: &ItemId) -> Task<Message> {
+        self.tab = Tab::Items;
+        self.selected = Some(id.clone());
+        let Load::Ready(catalog) = &self.catalog else {
+            return Task::none();
+        };
+        let Some(item) = catalog.item(id) else {
+            return Task::none();
+        };
+        let loads: Vec<_> = crate::detail::referenced(item, catalog)
             .iter()
             .filter_map(|id| catalog.item(id))
             .filter_map(|item| self.icons.request(item))
@@ -1851,6 +1884,7 @@ impl App {
                 .map(|q| (arclens_i18n::slug(&q.id), q.name.clone()))
                 .collect(),
         );
+        self.item_categories = arclens_core::categories(&catalog.items);
         self.catalog = Load::Ready(catalog);
         self.refresh_map_summary();
         self.send_configure();
@@ -2299,6 +2333,11 @@ impl App {
         .color(palette::TEXT_MUTED);
 
         let list = column![
+            container(crate::views::encyclopedia::filters(
+                &self.item_filter,
+                &self.item_categories,
+            ))
+            .padding([0, 10]),
             container(list_header).padding([0, 10]),
             scrollable(rows.padding([0, 10])).height(Length::Fill)
         ]
@@ -2309,14 +2348,23 @@ impl App {
         let detail: Element<'_, Message> = {
             match self.selected.as_ref().and_then(|id| catalog.item(id)) {
                 Some(item) => {
-                    let card = item_card(&ItemCard {
+                    let advice = self.advice(item, catalog, Situation::default());
+                    let detail = crate::detail::build(
                         item,
-                        advice: self.advice(item, catalog, Situation::default()),
+                        advice.clone(),
+                        catalog,
+                        self.progress.as_ref(),
+                        &self.icons,
+                    );
+                    let card = ItemCard {
+                        item,
+                        advice,
                         icon: self.icons.get(&item.id).map(|icon| &icon.large),
-                        recycle_names: recycle_names(item, catalog, Place::Workshop),
+                        recycle_names: Vec::new(),
                         size: CardSize::Full,
-                    });
-                    scrollable(container(card).padding(theme::PAGE_PADDING).max_width(820))
+                    };
+                    let page = crate::views::encyclopedia::page(&card, &detail, &self.icons);
+                    scrollable(container(page).padding(theme::PAGE_PADDING).max_width(900))
                         .height(Length::Fill)
                         .into()
                 }

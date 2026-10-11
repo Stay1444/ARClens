@@ -90,6 +90,8 @@ home-tip-toggle-body = Muestra u oculta el overlay.
 data-loading = Cargando los datos del juego…
 data-load-failed = No se han podido cargar los datos del juego
 items-search = Buscar objetos…
+items-all-types = Todos los tipos
+items-all-rarities = Todas
 items-browsing = { $shown } de { $total } objetos · escribe para buscar
 items-results = { $count ->
     [one] { $count } resultado

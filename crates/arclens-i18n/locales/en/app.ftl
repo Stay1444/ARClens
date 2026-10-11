@@ -90,6 +90,8 @@ home-tip-toggle-body = Show or hide the overlay.
 data-loading = Loading game data…
 data-load-failed = Could not load game data
 items-search = Search items…
+items-all-types = All types
+items-all-rarities = All
 items-browsing = Browsing { $shown } of { $total } items · type to search
 items-results = { $count ->
     [one] { $count } result

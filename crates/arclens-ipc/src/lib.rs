@@ -173,6 +173,10 @@ pub struct DetailSection {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct DetailRow {
     pub name: String,
+    /// The catalogue item the row names, to open it (absent for
+    /// currencies, quests and upgrades).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<arclens_core::ItemId>,
     #[serde(default)]
     pub icon: Option<PathBuf>,
     #[serde(default)]

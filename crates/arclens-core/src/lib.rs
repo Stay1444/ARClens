@@ -17,7 +17,8 @@ pub use advice::{
 pub use areas::{MarkerArea, MarkerLayout, layout};
 pub use events::{Agenda, ScheduledEvent, agenda, countdown};
 pub use item::{
-    Item, ItemDetails, ItemId, ItemQuantity, Rarity, Requirement, RequirementKind, Vendor,
+    Item, ItemDetails, ItemFilter, ItemId, ItemQuantity, Rarity, Requirement, RequirementKind,
+    Vendor, categories,
 };
 pub use map::{
     MapId, MapPoint, Marker, MarkerFilter, PointPair, Transform, humanize, marker_counts,

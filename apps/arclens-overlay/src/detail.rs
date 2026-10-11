@@ -6,10 +6,11 @@ use crate::Message;
 use arclens_core::ItemId;
 use arclens_i18n::t;
 use arclens_ipc::{DetailRow, ItemDetail};
+use arclens_ui::detail::{self, pairs, titled};
 use arclens_ui::palette::{self, with_alpha};
-use arclens_ui::theme::{self, DISPLAY, DISPLAY_SEMI, INK, RADIUS, STRONG};
+use arclens_ui::theme::{self, INK, RADIUS, STRONG};
 use arclens_ui::{CardSize, ItemCard, card};
-use iced::widget::{Space, button, column, container, image, row, scrollable, text};
+use iced::widget::{button, column, container, image, row, scrollable, text};
 use iced::{Alignment, Border, Element, Length};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -20,9 +21,6 @@ pub const MAX_OPEN: usize = 4;
 pub const WIDTH: f32 = 470.0;
 /// Space between windows.
 pub const GAP: f32 = 14.0;
-/// Row icon size, and the size it is decoded at (sharp at 2× scale).
-const ROW_ICON: f32 = 32.0;
-const ROW_ICON_PX: u32 = 64;
 
 /// An open window: its data and its icons, decoded once on arrival.
 #[derive(Debug)]
@@ -43,7 +41,12 @@ impl OpenItem {
             .iter()
             .flat_map(|s| &s.rows)
             .filter_map(|r| r.icon.clone())
-            .filter_map(|p| Some((p.clone(), arclens_ui::decode_icon(&p, ROW_ICON_PX)?)))
+            .filter_map(|p| {
+                Some((
+                    p.clone(),
+                    arclens_ui::decode_icon(&p, detail::LINE_ICON_PX)?,
+                ))
+            })
             .collect();
         Self {
             detail,
@@ -248,89 +251,18 @@ fn head<'a>(card: &ItemCard<'a>, id: &ItemId) -> Element<'a, Message> {
     .into()
 }
 
-/// A section: small caps title over its content.
-fn titled<'a>(title: &str, content: Element<'a, Message>) -> Element<'a, Message> {
-    column![
-        text(title.to_uppercase())
-            .size(theme::size::TINY)
-            .font(DISPLAY_SEMI)
-            .color(palette::TEXT_MUTED),
-        content
-    ]
-    .spacing(6)
-    .into()
-}
-
-/// `(label, value)` pairs, two to a line when `grid`, else one per line.
-fn pairs(list: &[(String, String)], grid: bool) -> Element<'_, Message> {
-    let cell = |(label, value): &(String, String)| {
-        row![
-            text(label.clone())
-                .size(theme::size::SMALL)
-                .color(palette::TEXT_MUTED)
-                .width(Length::Fill),
-            text(value.clone()).size(theme::size::SMALL).font(STRONG),
-        ]
-        .spacing(8)
-        .width(Length::Fill)
-    };
-    let mut col = column![].spacing(4);
-    if grid {
-        for chunk in list.chunks(2) {
-            let mut line = row![].spacing(18);
-            for pair in chunk {
-                line = line.push(cell(pair));
-            }
-            if chunk.len() == 1 {
-                line = line.push(Space::new().width(Length::Fill));
-            }
-            col = col.push(line);
-        }
-    } else {
-        for pair in list {
-            col = col.push(cell(pair));
-        }
-    }
-    col.into()
-}
-
-/// One row: icon, name, amount, and a note on the right.
+/// One row of a section, its icon decoded on arrival.
 fn row_view<'a>(
     r: &'a DetailRow,
     icons: &'a HashMap<PathBuf, image::Handle>,
 ) -> Element<'a, Message> {
-    let alpha = if r.done { 0.45 } else { 1.0 };
-    let icon: Element<'a, Message> = match r.icon.as_ref().and_then(|p| icons.get(p)) {
-        Some(handle) => image(handle.clone())
-            .width(ROW_ICON)
-            .height(ROW_ICON)
-            .opacity(alpha)
-            .into(),
-        None => Space::new().width(0).height(ROW_ICON).into(),
-    };
-    let name = match r.quantity {
-        Some(q) => format!("{} ×{q}", r.name),
-        None => r.name.clone(),
-    };
-    let mut line = row![
-        icon,
-        text(if r.done { format!("✓ {name}") } else { name })
-            .size(theme::size::SMALL)
-            .font(if r.done { theme::BODY } else { STRONG })
-            .color(with_alpha(palette::TEXT, alpha))
-            .width(Length::Fill),
-    ]
-    .spacing(10)
-    .align_y(Alignment::Center);
-    if let Some(note) = &r.note {
-        line = line.push(
-            text(note.clone())
-                .size(theme::size::TINY + 1.0)
-                .font(DISPLAY)
-                .color(with_alpha(palette::TEXT_MUTED, alpha)),
-        );
-    }
-    line.into()
+    detail::line(detail::Line {
+        icon: r.icon.as_ref().and_then(|p| icons.get(p)),
+        name: &r.name,
+        quantity: r.quantity,
+        note: r.note.as_deref(),
+        done: r.done,
+    })
 }
 
 #[cfg(test)]
