@@ -44,6 +44,8 @@ pub struct MapSummary {
     /// areas among `visible`.
     pub pickups: usize,
     pub in_areas: usize,
+    /// …and its zones (their labels).
+    pub zones: usize,
 }
 
 #[derive(Debug)]
@@ -75,7 +77,7 @@ impl MapSummary {
                 m.occurs_in(condition) && m.on_floor(floor) && matches_query(m, query)
             })
             .collect();
-        let (mut pickups, mut in_areas) = (0, 0);
+        let (mut pickups, mut in_areas, mut zones) = (0, 0, 0);
         let visible: Vec<usize> = matching
             .iter()
             .copied()
@@ -88,6 +90,10 @@ impl MapSummary {
                     }
                     Some(arclens_core::Spot::LootArea) => {
                         in_areas += 1;
+                        true
+                    }
+                    Some(arclens_core::Spot::Zone) => {
+                        zones += 1;
                         true
                     }
                     None => false,
@@ -129,6 +135,7 @@ impl MapSummary {
             layout,
             pickups,
             in_areas,
+            zones,
         }
     }
 }
@@ -245,6 +252,7 @@ fn focus_banner<'a>(name: &str, summary: &MapSummary) -> Element<'a, Message> {
     } else {
         t!(
             "map-focus-count",
+            zones = summary.zones,
             pickups = summary.pickups,
             containers = summary.in_areas
         )
@@ -969,6 +977,6 @@ mod tests {
         assert_eq!(all.visible.len(), 4);
         let focus = MapSummary::new(&markers, "", &filter, None, None, Some(&spots));
         assert_eq!(focus.visible, [0, 1]);
-        assert_eq!((focus.pickups, focus.in_areas), (1, 1));
+        assert_eq!((focus.pickups, focus.in_areas, focus.zones), (1, 1, 0));
     }
 }

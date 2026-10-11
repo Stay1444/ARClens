@@ -1936,7 +1936,19 @@ impl App {
                 self.presets.edited = self.presets.active().is_some_and(|p| {
                     !p.matches(&self.marker_filter, &arclens_core::marker_counts(markers))
                 });
-                let focus = self.item_on_map().map(arclens_core::ItemSpots::new);
+                let focus = self.item_on_map().map(|item| {
+                    let kinds = &item.details.found_in;
+                    arclens_core::ItemSpots::new(item).with_zones(
+                        arclens_data::loot_zones::zones(&self.map)
+                            .iter()
+                            .filter(|z| {
+                                z.kinds
+                                    .iter()
+                                    .any(|k| kinds.iter().any(|f| f.eq_ignore_ascii_case(k)))
+                            })
+                            .map(|z| z.name.as_str()),
+                    )
+                });
                 crate::views::map::MapSummary::new(
                     markers,
                     &self.marker_query,

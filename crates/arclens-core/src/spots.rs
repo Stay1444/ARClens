@@ -12,6 +12,8 @@ pub enum Spot {
     Pickup,
     /// A container in a loot area the item drops in.
     LootArea,
+    /// A named zone whose loot kinds include the item's (its map label).
+    Zone,
 }
 
 /// Matches markers against one item.
@@ -21,6 +23,8 @@ pub struct ItemSpots {
     names: Vec<String>,
     /// Its loot areas, squashed.
     areas: Vec<String>,
+    /// Named zones holding its kinds, squashed (see [`Self::with_zones`]).
+    zones: Vec<String>,
 }
 
 /// Categories whose kinds are never items.
@@ -57,16 +61,35 @@ impl ItemSpots {
         areas.retain(|a| !a.is_empty());
         areas.sort();
         areas.dedup();
-        Self { names, areas }
+        Self {
+            names,
+            areas,
+            zones: Vec::new(),
+        }
+    }
+
+    /// Also match the map labels of these zones (ones whose loot kinds
+    /// include the item's; the caller knows the map's zones).
+    #[must_use]
+    pub fn with_zones<'a>(mut self, zones: impl IntoIterator<Item = &'a str>) -> Self {
+        self.zones = zones.into_iter().map(key).collect();
+        self
     }
 
     /// Whether the item has any way to be found ([`Self::spot`] can match).
     pub fn is_empty(&self) -> bool {
-        self.names.is_empty() && self.areas.is_empty()
+        self.names.is_empty() && self.areas.is_empty() && self.zones.is_empty()
     }
 
     /// How `marker` relates to the item, if it does.
     pub fn spot(&self, marker: &Marker) -> Option<Spot> {
+        if marker.category == "labels" {
+            return marker
+                .label
+                .as_deref()
+                .filter(|label| self.zones.contains(&key(label)))
+                .map(|_| Spot::Zone);
+        }
         if !NOT_ITEMS.contains(&marker.category.as_str())
             && marker
                 .subcategory
@@ -163,5 +186,15 @@ mod tests {
         );
         // Only containers hold loot.
         assert_eq!(gear.spot(&marker("arc", "tick", &["Industrial"])), None);
+    }
+
+    #[test]
+    fn zone_labels_when_given() {
+        let mut railyard = marker("labels", "lootZone", &[]);
+        railyard.label = Some("Railyard".into());
+        let gear = ItemSpots::new(&item("rusted_gear", "Rusted Gear", &["Industrial"]));
+        assert_eq!(gear.spot(&railyard), None);
+        let gear = gear.with_zones(["Railyard"]);
+        assert_eq!(gear.spot(&railyard), Some(Spot::Zone));
     }
 }

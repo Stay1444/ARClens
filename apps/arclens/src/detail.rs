@@ -48,6 +48,7 @@ pub fn build(
         },
         rows.items(&item.details.repair_cost, false),
     );
+    push(t!("detail-where-to-look"), where_to_look(item));
     push(t!("detail-sold-by"), vendors(item, &rows));
     push(t!("detail-unlocks"), unlocks(item, catalog, &rows));
     push(t!("detail-mod-slots"), mod_slots(item, catalog));
@@ -276,6 +277,27 @@ fn crafting(
     }];
     out.extend(rows.items(&d.recipe, false));
     out
+}
+
+/// Named zones holding the item's loot kinds, on every map, best first.
+fn where_to_look(item: &Item) -> Vec<DetailRow> {
+    use arclens_data::loot_zones::{LootValue, zones_with};
+    zones_with(&item.details.found_in)
+        .into_iter()
+        .map(|(map, zone)| {
+            let mut note = arclens_ui::names::map(map);
+            match zone.value {
+                Some(LootValue::High) => note = format!("{note} · {}", t!("detail-loot-high")),
+                Some(LootValue::Medium) => note = format!("{note} · {}", t!("detail-loot-medium")),
+                None => {}
+            }
+            DetailRow {
+                name: zone.name.clone(),
+                note: Some(note),
+                ..DetailRow::default()
+            }
+        })
+        .collect()
 }
 
 /// Items whose recipe takes `item`.

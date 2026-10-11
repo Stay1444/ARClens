@@ -1,0 +1,34 @@
+{
+  "_source": "The game's own map: the loot-type icons under each named zone and, where shown, the hover card's LOOT VALUE. Transcribed from the maintainer's screenshots: Dam and Buried City from the in-raid map fixtures (2026-10-03, crates/arclens-vision/tests/fixtures/map/), Pendola Pass from the DESTINATIONS map at three zooms (2026-10-11). Kinds use the game's legend names, which are RaidTheory's foundIn values. 'value' is read from the hover card, or from the zone's outline colour (red high, yellow medium: both cards agree with their outlines); absent when neither was seen. Zones partly hidden in the frames may miss a kind.",
+  "maps": {
+    "dam": [
+      { "name": "Hydroponic Dome Complex", "kinds": ["Nature", "Industrial", "Security"], "value": "high" },
+      { "name": "Power Generation Complex", "kinds": ["Electrical", "Industrial"], "value": "medium" },
+      { "name": "Controlled Access Zone", "kinds": ["ARC", "Mechanical"], "value": "high" },
+      { "name": "Water Treatment Control", "kinds": ["Industrial", "Mechanical"], "value": "medium" },
+      { "name": "Primary Facility", "kinds": ["Mechanical", "Industrial"] },
+      { "name": "Control Tower", "kinds": ["Technological", "Security"], "value": "high" },
+      { "name": "Research & Administration", "kinds": ["Commercial", "Technological"], "value": "high" },
+      { "name": "Old Battleground", "kinds": ["ARC"] }
+    ],
+    "buried-city": [
+      { "name": "Hospital", "kinds": ["Medical"], "value": "high" },
+      { "name": "Library", "kinds": ["Commercial", "Old World"], "value": "medium" },
+      { "name": "Research", "kinds": ["Medical", "Technological"], "value": "medium" },
+      { "name": "Space Travel", "kinds": ["Commercial", "Technological"], "value": "high" },
+      { "name": "Town Hall", "kinds": ["Old World"], "value": "high" },
+      { "name": "Piazza Arbusto", "kinds": ["Medical", "Commercial"] }
+    ],
+    "pendola-pass": [
+      { "name": "Almatera Station", "kinds": ["Commercial"] },
+      { "name": "Railroad Junction", "kinds": ["Mechanical", "Electrical"] },
+      { "name": "Fallen Emperor", "kinds": ["ARC"] },
+      { "name": "Commissary Supermarket", "kinds": ["Commercial", "Medical"] },
+      { "name": "Railyard", "kinds": ["Industrial", "Mechanical"] },
+      { "name": "Old Town", "kinds": ["Residential", "Old World"] },
+      { "name": "Loading Platforms", "kinds": ["Industrial", "Exodus"] },
+      { "name": "Cielo Sereno Observatory", "kinds": ["Technological", "Exodus"] },
+      { "name": "Deep-Space Telescope", "kinds": ["Exodus"] }
+    ]
+  }
+}

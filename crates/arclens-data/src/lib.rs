@@ -11,6 +11,7 @@ mod error;
 mod icons;
 pub mod images;
 pub mod labels;
+pub mod loot_zones;
 pub mod map_images;
 pub mod metaforge;
 pub mod metaforge_db;
