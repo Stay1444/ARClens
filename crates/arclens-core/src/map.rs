@@ -196,6 +196,11 @@ pub struct Marker {
     /// floor.
     #[serde(default)]
     pub floors: Option<u32>,
+    /// Loot areas it belongs to, as the source names them (MetaForge's
+    /// `lootAreas`; e.g. "Residential", **unverified** shape), for finding
+    /// where an item drops.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub loot_areas: Vec<String>,
 }
 
 impl Marker {
@@ -396,6 +401,7 @@ mod tests {
             locked: false,
             conditions: None,
             floors: None,
+            loot_areas: Vec::new(),
         }
     }
 
@@ -453,7 +459,6 @@ mod tests {
         // Bit 12: Hurricane on Dam.
         let hurricane = Marker {
             conditions: Some(1 << 12),
-            floors: None,
             ..marker("containers", Some("hurricane_cache"), None)
         };
         assert!(always.occurs_in(Some(12)) && always.occurs_in(Some(0)));

@@ -212,6 +212,7 @@ mod tests {
             locked: false,
             conditions: None,
             floors: None,
+            loot_areas: Vec::new(),
         }
     }
 

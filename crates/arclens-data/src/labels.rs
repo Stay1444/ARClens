@@ -88,6 +88,7 @@ pub fn map_labels(map: &str) -> Vec<Marker> {
                     floors: l
                         .zlayers
                         .filter(|&f| f != 0 && f != i32::MAX.unsigned_abs()),
+                    loot_areas: Vec::new(),
                 })
                 .collect()
         })

@@ -93,7 +93,14 @@ pub fn page<'a>(
     detail: &ItemDetail,
     icons: &'a Icons,
 ) -> Element<'a, Message> {
-    let mut body = column![card::verdict(card)].spacing(18);
+    let mut body = column![
+        card::verdict(card),
+        row![theme::secondary_button(
+            &t!("items-show-on-map"),
+            Some(Message::ShowItemOnMap(detail.item.id.clone())),
+        )],
+    ]
+    .spacing(18);
     if !detail.facts.is_empty() {
         body = body.push(pairs(&detail.facts, true));
     }

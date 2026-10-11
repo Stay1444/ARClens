@@ -10,6 +10,7 @@ pub mod item;
 pub mod map;
 pub mod presets;
 pub mod progress;
+pub mod spots;
 
 pub use advice::{
     Advice, PARTS_MIN_VALUE_PERCENT, Place, Situation, Verdict, advise, advise_in, breakdown,
@@ -25,3 +26,4 @@ pub use map::{
 };
 pub use presets::{Preset, PresetBook};
 pub use progress::{Progress, Project, Quest, Station};
+pub use spots::{ItemSpots, Spot};

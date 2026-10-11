@@ -394,6 +394,8 @@ struct RawMarker {
     event_condition_mask: Option<serde_json::Value>,
     #[serde(default)]
     zlayers: Option<serde_json::Value>,
+    #[serde(default)]
+    loot_areas: Option<serde_json::Value>,
 }
 
 /// A coordinate, sent as a number or a numeric string.
@@ -450,6 +452,35 @@ fn floor_mask(value: Option<&serde_json::Value>) -> Option<u32> {
 /// Hills, lat 3915, at the bottom), so `x = lng`, `y = lat`.
 /// Records without coordinates are dropped; ones without a category land
 /// in `"other"`.
+/// A marker's `lootAreas`, read leniently: its shape isn't recorded yet
+/// (the field is on every record, 2026-10-03), so a comma-separated
+/// string, a list of strings and a list of `{name|label|type}` objects are
+/// all taken. Anything else reads as none.
+fn loot_areas(value: Option<&serde_json::Value>) -> Vec<String> {
+    use serde_json::Value;
+    fn name(value: &Value) -> Option<&str> {
+        match value {
+            Value::String(s) => Some(s),
+            Value::Object(o) => ["name", "label", "type", "title"]
+                .iter()
+                .find_map(|k| o.get(*k).and_then(Value::as_str)),
+            _ => None,
+        }
+    }
+    let mut out: Vec<String> = match value {
+        Some(Value::String(s)) => s.split(',').map(str::to_owned).collect(),
+        Some(Value::Array(list)) => list.iter().filter_map(name).map(str::to_owned).collect(),
+        Some(other) => name(other).map(str::to_owned).into_iter().collect(),
+        None => Vec::new(),
+    };
+    for area in &mut out {
+        *area = area.trim().to_owned();
+    }
+    out.retain(|a| !a.is_empty());
+    out.dedup();
+    out
+}
+
 pub fn parse_map_markers(bytes: &[u8], map: &str) -> Result<Vec<Marker>, Error> {
     let raw = match serde_json::from_slice(bytes)? {
         MapDataResponse::All { all_data: list }
@@ -475,6 +506,7 @@ pub fn parse_map_markers(bytes: &[u8], map: &str) -> Result<Vec<Marker>, Error> 
                 locked: m.behind_locked_door.unwrap_or(false),
                 conditions: condition_mask(m.event_condition_mask.as_ref()),
                 floors: floor_mask(m.zlayers.as_ref()),
+                loot_areas: loot_areas(m.loot_areas.as_ref()),
             })
         })
         .collect())
@@ -565,6 +597,33 @@ mod tests {
         let (_, hurricane) = condition_on_map("dam", "Hurricane").unwrap();
         assert!(markers[0].occurs_in(Some(hurricane)));
         assert!(!markers[0].occurs_in(Some(0)));
+    }
+
+    #[test]
+    fn reads_loot_areas_in_any_likely_shape() {
+        let markers = parse_map_markers(
+            br#"[{"id":"a","lat":1,"lng":2,"lootAreas":["Residential","Medical"]},
+                {"id":"b","lat":1,"lng":2,"lootAreas":"Industrial, Electrical"},
+                {"id":"c","lat":1,"lng":2,"lootAreas":[{"name":"ARC"}]},
+                {"id":"d","lat":1,"lng":2,"lootAreas":null},
+                {"id":"e","lat":1,"lng":2,"lootAreas":[3]}]"#,
+            "dam",
+        )
+        .unwrap();
+        let areas: Vec<Vec<&str>> = markers
+            .iter()
+            .map(|m| m.loot_areas.iter().map(String::as_str).collect())
+            .collect();
+        assert_eq!(
+            areas,
+            [
+                vec!["Residential", "Medical"],
+                vec!["Industrial", "Electrical"],
+                vec!["ARC"],
+                vec![],
+                vec![],
+            ]
+        );
     }
 
     #[test]

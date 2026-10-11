@@ -92,6 +92,7 @@ data-load-failed = Could not load game data
 items-search = Search items…
 items-all-types = All types
 items-all-rarities = All
+items-show-on-map = Show on map
 items-browsing = Browsing { $shown } of { $total } items · type to search
 items-results = { $count ->
     [one] { $count } result
@@ -104,6 +105,10 @@ items-pick-help = Search above (Enter opens the top result) or browse the list. 
 
 map-unknown = Unknown map
 map-loading = Loading markers…
+map-focus-title = Where to find { $item }
+map-focus-count = { $pickups } to pick up, { $containers } containers in its loot areas
+map-focus-none = Nothing on this map: try another, or it only drops from ARC and containers without a loot area.
+map-focus-clear = Show all markers
 map-load-failed = Could not load markers
 map-condition = Condition
 map-condition-any = Any

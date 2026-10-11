@@ -92,6 +92,7 @@ data-load-failed = No se han podido cargar los datos del juego
 items-search = Buscar objetos…
 items-all-types = Todos los tipos
 items-all-rarities = Todas
+items-show-on-map = Ver en el mapa
 items-browsing = { $shown } de { $total } objetos · escribe para buscar
 items-results = { $count ->
     [one] { $count } resultado
@@ -104,6 +105,10 @@ items-pick-help = Busca arriba (Intro abre el primer resultado) o recorre la lis
 
 map-unknown = Mapa desconocido
 map-loading = Cargando marcadores…
+map-focus-title = Dónde encontrar { $item }
+map-focus-count = { $pickups } para recoger, { $containers } contenedores en sus zonas de botín
+map-focus-none = Nada en este mapa: prueba otro, o solo lo sueltan ARC y contenedores sin zona de botín.
+map-focus-clear = Ver todos los marcadores
 map-load-failed = No se han podido cargar los marcadores
 map-condition = Condición
 map-condition-any = Cualquiera

@@ -48,6 +48,8 @@ pub struct App {
     /// Items tab: what the list is narrowed to, and the types to pick from.
     item_filter: arclens_core::ItemFilter,
     item_categories: Vec<String>,
+    /// Map tab: the item whose spots are shown instead of the filter.
+    item_on_map: Option<ItemId>,
     overlay: Option<OverlayHandle>,
     overlay_visible: bool,
     overlay_interactive: bool,
@@ -285,6 +287,9 @@ pub enum Message {
     /// The cached catalogue, shown while a refresh runs.
     CatalogCached(Option<Arc<Catalog>>),
     SetItemFilter(arclens_core::ItemFilter),
+    /// Encyclopedia: show where an item turns up on the map, or stop.
+    ShowItemOnMap(ItemId),
+    ClearItemOnMap,
     /// A map close is held: see whether it is due.
     CheckMapHold,
     /// Every item image is on disk (for recognising stash slots).
@@ -382,6 +387,7 @@ impl App {
             selected: None,
             item_filter: arclens_core::ItemFilter::default(),
             item_categories: Vec::new(),
+            item_on_map: None,
             overlay: None,
             overlay_visible: false,
             overlay_interactive: false,
@@ -558,6 +564,8 @@ impl App {
                 self.push_menu_card();
             }
             Message::CheckMapHold => self.check_map_hold(),
+            Message::ShowItemOnMap(id) => return self.show_item_on_map(Some(id)),
+            Message::ClearItemOnMap => return self.show_item_on_map(None),
             Message::Tick => {
                 self.now_ms = now_ms();
                 return self.refresh_events_if_stale();
@@ -783,6 +791,26 @@ impl App {
             }
         }
         Task::none()
+    }
+
+    /// Shows `item`'s spots on the Map tab (`None`: the filter's markers).
+    fn show_item_on_map(&mut self, item: Option<ItemId>) -> Task<Message> {
+        let open = item.is_some();
+        self.item_on_map = item;
+        self.refresh_map_summary();
+        if open {
+            Task::batch([self.load_map_markers(), self.set_tab(Tab::Map)])
+        } else {
+            Task::none()
+        }
+    }
+
+    /// The item in focus on the Map tab, from the catalogue.
+    fn item_on_map(&self) -> Option<&Item> {
+        let Load::Ready(catalog) = &self.catalog else {
+            return None;
+        };
+        catalog.item(self.item_on_map.as_ref()?)
     }
 
     /// Applies a held map close once the pointer has left the panel and
@@ -1797,12 +1825,14 @@ impl App {
                 self.presets.edited = self.presets.active().is_some_and(|p| {
                     !p.matches(&self.marker_filter, &arclens_core::marker_counts(markers))
                 });
+                let focus = self.item_on_map().map(arclens_core::ItemSpots::new);
                 crate::views::map::MapSummary::new(
                     markers,
                     &self.marker_query,
                     &self.marker_filter,
                     self.condition_bit(&self.map),
                     self.map_floor,
+                    focus.as_ref(),
                 )
             }
             _ => crate::views::map::MapSummary::default(),
@@ -2048,6 +2078,7 @@ impl App {
                 .and_then(Option::as_ref)
                 .zip(arclens_data::map_images::bounds(&self.map, self.map_floor))
                 .map(|(handle, (min, max))| crate::views::map::Background { handle, min, max }),
+            focus: self.item_on_map().map(|item| item.name.as_str()),
         })
     }
 

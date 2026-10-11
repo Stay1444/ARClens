@@ -40,6 +40,10 @@ pub struct MapSummary {
     pub categories: Vec<CategorySummary>,
     /// `visible`, with dense same-kind groups merged into areas.
     pub layout: arclens_core::MarkerLayout,
+    /// With an item in focus: its pickups and the containers in its loot
+    /// areas among `visible`.
+    pub pickups: usize,
+    pub in_areas: usize,
 }
 
 #[derive(Debug)]
@@ -55,12 +59,15 @@ pub struct CategorySummary {
 impl MapSummary {
     /// `condition`: the bit of the map's current condition; `floor`: the
     /// floor shown, on maps with several. Markers elsewhere are left out.
+    /// `focus`: an item looked for; only its spots show, whatever the
+    /// filter.
     pub fn new(
         markers: &[Marker],
         query: &str,
         filter: &MarkerFilter,
         condition: Option<u8>,
         floor: Option<u32>,
+        focus: Option<&arclens_core::ItemSpots>,
     ) -> Self {
         let matching: Vec<usize> = (0..markers.len())
             .filter(|&i| {
@@ -68,10 +75,24 @@ impl MapSummary {
                 m.occurs_in(condition) && m.on_floor(floor) && matches_query(m, query)
             })
             .collect();
+        let (mut pickups, mut in_areas) = (0, 0);
         let visible: Vec<usize> = matching
             .iter()
             .copied()
-            .filter(|&i| filter.shows(&markers[i]))
+            .filter(|&i| match focus {
+                None => filter.shows(&markers[i]),
+                Some(spots) => match spots.spot(&markers[i]) {
+                    Some(arclens_core::Spot::Pickup) => {
+                        pickups += 1;
+                        true
+                    }
+                    Some(arclens_core::Spot::LootArea) => {
+                        in_areas += 1;
+                        true
+                    }
+                    None => false,
+                },
+            })
             .collect();
         let named = matching
             .iter()
@@ -106,6 +127,8 @@ impl MapSummary {
             named,
             categories,
             layout,
+            pickups,
+            in_areas,
         }
     }
 }
@@ -156,6 +179,8 @@ pub struct MapView<'a> {
     pub floor: Option<u32>,
     /// The map image, once loaded (not every map has one).
     pub background: Option<Background<'a>>,
+    /// The item whose spots are shown instead of the filter's markers.
+    pub focus: Option<&'a str>,
 }
 
 /// The preset section of the panel.
@@ -201,11 +226,47 @@ pub fn view<'a>(map: &MapView<'a>) -> Element<'a, Message> {
         .into(),
     };
 
-    column![top_bar(map), body]
+    let mut page = column![top_bar(map)];
+    if let Some(name) = map.focus {
+        page = page.push(focus_banner(name, map.summary));
+    }
+    page.push(body)
         .spacing(space::SECTION)
         .padding(theme::PAGE_PADDING)
         .height(Length::Fill)
         .into()
+}
+
+/// "Where to find X": what the plot shows instead of the filter, and the
+/// way back.
+fn focus_banner<'a>(name: &str, summary: &MapSummary) -> Element<'a, Message> {
+    let found = if summary.visible.is_empty() {
+        t!("map-focus-none")
+    } else {
+        t!(
+            "map-focus-count",
+            pickups = summary.pickups,
+            containers = summary.in_areas
+        )
+    };
+    container(
+        row![
+            column![
+                text(t!("map-focus-title", item = name.to_owned()))
+                    .size(size::BODY)
+                    .font(theme::STRONG),
+                text(found).size(size::SMALL).color(palette::TEXT_MUTED),
+            ]
+            .spacing(2)
+            .width(Length::Fill),
+            theme::secondary_button(&t!("map-focus-clear"), Some(Message::ClearItemOnMap)),
+        ]
+        .spacing(space::GAP)
+        .align_y(Alignment::Center),
+    )
+    .padding([10, 14])
+    .style(theme::panel_body)
+    .into()
 }
 
 /// Map chips, then (if the map has any) its conditions.
@@ -866,4 +927,48 @@ fn centered<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message
         .center_x(Length::Fill)
         .center_y(Length::Fill)
         .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arclens_core::{Item, ItemSpots, MapId, MapPoint};
+
+    fn marker(category: &str, sub: &str, areas: &[&str]) -> Marker {
+        Marker {
+            id: sub.into(),
+            map: MapId::new("dam"),
+            category: category.into(),
+            subcategory: Some(sub.into()),
+            position: MapPoint::new(0.0, 0.0),
+            label: None,
+            locked: false,
+            conditions: None,
+            floors: None,
+            loot_areas: areas.iter().map(|s| (*s).to_owned()).collect(),
+        }
+    }
+
+    #[test]
+    fn an_item_in_focus_shows_only_its_spots() {
+        let markers = [
+            marker("nature", "mushroom", &[]),
+            marker("containers", "locker", &["Nature"]),
+            marker("containers", "locker", &["Industrial"]),
+            marker("arc", "tick", &[]),
+        ];
+        let mushroom: Item = serde_json::from_value(serde_json::json!({
+            "id": "mushroom",
+            "name": "Mushroom",
+            "details": {"found_in": ["Nature"]}
+        }))
+        .unwrap();
+        let spots = ItemSpots::new(&mushroom);
+        let filter = MarkerFilter::default();
+        let all = MapSummary::new(&markers, "", &filter, None, None, None);
+        assert_eq!(all.visible.len(), 4);
+        let focus = MapSummary::new(&markers, "", &filter, None, None, Some(&spots));
+        assert_eq!(focus.visible, [0, 1]);
+        assert_eq!((focus.pickups, focus.in_areas), (1, 1));
+    }
 }
