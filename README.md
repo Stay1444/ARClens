@@ -281,7 +281,8 @@ here.
 - **Screen frames stay in memory.** They're analysed and thrown away, never
   written to disk or sent anywhere.
 - The only network requests are downloads of public data: the RaidTheory
-  dataset (GitHub), MetaForge's markers and schedule, condition icons
+  dataset (GitHub), MetaForge's markers, schedule, items and quests,
+  item and condition icons
   (MetaForge / arctracker.io CDNs) and, once, the OCR model (~10 MB, from the
   [ocrs](https://github.com/robertknight/ocrs) project).
 - Your progress, presets and settings are plain JSON files in your config
@@ -311,6 +312,10 @@ Pull requests that cross these lines will be closed.
   [MetaForge](https://metaforge.app/arc-raiders), through its
   [public API](https://metaforge.app/arc-raiders/api). Thanks to the
   MetaForge team. Responses are cached to keep their load low.
+- **Items and quests newer than the RaidTheory dataset** (after a game
+  update it hasn't caught up with yet) and where items drop when RaidTheory
+  doesn't say: MetaForge's item and quest lists, through the same public
+  API. RaidTheory's records always come first.
 - **In-game place names** used to line markers up with the map: extracted
   once from MetaForge's map page (they are the game's own names and
   positions; see [data-sources.md](docs/research/data-sources.md)).

@@ -65,8 +65,10 @@ async fn load_inner(
     let dir = paths.raidtheory_dir();
     if cached.is_none() && max_age > Duration::ZERO && dir.join("items").is_dir() {
         let cache = cache.clone();
+        let extra = fetch_supplement().await;
         let built = tokio::task::spawn_blocking(move || -> anyhow::Result<Catalog> {
-            let catalog = RaidTheoryDir::new(dir).in_language(lang).load()?;
+            let mut catalog = RaidTheoryDir::new(dir).in_language(lang).load()?;
+            supplement(&mut catalog, extra);
             cache.store(&catalog)?;
             Ok(catalog)
         })
@@ -111,14 +113,42 @@ async fn refresh(paths: &Paths, cache: &DiskCache, lang: &'static str) -> anyhow
         .await
         .context("downloading RaidTheory dataset")?;
 
+    let extra = fetch_supplement().await;
     let cache = cache.clone();
     tokio::task::spawn_blocking(move || {
-        let catalog = RaidTheoryDir::new(dir).in_language(lang).load()?;
+        let mut catalog = RaidTheoryDir::new(dir).in_language(lang).load()?;
+        supplement(&mut catalog, extra);
         cache.store(&catalog)?;
         tracing::info!(items = catalog.items.len(), "catalog refreshed");
         Ok(catalog)
     })
     .await?
+}
+
+/// MetaForge's item and quest lists, for what RaidTheory doesn't have yet
+/// (a patch it hasn't caught up with). `None` when they can't be fetched:
+/// the catalogue is then RaidTheory's alone.
+async fn fetch_supplement() -> Option<arclens_data::metaforge_db::Database> {
+    match arclens_data::metaforge_db::fetch(&http_client()).await {
+        Ok(db) => Some(db),
+        Err(error) => {
+            tracing::warn!(%error, "MetaForge items and quests unavailable");
+            None
+        }
+    }
+}
+
+fn supplement(catalog: &mut Catalog, extra: Option<arclens_data::metaforge_db::Database>) {
+    use arclens_data::metaforge_db::NEW_SINCE;
+    if let Some(db) = extra {
+        let done = catalog.supplement(db, Some(NEW_SINCE));
+        tracing::info!(
+            items = done.items,
+            quests = done.quests,
+            found_in = done.found_in,
+            "filled from MetaForge"
+        );
+    }
 }
 
 /// Load a saved `events-schedule` response instead of fetching (offline dev).

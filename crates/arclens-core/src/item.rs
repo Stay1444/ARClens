@@ -140,6 +140,9 @@ pub struct ItemDetails {
     /// Kinds of place it drops in ("Residential", "ARC").
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub found_in: Vec<String>,
+    /// ARC enemies that drop it ("Bastion").
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dropped_by: Vec<String>,
     /// Weapons a mod fits.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub compatible_with: Vec<String>,
@@ -157,6 +160,10 @@ pub struct ItemDetails {
     /// A hint from the data source.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tip: Option<String>,
+    /// Where the record came from when it isn't the catalogue's own source
+    /// (an item a newer patch added, filled from a second source).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 impl ItemDetails {

@@ -643,6 +643,7 @@ impl RawItem {
                         .collect()
                 })
                 .unwrap_or_default(),
+            dropped_by: Vec::new(),
             compatible_with: std::mem::take(&mut self.compatible_with),
             mod_slots: std::mem::take(&mut self.mod_slots)
                 .into_iter()
@@ -656,6 +657,7 @@ impl RawItem {
                 .as_ref()
                 .map(|t| t.resolve(lang))
                 .filter(|t| !t.is_empty()),
+            source: None,
         }
     }
 }

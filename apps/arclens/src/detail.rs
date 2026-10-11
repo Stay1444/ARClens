@@ -180,6 +180,9 @@ fn facts(
             .collect();
         facts.push((t!("detail-found-in"), places.join(", ")));
     }
+    if !d.dropped_by.is_empty() {
+        facts.push((t!("detail-dropped-by"), d.dropped_by.join(", ")));
+    }
     if d.blueprint_locked {
         let state = match (blueprint_of(item, catalog), progress) {
             (Some(bp), Some(p)) if p.blueprint_learned(&bp.id) => t!("detail-blueprint-learned"),
@@ -198,6 +201,12 @@ fn facts(
             version.clone()
         };
         facts.push((t!("detail-added-in"), version));
+    }
+    if let Some(source) = &d.source {
+        facts.push((
+            t!("detail-source"),
+            t!("detail-source-note", source = source.as_str()),
+        ));
     }
     facts
 }

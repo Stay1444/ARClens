@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 /// Everything fetched from a [`crate::Provider`], plus where and when it came from.
 /// Bump when the catalogue's content or meaning changes (new fields filled by
 /// the loader), so caches written by older versions are rebuilt.
-pub const SCHEMA_VERSION: u32 = 7;
+pub const SCHEMA_VERSION: u32 = 8;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Catalog {
@@ -39,7 +39,7 @@ pub struct Catalog {
     #[serde(default)]
     pub event_icons: BTreeMap<String, String>,
     #[serde(skip)]
-    index: HashMap<ItemId, usize>,
+    pub(crate) index: HashMap<ItemId, usize>,
 }
 
 fn english() -> String {

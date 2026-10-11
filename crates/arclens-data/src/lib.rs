@@ -13,6 +13,7 @@ pub mod images;
 pub mod labels;
 pub mod map_images;
 pub mod metaforge;
+pub mod metaforge_db;
 mod name_match;
 pub mod presets;
 pub mod raidtheory;

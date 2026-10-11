@@ -43,13 +43,24 @@ impl IconCache {
             .find(|path| path.is_file())
     }
 
+    /// Like [`Self::cached`], for an item filled from a second source
+    /// (`details.source`): its icon is a different render, kept under its
+    /// own name so the dataset's icon replaces it once the dataset has the
+    /// item.
+    fn cached_item(&self, item: &Item) -> Option<PathBuf> {
+        match &item.details.source {
+            None => self.cached(&item.id),
+            Some(_) => Some(self.dir.join(icon_name(item)?)).filter(|p| p.is_file()),
+        }
+    }
+
     /// Returns the icon path, downloading it first if needed. `Ok(None)` when
     /// the item has no usable image URL.
     pub async fn fetch(&self, item: &Item) -> Result<Option<PathBuf>, Error> {
-        if let Some(path) = self.cached(&item.id) {
+        if let Some(path) = self.cached_item(item) {
             return Ok(Some(path));
         }
-        let (Some(url), Some(name)) = (&item.image_url, file_name(&item.id)) else {
+        let (Some(url), Some(name)) = (&item.image_url, icon_name(item)) else {
             return Ok(None);
         };
         let bytes = self
@@ -67,6 +78,22 @@ impl IconCache {
         tokio::fs::write(&tmp, &bytes).await?;
         tokio::fs::rename(&tmp, &path).await?;
         Ok(Some(path))
+    }
+}
+
+/// [`file_name`], or `<id>.<source>.png` for an item from a second source.
+fn icon_name(item: &Item) -> Option<String> {
+    let name = file_name(&item.id)?;
+    match &item.details.source {
+        None => Some(name),
+        Some(source) => {
+            let source: String = source
+                .chars()
+                .filter(char::is_ascii_alphanumeric)
+                .map(|c| c.to_ascii_lowercase())
+                .collect();
+            Some(format!("{}.{source}.png", item.id))
+        }
     }
 }
 
