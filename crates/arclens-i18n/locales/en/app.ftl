@@ -65,6 +65,7 @@ home-status-ready = Ready
 home-conditions = Map conditions
 home-all-events = All events →
 home-loading-schedule = Loading the schedule…
+home-schedule-unavailable = The schedule is unavailable right now (offline?). It is retried every two minutes.
 home-now = Now
 home-next = Next
 home-in = In { $time }
@@ -301,3 +302,17 @@ detail-slot-grip = Grip
 detail-slot-stock = Stock
 detail-slot-magazine = Magazine
 detail-slot-special = Special
+
+## Start-up screen
+
+startup-tagline = Item advice, maps and timers for ARC Raiders
+startup-skip = Skip
+startup-data = Game data
+startup-items = { $count } items
+startup-unavailable = unavailable, will retry
+startup-schedule = Condition schedule
+startup-conditions = { $count } conditions
+startup-overlay = Overlay
+startup-capture = Game capture
+startup-off = off
+startup-waiting-game = waiting for the game

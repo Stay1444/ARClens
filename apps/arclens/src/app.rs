@@ -92,6 +92,8 @@ pub struct App {
     marker_query: String,
     /// The app icon, for the Home tab (parsed once).
     logo: iced::widget::svg::Handle,
+    /// The start-up screen, while shown.
+    startup: Option<crate::views::startup::Startup>,
     expanded_categories: std::collections::BTreeSet<String>,
     /// Map tab: what the view derives from markers, query and filter, and
     /// the plot's cached marker layer. Rebuilt on change, not per frame.
@@ -287,6 +289,9 @@ pub enum Message {
     /// The cached catalogue, shown while a refresh runs.
     CatalogCached(Option<Arc<Catalog>>),
     SetItemFilter(arclens_core::ItemFilter),
+    /// The start-up screen's frame; any key or "Skip" leaves it.
+    StartupTick,
+    SkipStartup,
     /// Encyclopedia: show where an item turns up on the map, or stop.
     ShowItemOnMap(ItemId),
     ClearItemOnMap,
@@ -423,6 +428,9 @@ impl App {
             presets: crate::presets::Presets::load(paths.presets()),
             marker_query: String::new(),
             logo: iced::widget::svg::Handle::from_memory(crate::platform::ICON_SVG),
+            startup: Some(crate::views::startup::Startup::new(
+                std::time::Instant::now(),
+            )),
             expanded_categories: std::collections::BTreeSet::new(),
             map_screen: None,
             map_hold: crate::map_hold::MapHold::default(),
@@ -485,6 +493,17 @@ impl App {
                     .map(|_| Message::RefreshMenuCard),
             );
         }
+        if self.startup.is_some() {
+            subscriptions
+                .push(iced::time::every(crate::views::startup::TICK).map(|_| Message::StartupTick));
+            subscriptions.push(iced::event::listen_with(|event, _, _| {
+                matches!(
+                    event,
+                    iced::Event::Keyboard(iced::keyboard::Event::KeyPressed { .. })
+                )
+                .then_some(Message::SkipStartup)
+            }));
+        }
         if self.map_hold.is_pending() {
             subscriptions.push(
                 iced::time::every(std::time::Duration::from_millis(250))
@@ -508,15 +527,7 @@ impl App {
             Message::CatalogLoaded(result) => return self.on_catalog_loaded(result),
             Message::CatalogCached(cached) => return self.on_catalog_cached(cached),
             Message::SetLanguage(lang) => return self.set_language(lang),
-            Message::QueryChanged(query) => {
-                self.query = query;
-                return self.refresh_results();
-            }
             Message::Select(id) => return self.select_item(&id),
-            Message::SetItemFilter(filter) => {
-                self.item_filter = filter;
-                return self.refresh_results();
-            }
             Message::SelectFirst => {
                 if let Some(first) = self.results.first().cloned() {
                     return self.update(Message::Select(first));
@@ -563,9 +574,13 @@ impl App {
                 // The menu card shows the icons too.
                 self.push_menu_card();
             }
-            Message::CheckMapHold => self.check_map_hold(),
-            Message::ShowItemOnMap(id) => return self.show_item_on_map(Some(id)),
-            Message::ClearItemOnMap => return self.show_item_on_map(None),
+            message @ (Message::QueryChanged(_)
+            | Message::SetItemFilter(_)
+            | Message::CheckMapHold
+            | Message::StartupTick
+            | Message::SkipStartup
+            | Message::ShowItemOnMap(_)
+            | Message::ClearItemOnMap) => return self.update_view_state(message),
             Message::Tick => {
                 self.now_ms = now_ms();
                 return self.refresh_events_if_stale();
@@ -592,7 +607,12 @@ impl App {
                 self.set_quest_or_project(message);
             }
             Message::SetProgressSection(section) => self.progress_section = section,
-            Message::RefreshMenuCard => self.push_menu_card(),
+            // In game the app may sit on any tab: the card's refresh keeps
+            // the schedule current too.
+            Message::RefreshMenuCard => {
+                self.push_menu_card();
+                return self.refresh_events_if_stale();
+            }
             Message::ClearProgress => {
                 self.progress = None;
                 self.progress_changed();
@@ -791,6 +811,97 @@ impl App {
             }
         }
         Task::none()
+    }
+
+    /// The item list's query and filter, the start-up screen, held map
+    /// closes and the item shown on the map.
+    fn update_view_state(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::QueryChanged(query) => {
+                self.query = query;
+                return self.refresh_results();
+            }
+            Message::SetItemFilter(filter) => {
+                self.item_filter = filter;
+                return self.refresh_results();
+            }
+            Message::CheckMapHold => self.check_map_hold(),
+            Message::StartupTick => self.startup_tick(),
+            Message::SkipStartup => self.startup = None,
+            Message::ShowItemOnMap(id) => return self.show_item_on_map(Some(id)),
+            Message::ClearItemOnMap => return self.show_item_on_map(None),
+            _ => {}
+        }
+        Task::none()
+    }
+
+    /// Animates the start-up screen and leaves it once the data is in.
+    fn startup_tick(&mut self) {
+        let settled = !matches!(self.catalog, Load::Loading);
+        if let Some(startup) = &mut self.startup {
+            startup.frame = startup.frame.wrapping_add(1);
+            if startup.finished(settled, std::time::Instant::now()) {
+                self.startup = None;
+            }
+        }
+    }
+
+    /// What the start-up screen lists, from the state as it is.
+    fn startup_steps(&self) -> Vec<crate::views::startup::Step> {
+        use crate::views::startup::{Step, StepState};
+        let step = |label: String, state, detail: Option<String>| Step {
+            label,
+            state,
+            detail,
+        };
+        let data = match &self.catalog {
+            Load::Loading => step(t!("startup-data"), StepState::Working, None),
+            Load::Ready(catalog) => step(
+                t!("startup-data"),
+                StepState::Done,
+                Some(t!("startup-items", count = catalog.items.len())),
+            ),
+            Load::Failed(_) => step(
+                t!("startup-data"),
+                StepState::Failed,
+                Some(t!("startup-unavailable")),
+            ),
+        };
+        let events = match &self.events {
+            Load::Loading => step(t!("startup-schedule"), StepState::Working, None),
+            Load::Ready(events) => step(
+                t!("startup-schedule"),
+                StepState::Done,
+                Some(t!("startup-conditions", count = events.len())),
+            ),
+            Load::Failed(_) => step(
+                t!("startup-schedule"),
+                StepState::Failed,
+                Some(t!("startup-unavailable")),
+            ),
+        };
+        let overlay = match (&self.overlay, overlay_process::enabled()) {
+            (Some(_), _) => step(t!("startup-overlay"), StepState::Done, None),
+            (None, true) => step(t!("startup-overlay"), StepState::Working, None),
+            (None, false) => step(
+                t!("startup-overlay"),
+                StepState::Idle,
+                Some(t!("startup-off")),
+            ),
+        };
+        let capture = if self.capturing() {
+            step(t!("startup-capture"), StepState::Done, None)
+        } else {
+            step(
+                t!("startup-capture"),
+                StepState::Idle,
+                Some(match self.capture {
+                    CaptureMode::Off => t!("startup-off"),
+                    _ => t!("startup-waiting-game"),
+                }),
+            )
+        };
+        vec![data, events, overlay, capture]
     }
 
     /// Shows `item`'s spots on the Map tab (`None`: the filter's markers).
@@ -1884,7 +1995,18 @@ impl App {
         &mut self,
         result: Result<arclens_data::metaforge::Schedule, String>,
     ) -> Task<Message> {
-        self.events_loaded_at = Some(std::time::Instant::now());
+        let now = std::time::Instant::now();
+        self.events_loaded_at = Some(now);
+        if let Err(error) = &result {
+            // Retry soon rather than after the full refresh interval.
+            self.events_loaded_at = data::EVENTS_MAX_AGE
+                .checked_sub(data::EVENTS_RETRY)
+                .and_then(|back| now.checked_sub(back));
+            if matches!(self.events, Load::Ready(_)) {
+                tracing::warn!(%error, "schedule refresh failed; keeping the last one");
+                return Task::none();
+            }
+        }
         self.events = match result {
             Ok(schedule) => {
                 let mut events = schedule.events;
@@ -2036,6 +2158,13 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
+        if let Some(startup) = &self.startup {
+            return crate::views::startup::view(&crate::views::startup::StartupView {
+                logo: &self.logo,
+                steps: self.startup_steps(),
+                frame: startup.frame,
+            });
+        }
         let body: Element<'_, Message> = match self.tab {
             Tab::Home => self.view_home(),
             Tab::Events => self.view_events(),
@@ -2175,6 +2304,7 @@ impl App {
                 Load::Ready(events) => Some(events),
                 _ => None,
             },
+            schedule_failed: matches!(self.events, Load::Failed(_)),
             icons: &self.event_icons,
             now_ms: self.now_ms,
             maps: arclens_data::metaforge::MAPS,

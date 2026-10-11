@@ -38,6 +38,8 @@ pub struct HomeView<'a> {
     pub status: Vec<Status>,
     /// `None` while the schedule loads (or failed).
     pub events: Option<&'a [ScheduledEvent]>,
+    /// The schedule couldn't be loaded (offline, MetaForge down).
+    pub schedule_failed: bool,
     pub icons: &'a EventIcons,
     pub now_ms: i64,
     /// `(id, name)` of every map.
@@ -134,9 +136,13 @@ fn conditions<'a>(home: &HomeView<'a>) -> Element<'a, Message> {
         return theme::panel(
             &t!("home-conditions"),
             Some(all),
-            text(t!("home-loading-schedule"))
-                .size(size::BODY)
-                .color(palette::TEXT_MUTED),
+            text(if home.schedule_failed {
+                t!("home-schedule-unavailable")
+            } else {
+                t!("home-loading-schedule")
+            })
+            .size(size::BODY)
+            .color(palette::TEXT_MUTED),
         );
     };
     let now = home.now_ms;

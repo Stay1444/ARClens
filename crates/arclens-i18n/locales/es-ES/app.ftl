@@ -65,6 +65,7 @@ home-status-ready = Listo
 home-conditions = Condiciones de mapa
 home-all-events = Todos los eventos →
 home-loading-schedule = Cargando el calendario…
+home-schedule-unavailable = El horario no está disponible ahora (¿sin conexión?). Se reintenta cada dos minutos.
 home-now = Ahora
 home-next = Próximas
 home-in = En { $time }
@@ -301,3 +302,17 @@ detail-slot-grip = Empuñadura
 detail-slot-stock = Culata
 detail-slot-magazine = Cargador
 detail-slot-special = Especial
+
+## Start-up screen
+
+startup-tagline = Consejos de objetos, mapas y horarios para ARC Raiders
+startup-skip = Saltar
+startup-data = Datos del juego
+startup-items = { $count } objetos
+startup-unavailable = no disponible, se reintentará
+startup-schedule = Horario de condiciones
+startup-conditions = { $count } condiciones
+startup-overlay = Overlay
+startup-capture = Captura del juego
+startup-off = desactivada
+startup-waiting-game = esperando al juego

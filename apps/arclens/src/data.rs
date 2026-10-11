@@ -175,6 +175,8 @@ fn supplement(catalog: &mut Catalog, extra: Option<arclens_data::metaforge_db::D
 pub const EVENTS_FILE_ENV: &str = "ARCLENS_EVENTS_FILE";
 /// Events are refetched after this long.
 pub const EVENTS_MAX_AGE: Duration = Duration::from_secs(30 * 60);
+/// A failed load is retried after this long.
+pub const EVENTS_RETRY: Duration = Duration::from_secs(2 * 60);
 
 /// The condition schedule for `region` (`None`: MetaForge's default):
 /// fetched and cached per region; the cache is used when offline.
