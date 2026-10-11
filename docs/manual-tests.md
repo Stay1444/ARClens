@@ -88,3 +88,32 @@ Full-resolution PNGs, game in the foreground, nothing over it (Spectacle's
 - If available, the same at **16:10** (2560×1600) or **21:9**
   (3440×1440).
 - The workshop overview with a station **not yet built** (level 0).
+
+## 7. Frozen Trail captures (asked 2026-10-11)
+
+Full-screen PNGs at 2560×1440 like the other fixtures, ARClens overlay
+hidden (Ctrl+Shift+O), unless a step says otherwise.
+
+1. **Pendola Pass map screen** at the widest zoom, a middle zoom and close
+   up, panned so different place names show (title OCR, label matching,
+   later the map-image fit). A 30–60 s recording of panning and zooming
+   is even better.
+2. The map screen **during Redirection** on Pendola Pass, and **during the
+   ARC Frigate** on any map (the condition line under the title).
+3. A **HAR of metaforge.app/arc-raiders/map/pendola-pass** (browser
+   devtools → Network → "Save all as HAR"), for the one-off label
+   extraction and the map's condition bits (`scripts/extract-map-labels.py`).
+4. `curl -s 'https://metaforge.app/api/game-map-data?tableID=arc_map_data&mapID=pendola-pass' > pendola-pass.json`
+   and the same for `dam`: confirms the `lootAreas` shape and the
+   condition masks (MetaForge is blocked from the dev environment).
+5. The **workshop overview** after 2.0 (did tiles move or get added?), and
+   the **Outpost / Research Bench** page with its title and level.
+6. The **stash** on the "all" tab after the new upgrade tiers: the header
+   count (e.g. `312/400`) must fit the count box.
+7. **Tooltips of new items**: Bantam, Stiletto, Grappling Hook, a camera,
+   and any new material, in the stash and in a raid.
+8. The **main menu** after 2.0 (menu detection and card placement).
+9. The **logbook** with a 2.0 quest active, and **Shani's** quest page.
+10. Optional, for later features: the Reward Pass screen, the skill tree,
+    the post-raid summary.
+

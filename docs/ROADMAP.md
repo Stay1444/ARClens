@@ -407,6 +407,31 @@ recycle or keep. Feasibility notes:
       (`docs/manual-tests.md`).
 - [ ] Other resolutions and aspect ratios (layout measured at 2560×1440).
 
+## M6: Frozen Trail (2.0, released 2026-10-08)
+
+Research: `docs/research/frozen-trail.md`.
+
+- [x] Pendola Pass as a map: title OCR, names, schedule (2026-10-11).
+- [x] Redirection, ARC Frigate and Flash Freeze names (en, es).
+- [x] Items and quests RaidTheory lacks, from MetaForge (2026-10-11).
+- [ ] Pendola Pass place names (HAR of MetaForge's map page) and map
+      image (RaidTheory tiles, once published).
+- [ ] Condition bits for Redirection and the ARC Frigate; presets for them.
+- [ ] Re-check vision regions on 2.0 screens: workshop overview tiles,
+      stash count box (bigger stashes), main menu (`manual-tests.md` §7).
+- [ ] Reward Points instead of Cred in vendor costs, once the data says so.
+- [ ] Outposts and the Research Bench in Progress, once a data source
+      covers them.
+
+## Item encyclopedia (2026-10-11)
+
+- [x] Items tab: every fact under the card, rarity and type filters,
+      linked items (`docs/assets/startup.png` for the new start-up screen).
+- [x] "Show on map": the item's pickups and containers in its loot areas.
+- [ ] Verify the `lootAreas` shape on live data (`manual-tests.md` §7).
+- [ ] The same in game: pick an item in the overlay search, see its spots
+      on the open map.
+
 ## Later
 
 - X11 and Windows overlay backends.

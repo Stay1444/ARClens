@@ -153,6 +153,19 @@ _Last researched: 2026-10-03. Re-verify before relying on anything marked
     map (**verified** 2026-10-03 on Dam: Victory Ridge, lat 1461, is at the
     top of the in-game map; Formicai Hills, lat 3915, at the bottom).
 
+- **Items and quests** (`/items`, `/quests`, used since 2026-10-11):
+  paginated `{"data": [...], "pagination": {"hasNextPage", ...}}`, with
+  `page` and `limit` parameters. ARClens reads every page on each data
+  refresh and adds what RaidTheory lacks (only records MetaForge created
+  after RaidTheory's last update, to avoid double entries under other
+  spellings), plus "found in" / "dropped by" where RaidTheory has none.
+  The result lives in the catalogue cache. Shapes recorded in
+  Getty/p5-www-metaforge's fixtures (2026-10-03), copied to
+  `crates/arclens-data/tests/fixtures/metaforge/`.
+- **`lootAreas`** on map markers: present on every record (2026-10-03),
+  shape not recorded. Read leniently (string, list of strings or of
+  objects with a name); **unverified**. Used for "Show on map".
+
 ## ardb.app
 
 - Closed source, public API at `https://ardb.app/api`:
@@ -253,4 +266,5 @@ _Last researched: 2026-10-03. Re-verify before relying on anything marked
 - The Blue Gate
 - Stella Montis (upper / lower)
 - Riven Tides (added 2026-04-28)
-- **Pendola Pass** is announced for the "Frozen Trail" update on 2026-10-08.
+- Pendola Pass (added 2026-10-08 with "Frozen Trail", update 2.0; see
+  [frozen-trail.md](frozen-trail.md))
