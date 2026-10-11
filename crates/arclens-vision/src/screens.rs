@@ -335,6 +335,7 @@ const MAP_TITLES: &[(&str, &[&str])] = &[
     ("blue-gate", &["BLUE GATE"]),
     ("stella-montis", &["STELLA MONTIS"]),
     ("riven-tides", &["RIVEN TIDES"]),
+    ("pendola-pass", &["PENDOLA PASS", "PENDOLA"]),
 ];
 /// Least similarity (1 − edits / length) to accept a name.
 const MIN_TITLE_SIMILARITY: f32 = 0.8;

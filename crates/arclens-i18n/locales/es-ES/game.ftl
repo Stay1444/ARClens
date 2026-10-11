@@ -12,15 +12,19 @@ map-blue-gate = La puerta azul
 map-the-blue-gate = La puerta azul
 map-stella-montis = Stella Montis
 map-riven-tides = Mareas divididas
+map-pendola-pass = Pendola Pass
 
 ## Condiciones del mapa
 
 condition-no-event = Sin evento
+condition-arc-frigate = Fragata ARC
 condition-beachcombing = Rastreo de playa
 condition-bird-city = Ciudad de pájaros
 condition-close-scrutiny = Vigilancia estrecha
 condition-cold-snap = Ola de frío
 condition-electromagnetic-storm = Tormenta electromagnética
+condition-flash-freeze = Congelación súbita
+condition-frigate = Fragata
 condition-harvester = Cosechadora
 condition-hidden-bunker = Búnker oculto
 condition-hurricane = Huracán
@@ -31,6 +35,7 @@ condition-lush-blooms = Floración exuberante
 condition-matriarch = Matriarca
 condition-night-raid = Incursión nocturna
 condition-prospecting-probes = Sondas de prospección
+condition-redirection = Redirección
 condition-uncovered-caches = Alijos al descubierto
 
 ## Regiones de servidor

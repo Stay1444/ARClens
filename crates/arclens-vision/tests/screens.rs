@@ -166,6 +166,8 @@ fn matches_map_titles() {
         ("STELLA M0NTIS", Some("stella-montis")),
         ("RIVEN TIDES — 30:00", Some("riven-tides")),
         ("R1VEN TIDES", Some("riven-tides")),
+        ("PENDOLA PASS - 24:10", Some("pendola-pass")),
+        ("PEND0LA PASS", Some("pendola-pass")),
     ];
     for (title, expected) in cases {
         assert_eq!(map_from_title(title), expected, "{title}");

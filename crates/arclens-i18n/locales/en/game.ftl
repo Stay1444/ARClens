@@ -12,15 +12,19 @@ map-blue-gate = The Blue Gate
 map-the-blue-gate = The Blue Gate
 map-stella-montis = Stella Montis
 map-riven-tides = Riven Tides
+map-pendola-pass = Pendola Pass
 
 ## Map conditions
 
 condition-no-event = No Event
+condition-arc-frigate = ARC Frigate
 condition-beachcombing = Beachcombing
 condition-bird-city = Bird City
 condition-close-scrutiny = Close Scrutiny
 condition-cold-snap = Cold Snap
 condition-electromagnetic-storm = Electromagnetic Storm
+condition-flash-freeze = Flash Freeze
+condition-frigate = Frigate
 condition-harvester = Harvester
 condition-hidden-bunker = Hidden Bunker
 condition-hurricane = Hurricane
@@ -31,6 +35,7 @@ condition-lush-blooms = Lush Blooms
 condition-matriarch = Matriarch
 condition-night-raid = Night Raid
 condition-prospecting-probes = Prospecting Probes
+condition-redirection = Redirection
 condition-uncovered-caches = Uncovered Caches
 
 ## Server regions

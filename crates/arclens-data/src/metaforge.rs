@@ -179,6 +179,8 @@ pub const MAPS: &[(&str, &str)] = &[
     ("blue-gate", "The Blue Gate"),
     ("stella-montis", "Stella Montis"),
     ("riven-tides", "Riven Tides"),
+    // Frozen Trail (2.0, 2026-10-08). No labels or map image yet.
+    ("pendola-pass", "Pendola Pass"),
 ];
 
 /// The map whose name starts the in-game map panel title, e.g.
@@ -308,6 +310,13 @@ pub const CONDITIONS: &[(&str, &[(&str, u8)])] = &[
         "riven-tides",
         &[("No Event", 0), ("Night Raid", 7), ("Beachcombing", 15)],
     ),
+    // Bit 0 is from the 2026-10-03 bundle (No Event only, before release).
+    // Night Raid is bit 7 on every other map: **unverified** here. The
+    // map's own condition (Redirection) and the ARC Frigate operation are
+    // left out until their bits are known; the map panel then reads them
+    // as "no condition" and keeps every marker
+    // (docs/research/frozen-trail.md).
+    ("pendola-pass", &[("No Event", 0), ("Night Raid", 7)]),
 ];
 
 /// A map's conditions with their bits (empty for an unknown map).
@@ -537,6 +546,7 @@ mod tests {
         assert_eq!(map_for_title("STELLA MONTIS - 1:00"), Some("stella-montis"));
         assert_eq!(map_for_title("BURIED CITY 26:03"), Some("buried-city"));
         assert_eq!(map_for_title("BURIED CITY -25:57"), Some("buried-city"));
+        assert_eq!(map_for_title("PENDOLA PASS - 24:10"), Some("pendola-pass"));
         assert_eq!(map_for_title("Stay1444"), None);
     }
 
@@ -590,6 +600,12 @@ mod tests {
             Some(("Husk Graveyard", 4))
         );
         assert_eq!(condition_on_map("stella-montis", "Hurricane"), None);
+        assert_eq!(
+            condition_on_map("pendola-pass", "Night Raid"),
+            Some(("Night Raid", 7))
+        );
+        // Bit not known yet: read as no condition, every marker shown.
+        assert_eq!(condition_on_map("pendola-pass", "Redirection"), None);
         assert_eq!(condition_on_map("dam", "??"), None);
         assert_eq!(condition_on_map("nowhere", "Hurricane"), None);
         // Every map we list has a condition table.
@@ -602,6 +618,8 @@ mod tests {
         assert!(event_on_map("Dam Battlegrounds", "dam"));
         assert!(event_on_map("The Spaceport", "spaceport"));
         assert!(event_on_map("Blue Gate", "blue-gate"));
+        assert!(event_on_map("Pendola Pass", "pendola-pass"));
+        assert!(!event_on_map("Pendola Pass", "spaceport"));
         assert!(!event_on_map("Blue Gate", "dam"));
         assert!(!event_on_map("", "dam"));
     }
