@@ -121,8 +121,10 @@ pub fn update(state: &mut Overlay, message: ShellMessage) -> Task<Message> {
                 })
                 .unwrap_or(false);
             let mut tasks = Vec::new();
-            if over_panel != state.panel.hovered {
-                state.panel.hovered = over_panel;
+            if let Some(to_app) = state.panel.set_hovered(over_panel)
+                && let Some(outbox) = &state.outbox
+            {
+                outbox.send(to_app);
             }
             if over_panel != state.shell.takes_input {
                 state.shell.takes_input = over_panel;

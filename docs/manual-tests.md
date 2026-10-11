@@ -9,9 +9,16 @@ headless setup (`docs/development.md`) covers everything else.
 Roadmap: "Verify clicks and typing in the map panel on KDE".
 
 1. `cargo build -p arclens-overlay && ARCLENS_VISION=1 cargo run -p arclens`
-2. In game, open the map. The marker panel appears on the left.
-3. Click a category checkbox; type in the panel's search box.
-4. Close the map. Check the game takes clicks again everywhere.
+2. In game, open the map. The marker panel appears on the right, under
+   the game's legend.
+3. Move the pointer onto the panel without clicking (2026-10-11 fix):
+   the game must keep its focus, the taskbar must stay hidden, and the
+   markers must stay where they are.
+4. Click a category checkbox; click the panel's search box and type.
+   The game may lose focus now (the panel has the keyboard); the map,
+   its markers and their positions must stay until the pointer leaves
+   the panel and the map is really gone.
+5. Close the map. Check the game takes clicks again everywhere.
 
 Send back: works / doesn't, and `RUST_LOG=arclens=debug` output if not.
 

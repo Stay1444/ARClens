@@ -229,6 +229,10 @@ fn subscription(state: &Overlay) -> Subscription<Message> {
                 key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
                 ..
             }) => Some(Message::Escape),
+            // The surface only gets the pointer where it takes input.
+            iced::Event::Mouse(iced::mouse::Event::ButtonPressed(_)) => {
+                Some(Message::Panel(map_panel::PanelMessage::Pressed))
+            }
             iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
                 key: iced::keyboard::Key::Named(key @ (Named::ArrowUp | Named::ArrowDown)),
                 ..
@@ -258,7 +262,9 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
         Message::Panel(msg) => {
             let resize = matches!(
                 msg,
-                map_panel::PanelMessage::ToggleExpanded | map_panel::PanelMessage::Hover(_)
+                map_panel::PanelMessage::ToggleExpanded
+                    | map_panel::PanelMessage::Hover(_)
+                    | map_panel::PanelMessage::Pressed
             );
             if let Some(to_app) = state.panel.update(msg)
                 && let Some(outbox) = &state.outbox

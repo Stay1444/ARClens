@@ -22,10 +22,13 @@ pub struct PanelState {
     pub panel: Option<MapPanel>,
     pub expanded: bool,
     pub query: String,
-    /// The pointer is over the panel: only then may it take the keyboard
-    /// (for the search box). Taking it while the game is in front costs
-    /// the game its focus, and with it audio and input.
+    /// The pointer is over the panel.
     pub hovered: bool,
+    /// The panel was clicked since the pointer came onto it: only then
+    /// does it take the keyboard (for its search box). Taking it costs the
+    /// game its focus (KDE then shows the taskbar over the game), so mere
+    /// hovering must not.
+    pub typing: bool,
     /// Categories opened to show their subcategories.
     pub open: std::collections::BTreeSet<String>,
 }
@@ -36,6 +39,8 @@ pub enum PanelMessage {
     Query(String),
     /// Pointer entered (`true`) or left the panel.
     Hover(bool),
+    /// A click on the panel: the player is using it.
+    Pressed,
     Open(String),
     /// Forwarded to the app.
     Send(ToApp),
@@ -54,12 +59,25 @@ impl PanelState {
         })
     }
 
+    /// Records the pointer entering or leaving; tells the app on a change.
+    pub fn set_hovered(&mut self, hovered: bool) -> Option<ToApp> {
+        if !hovered {
+            self.typing = false;
+        }
+        if hovered == self.hovered {
+            return None;
+        }
+        self.hovered = hovered;
+        Some(ToApp::MapPanelHovered { hovered })
+    }
+
     /// Applies a local message; returns what to send to the app, if any.
     pub fn update(&mut self, message: PanelMessage) -> Option<ToApp> {
         match message {
             PanelMessage::ToggleExpanded => self.expanded = !self.expanded,
             PanelMessage::Query(query) => self.query = query,
-            PanelMessage::Hover(hovered) => self.hovered = hovered,
+            PanelMessage::Hover(hovered) => return self.set_hovered(hovered),
+            PanelMessage::Pressed => self.typing = self.hovered,
             PanelMessage::Open(category) => {
                 if !self.open.remove(&category) {
                     self.open.insert(category);

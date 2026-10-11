@@ -110,6 +110,8 @@ pub struct App {
     last_map: Option<&'static str>,
     /// Set while the in-game map is open.
     map_screen: Option<MapScreen>,
+    /// Holds the map open while the pointer is on the overlay's map panel.
+    map_hold: crate::map_hold::MapHold,
     /// Item currently detected under the cursor in game, and where.
     hover: Option<(
         ItemId,
@@ -283,6 +285,8 @@ pub enum Message {
     /// The cached catalogue, shown while a refresh runs.
     CatalogCached(Option<Arc<Catalog>>),
     SetItemFilter(arclens_core::ItemFilter),
+    /// A map close is held: see whether it is due.
+    CheckMapHold,
     /// Every item image is on disk (for recognising stash slots).
     StashIcons(Vec<(ItemId, std::path::PathBuf)>),
     /// `None`: follow the system.
@@ -415,6 +419,7 @@ impl App {
             logo: iced::widget::svg::Handle::from_memory(crate::platform::ICON_SVG),
             expanded_categories: std::collections::BTreeSet::new(),
             map_screen: None,
+            map_hold: crate::map_hold::MapHold::default(),
             game_view: GameMapView::default(),
             last_map: None,
             map_summary: crate::views::map::MapSummary::default(),
@@ -472,6 +477,12 @@ impl App {
             subscriptions.push(
                 iced::time::every(std::time::Duration::from_secs(30))
                     .map(|_| Message::RefreshMenuCard),
+            );
+        }
+        if self.map_hold.is_pending() {
+            subscriptions.push(
+                iced::time::every(std::time::Duration::from_millis(250))
+                    .map(|_| Message::CheckMapHold),
             );
         }
         if matches!(self.tab, Tab::Events | Tab::Home) {
@@ -546,6 +557,7 @@ impl App {
                 // The menu card shows the icons too.
                 self.push_menu_card();
             }
+            Message::CheckMapHold => self.check_map_hold(),
             Message::Tick => {
                 self.now_ms = now_ms();
                 return self.refresh_events_if_stale();
@@ -632,7 +644,11 @@ impl App {
                 self.push_menu_card();
                 self.push_stash_progress();
             }
-            overlay_link::Event::Disconnected => self.overlay = None,
+            overlay_link::Event::Disconnected => {
+                self.overlay = None;
+                // No panel, no hover to hold the map for.
+                self.map_hold.hover(false, std::time::Instant::now());
+            }
             overlay_link::Event::Message(arclens_ipc::ToApp::Search { query }) => {
                 self.query = query;
                 let icons = self.refresh_results();
@@ -662,6 +678,9 @@ impl App {
             }
             overlay_link::Event::Message(arclens_ipc::ToApp::HideAllMarkers) => {
                 self.edit_marker_filter(Message::HideAllMarkers);
+            }
+            overlay_link::Event::Message(arclens_ipc::ToApp::MapPanelHovered { hovered }) => {
+                self.map_hold.hover(hovered, std::time::Instant::now());
             }
             overlay_link::Event::Message(arclens_ipc::ToApp::ApplyPreset { id }) => {
                 return self.update_map(Message::ApplyPreset(id));
@@ -703,6 +722,7 @@ impl App {
                     self.last_map = read;
                 }
                 let map = read.or(self.last_map);
+                self.map_hold.opened();
                 if self.map_screen != Some(MapScreen { map }) {
                     tracing::info!(title = %header.title, ?map, condition = ?header.condition, "map open");
                 }
@@ -727,7 +747,13 @@ impl App {
                 self.push_map_panel();
                 return task;
             }
-            vision::Event::MapClosed => self.on_map_closed(),
+            vision::Event::MapClosed => {
+                if self.map_hold.closed(std::time::Instant::now()) {
+                    self.on_map_closed();
+                } else {
+                    tracing::debug!("map close held: the pointer is on the map panel");
+                }
+            }
             vision::Event::MapLabels(read) => self.on_map_labels(&read),
             vision::Event::MapMotion(motion) => {
                 self.game_view.motion = motion;
@@ -757,6 +783,14 @@ impl App {
             }
         }
         Task::none()
+    }
+
+    /// Applies a held map close once the pointer has left the panel and
+    /// the map hasn't come back.
+    fn check_map_hold(&mut self) {
+        if self.map_hold.due(std::time::Instant::now()) {
+            self.on_map_closed();
+        }
     }
 
     fn on_map_closed(&mut self) {
@@ -1286,6 +1320,7 @@ impl App {
         if was_capturing && !self.capturing() {
             self.hover = None;
             self.map_screen = None;
+            self.map_hold.reset();
             self.game_view = GameMapView::default();
             self.main_menu = None;
             self.send(ToOverlay::HideMenuCard);

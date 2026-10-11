@@ -18,7 +18,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 mod transport;
 pub use transport::{Endpoint, Listener};
 
-pub const PROTOCOL_VERSION: u32 = 18;
+pub const PROTOCOL_VERSION: u32 = 19;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hello {
@@ -471,6 +471,12 @@ pub enum ToApp {
     /// The player picked a map preset in the panel.
     ApplyPreset {
         id: String,
+    },
+    /// The pointer entered (`true`) or left the map panel. Using the panel
+    /// can cost the game its focus, so the app keeps the map open
+    /// meanwhile (protocol 19).
+    MapPanelHovered {
+        hovered: bool,
     },
     /// The overlay is about to exit.
     Bye,

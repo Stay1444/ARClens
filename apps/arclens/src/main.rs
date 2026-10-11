@@ -11,6 +11,7 @@ mod event_icons;
 mod game_process;
 mod hotkeys;
 mod icons;
+mod map_hold;
 mod overlay_link;
 mod overlay_process;
 mod paths;

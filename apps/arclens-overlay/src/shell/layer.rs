@@ -126,11 +126,12 @@ pub fn input_task(state: &Overlay) -> Task<Message> {
     });
     // Interactive mode is the user asking for mouse and keyboard (to type
     // a quick search): take the keyboard until it is toggled off.
-    // Otherwise keyboard only while the pointer is on the panel: else the
-    // compositor may hand us focus and the game loses it.
+    // Otherwise keyboard only once the panel is clicked, while the pointer
+    // stays on it: holding it on mere hover lets the compositor hand us
+    // focus, the game loses it and KDE shows the taskbar over the map.
     let keyboard = if state.interactive {
         KeyboardInteractivity::Exclusive
-    } else if rect.is_some() && state.panel.hovered {
+    } else if rect.is_some() && state.panel.hovered && state.panel.typing {
         KeyboardInteractivity::OnDemand
     } else {
         KeyboardInteractivity::None
