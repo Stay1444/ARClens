@@ -1,7 +1,8 @@
-//! Plans a goal (a workshop station's next levels, or crafting an item)
-//! down to materials: what it takes, what the stash already holds, what can
-//! be crafted from parts, what is still missing, and which spare stash
-//! items would recycle into the missing parts.
+//! Plans goals (workshop stations' next levels, items to craft), all at
+//! once and in no order, down to materials: what they take together, what
+//! the stash already holds (counted once across all of them), what can be
+//! crafted from parts, what is still missing, and which spare stash items
+//! would recycle into the missing parts.
 
 use crate::item::{Item, ItemId, ItemQuantity, RequirementKind};
 use std::collections::{BTreeMap, HashMap};
@@ -13,6 +14,9 @@ pub enum Goal {
     Station { station: String, level: u32 },
     /// Craft `count` of `item`.
     Craft { item: ItemId, count: u32 },
+    /// Deliver `project`'s phases up to `phase` (from those done; an
+    /// expedition is a project too).
+    Project { project: String, phase: u32 },
 }
 
 /// One material of the plan.
@@ -56,19 +60,26 @@ impl Plan {
 /// Parts are crafted at most this deep (Refiner chains are 2-3 deep).
 const MAX_DEPTH: u8 = 4;
 
-/// What `goal` takes from `items`, with the stash's `have` counts used
-/// first. `current_level`: the station's level now (station goals).
-/// `spare`: how many of a stash item may be broken down (the caller's
-/// advice: SELL/RECYCLE items whole, KEEP ones beyond their needs).
+/// What `goals` take together from `items`, with the stash's `have`
+/// counts used first (each stash item counts once, whichever goal takes
+/// it). `level`: a station's level, or a project's phases done, now (by
+/// id). `spare`: how many of a stash item
+/// may be broken down (the caller's advice: SELL/RECYCLE items whole, KEEP
+/// ones beyond their needs).
 pub fn plan(
-    goal: &Goal,
+    goals: &[Goal],
     items: &[Item],
     have: &BTreeMap<ItemId, u32>,
-    current_level: u32,
+    level: impl Fn(&str) -> u32,
     spare: impl Fn(&ItemId) -> u32,
 ) -> Plan {
     let by_id: HashMap<&ItemId, &Item> = items.iter().map(|i| (&i.id, i)).collect();
-    let direct = direct_needs(goal, items, &by_id, current_level);
+    let mut direct: BTreeMap<ItemId, u32> = BTreeMap::new();
+    for goal in goals {
+        for (id, quantity) in direct_needs(goal, items, &by_id, &level) {
+            *direct.entry(id).or_default() += quantity;
+        }
+    }
     let mut stock = have.clone();
     let mut lines: BTreeMap<ItemId, PlanLine> = BTreeMap::new();
     let mut queue: Vec<(ItemId, u32, u8)> = direct.into_iter().map(|(id, q)| (id, q, 0)).collect();
@@ -117,27 +128,33 @@ pub fn plan(
     Plan { lines, recycle }
 }
 
-/// What the goal asks for directly.
+/// What one goal asks for directly.
 fn direct_needs(
     goal: &Goal,
     items: &[Item],
     by_id: &HashMap<&ItemId, &Item>,
-    current_level: u32,
+    current: &impl Fn(&str) -> u32,
 ) -> BTreeMap<ItemId, u32> {
     let mut needs = BTreeMap::new();
-    match goal {
-        Goal::Station { station, level } => {
-            for item in items {
-                for req in &item.required_for {
-                    let wanted = req.kind == RequirementKind::WorkshopUpgrade
-                        && req.station.as_deref() == Some(station.as_str())
-                        && req.level.is_some_and(|l| l > current_level && l <= *level);
-                    if wanted {
-                        *needs.entry(item.id.clone()).or_default() += req.quantity;
-                    }
+    // Requirements of `kind` on `id` past what is done, up to `upto`.
+    let mut ahead = |kind: RequirementKind, id: &str, upto: u32| {
+        let done = current(id);
+        for item in items {
+            for req in &item.required_for {
+                let wanted = req.kind == kind
+                    && req.station.as_deref() == Some(id)
+                    && req.level.is_some_and(|l| l > done && l <= upto);
+                if wanted {
+                    *needs.entry(item.id.clone()).or_default() += req.quantity;
                 }
             }
         }
+    };
+    match goal {
+        Goal::Station { station, level } => {
+            ahead(RequirementKind::WorkshopUpgrade, station, *level);
+        }
+        Goal::Project { project, phase } => ahead(RequirementKind::Project, project, *phase),
         Goal::Craft { item, count } => {
             if let Some(item) = by_id.get(item) {
                 let makes = item.details.craft_quantity.unwrap_or(1).max(1);
@@ -290,7 +307,7 @@ mod tests {
             station: "weapon_bench".into(),
             level: 3,
         };
-        let plan = plan(&goal, &items, &have, 1, |_| u32::MAX);
+        let plan = plan(&[goal], &items, &have, |_| 1, |_| u32::MAX);
         let mech = line(&plan, "mechanical_components");
         assert_eq!((mech.needed, mech.from_stash, mech.crafted), (6, 2, 4));
         let gear = line(&plan, "rusted_gear");
@@ -323,7 +340,7 @@ mod tests {
             level: 3,
         };
         // Level 2 built: only Gunsmith 3's gears.
-        let plan = plan(&goal, &items, &have, 2, |_| 0);
+        let plan = plan(&[goal], &items, &have, |_| 2, |_| 0);
         assert_eq!(plan.lines.len(), 1);
         assert_eq!(line(&plan, "rusted_gear").missing, 2);
         assert_eq!(plan.recycle, []);
@@ -336,8 +353,56 @@ mod tests {
             item: ItemId::new("mechanical_components"),
             count: 3,
         };
-        let plan = plan(&goal, &items, &BTreeMap::new(), 0, |_| 0);
+        let plan = plan(&[goal], &items, &BTreeMap::new(), |_| 0, |_| 0);
         assert_eq!(line(&plan, "metal_parts").missing, 6);
         assert_eq!(line(&plan, "rubber_parts").missing, 3);
+    }
+
+    #[test]
+    fn several_goals_share_the_stash() {
+        let mut items = catalogue();
+        // A second station that also takes rusted gears.
+        let mut gear = items.remove(1);
+        gear.required_for.push(Requirement {
+            kind: RequirementKind::WorkshopUpgrade,
+            name: "Refiner 1".into(),
+            quantity: 3,
+            station: Some("refiner".into()),
+            level: Some(1),
+        });
+        items.push(gear);
+        let have: BTreeMap<ItemId, u32> = [(ItemId::new("rusted_gear"), 5)].into_iter().collect();
+        let goals = [
+            Goal::Station {
+                station: "weapon_bench".into(),
+                level: 2,
+            },
+            Goal::Station {
+                station: "refiner".into(),
+                level: 1,
+            },
+        ];
+        let level = |station: &str| u32::from(station == "weapon_bench");
+        let planned = plan(&goals, &items, &have, level, |_| 0);
+        // 4 for Gunsmith 2 + 3 for Refiner 1, the 5 in the stash once.
+        let gear = line(&planned, "rusted_gear");
+        assert_eq!((gear.needed, gear.from_stash, gear.missing), (7, 5, 2));
+        assert_eq!(line(&planned, "mechanical_components").needed, 6);
+        // A project's phases past those done count the same way.
+        items[0].required_for.push(Requirement {
+            kind: RequirementKind::Project,
+            name: "Trophy Display: 2".into(),
+            quantity: 2,
+            station: Some("trophy".into()),
+            level: Some(2),
+        });
+        let project = Goal::Project {
+            project: "trophy".into(),
+            phase: 2,
+        };
+        let one_done = |id: &str| u32::from(id == "trophy");
+        let planned = plan(&[project], &items, &BTreeMap::new(), one_done, |_| 0);
+        assert_eq!(line(&planned, "mechanical_components").needed, 2);
+        assert_eq!(plan(&[], &items, &have, level, |_| 0), Plan::default());
     }
 }

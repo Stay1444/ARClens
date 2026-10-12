@@ -1,38 +1,36 @@
-//! The Progress tab's Planner: a goal (a station's next level, or crafting
-//! an item) broken down to materials, against the latest stash scan: what
-//! the stash covers, what to craft from parts, what is missing, and which
-//! spare items would recycle into the missing parts.
+//! The Progress tab's Planner: goals chosen all at once and in no order
+//! (workshop stations, projects and expeditions, items to craft) broken
+//! down to materials together, against the latest stash scan: what the
+//! stash covers, what to craft from parts, what is missing, and which spare
+//! items would recycle into the missing parts.
 
 use crate::app::Message;
 use crate::icons::Icons;
-use arclens_core::{Goal, Plan, PlanLine};
+use crate::plan_goals::PlanGoals;
+use arclens_core::{ItemId, Plan, PlanLine};
 use arclens_data::Catalog;
 use arclens_i18n::t;
 use arclens_ui::detail::{self, titled};
 use arclens_ui::palette;
 use arclens_ui::theme::{self, size, space};
-use iced::widget::{column, pick_list, row, text};
+use iced::widget::{column, row, text};
 use iced::{Alignment, Element, Length};
-use std::fmt;
 
-/// A goal in the picker, with its label.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GoalChoice {
-    pub goal: Goal,
-    pub label: String,
-}
-
-impl fmt::Display for GoalChoice {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.label)
-    }
+/// A station or project to choose: id, name, how far along, how far it
+/// goes.
+pub struct Track<'a> {
+    pub id: &'a str,
+    pub name: std::borrow::Cow<'a, str>,
+    pub done: u32,
+    pub total: u32,
 }
 
 pub struct PlannerView<'a> {
-    /// Each station's next level, and the craft goal if one is set.
-    pub choices: Vec<GoalChoice>,
-    pub goal: Option<&'a Goal>,
-    /// The plan for `goal`.
+    pub goals: &'a PlanGoals,
+    pub stations: Vec<Track<'a>>,
+    /// Projects and expeditions.
+    pub projects: Vec<Track<'a>>,
+    /// The plan for every goal together (`None` when there are none).
     pub plan: Option<Plan>,
     pub catalog: &'a Catalog,
     pub icons: &'a Icons,
@@ -41,49 +39,17 @@ pub struct PlannerView<'a> {
 }
 
 pub fn summary(page: &PlannerView<'_>) -> String {
-    match (&page.goal, &page.plan) {
-        (Some(_), Some(plan)) if plan.missing() == 0 => t!("planner-summary-ready"),
-        (Some(_), Some(plan)) => t!("planner-summary-missing", count = plan.missing()),
-        _ => t!("planner-summary-none"),
+    match &page.plan {
+        Some(plan) if plan.missing() == 0 => t!("planner-summary-ready"),
+        Some(plan) => t!("planner-summary-missing", count = plan.missing()),
+        None => t!("planner-summary-none"),
     }
 }
 
 pub fn view<'a>(page: &PlannerView<'a>, header: Element<'a, Message>) -> Element<'a, Message> {
-    let selected = page
-        .goal
-        .and_then(|g| page.choices.iter().find(|c| &c.goal == g))
-        .cloned();
-    let picker = pick_list(page.choices.clone(), selected, |c: GoalChoice| {
-        Message::SetPlanGoal(c.goal)
-    })
-    .placeholder(t!("planner-pick"))
-    .text_size(size::BODY)
-    .padding([8, 12])
-    .width(Length::Fill);
-    let mut picker_row = row![picker].spacing(8).align_y(Alignment::Center);
-    if let Some(Goal::Craft { item, count }) = page.goal {
-        let step = |n: u32| {
-            Message::SetPlanGoal(Goal::Craft {
-                item: item.clone(),
-                count: n.max(1),
-            })
-        };
-        picker_row = picker_row
-            .push(theme::secondary_button(
-                "−",
-                Some(step(count.saturating_sub(1))),
-            ))
-            .push(
-                text(format!("×{count}"))
-                    .size(size::BODY)
-                    .font(theme::DISPLAY),
-            )
-            .push(theme::secondary_button("+", Some(step(count + 1))));
-    }
-
     let mut body = column![
         header,
-        picker_row,
+        goal_picker(page),
         text(match &page.scanned {
             Some(date) => t!("planner-stash-from", date = date.as_str()),
             None => t!("planner-no-scan"),
@@ -98,7 +64,133 @@ pub fn view<'a>(page: &PlannerView<'a>, header: Element<'a, Message>) -> Element
             body = body.push(recycling(page, plan));
         }
     }
-    body.max_width(760.0).into()
+    body.max_width(860.0).into()
+}
+
+/// The goals: station and project chips, how far, items to craft.
+fn goal_picker<'a>(page: &PlannerView<'a>) -> Element<'a, Message> {
+    let goals = page.goals;
+    let set = |next: PlanGoals| Message::SetPlanGoals(next);
+    let reach = row![
+        theme::chip(
+            &t!("planner-reach-next"),
+            !goals.to_max,
+            set(goals.with_to_max(false))
+        ),
+        theme::chip(
+            &t!("planner-reach-max"),
+            goals.to_max,
+            set(goals.with_to_max(true))
+        ),
+    ]
+    .spacing(4);
+
+    // Workshop: every station not maxed, and "all".
+    let open: Vec<&str> = page
+        .stations
+        .iter()
+        .filter(|s| s.done < s.total)
+        .map(|s| s.id)
+        .collect();
+    let all_on = !open.is_empty() && open.iter().all(|id| goals.stations.contains(*id));
+    let stations = page.stations.iter().filter(|s| s.done < s.total).fold(
+        row![theme::chip(
+            &t!("planner-all-benches"),
+            all_on,
+            set(goals.toggle_all_stations(open.iter().copied())),
+        )]
+        .spacing(4),
+        |r, s| {
+            r.push(theme::chip(
+                &t!(
+                    "planner-station-chip",
+                    station = s.name.as_ref(),
+                    level = if goals.to_max { s.total } else { s.done + 1 }
+                ),
+                goals.stations.contains(s.id),
+                set(goals.toggle_station(s.id)),
+            ))
+        },
+    );
+    let projects =
+        page.projects
+            .iter()
+            .filter(|p| p.done < p.total)
+            .fold(row![].spacing(4), |r, p| {
+                r.push(theme::chip(
+                    &t!(
+                        "planner-project-chip",
+                        project = p.name.as_ref(),
+                        phase = if goals.to_max { p.total } else { p.done + 1 },
+                        total = p.total
+                    ),
+                    goals.projects.contains(p.id),
+                    set(goals.toggle_project(p.id)),
+                ))
+            });
+    let crafts = goals
+        .crafts
+        .iter()
+        .fold(column![].spacing(6), |col, (item, &count)| {
+            col.push(craft_row(page, item, count))
+        });
+
+    let mut choose = column![
+        titled(
+            &t!("planner-workshop"),
+            stations.wrap().vertical_spacing(4).into()
+        ),
+        titled(
+            &t!("planner-projects"),
+            projects.wrap().vertical_spacing(4).into()
+        ),
+        titled(
+            &t!("planner-crafting"),
+            if goals.crafts.is_empty() {
+                text(t!("planner-crafting-help"))
+                    .size(size::SMALL)
+                    .color(palette::TEXT_MUTED)
+                    .into()
+            } else {
+                crafts.into()
+            }
+        ),
+        row![
+            text(t!("planner-reach"))
+                .size(size::SMALL)
+                .color(palette::TEXT_MUTED),
+            reach
+        ]
+        .spacing(12)
+        .align_y(Alignment::Center),
+    ]
+    .spacing(16);
+    if !goals.is_empty() {
+        choose = choose.push(theme::secondary_button(
+            &t!("planner-clear"),
+            Some(set(PlanGoals::default())),
+        ));
+    }
+    choose.into()
+}
+
+/// `Anvil I ×2  − + ✕`.
+fn craft_row<'a>(page: &PlannerView<'a>, item: &ItemId, count: u32) -> Element<'a, Message> {
+    let set = |n: u32| Message::SetPlanGoals(page.goals.with_craft(item, n));
+    row![
+        text(t!("planner-goal-craft", item = name(page.catalog, item)))
+            .size(size::BODY)
+            .width(Length::Fill),
+        theme::secondary_button("−", Some(set(count.saturating_sub(1).max(1)))),
+        text(format!("×{count}"))
+            .size(size::BODY)
+            .font(theme::DISPLAY),
+        theme::secondary_button("+", Some(set(count + 1))),
+        theme::secondary_button("✕", Some(set(0))),
+    ]
+    .spacing(8)
+    .align_y(Alignment::Center)
+    .into()
 }
 
 fn name(catalog: &Catalog, id: &arclens_core::ItemId) -> String {

@@ -355,9 +355,7 @@ hunt-help = Primero los que faltan. Los planos salen de contenedores; el juego m
 ## Progress → Planner
 
 progress-planner = Planificador
-progress-planner-help = Elige un objetivo: lo que hace falta, lo que cubre tu último escaneo del alijo, lo que puedes fabricar con piezas y lo que aún falta.
-planner-pick = Elige un objetivo…
-planner-goal-station = { $station } → nivel { $level }
+progress-planner-help = Elige los objetivos que quieras, todos a la vez y sin orden: bancos que mejorar, proyectos y expediciones que entregar, objetos que fabricar. ARClens suma lo que piden, cuenta tu alijo una vez y muestra qué fabricar con piezas y qué falta.
 planner-goal-craft = Fabricar { $item }
 planner-stash-from = Alijo del escaneo del { $date }.
 planner-no-scan = Aún no hay escaneo del alijo: todo cuenta como pendiente. Abre el alijo en el juego y recórrelo una vez.
@@ -374,3 +372,18 @@ planner-summary-ready = listo
 planner-summary-missing = faltan { $count }
 planner-summary-none = sin objetivo
 items-plan-craft = Planificar fabricación
+planner-reach = Hasta dónde
+planner-reach-next = Siguiente nivel / fase
+planner-reach-max = Hasta el final
+planner-all-benches = Todos los bancos
+planner-station-chip = { $station } → { $level }
+planner-project-chip = { $project } → { $phase }/{ $total }
+planner-workshop = Taller
+planner-projects = Proyectos y expediciones
+planner-crafting = Fabricación
+planner-crafting-help = Añade objetos desde su página con «Planificar fabricación».
+planner-clear = Quitar objetivos
+planner-goal-count = { $count ->
+    [one] 1 objetivo
+   *[other] { $count } objetivos
+}

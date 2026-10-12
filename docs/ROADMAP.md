@@ -442,10 +442,12 @@ Research: `docs/research/frozen-trail.md`.
       each unlocks, drops where the data has them (MetaForge), the game's
       high-loot zones, and a link into the encyclopedia. RaidTheory has no
       drop data for blueprints (0 of 83, 2026-10-12).
-- [x] Planner (Progress → Planner, 2026-10-12): a station's next level or
-      crafting an item, broken down to materials against the latest stash
-      scan; parts crafted where a recipe exists; spare stash items that
-      recycle into missing parts. "Plan crafting" on craftable items.
+- [x] Planner (Progress → Planner, 2026-10-12): goals all at once and in
+      no order (any stations, "All benches", projects and expeditions,
+      items to craft with counts; next level / phase or all the way),
+      saved in settings.json, broken down to materials together with the
+      stash counted once; parts crafted where a recipe exists; spare stash
+      items that recycle into missing parts (`docs/assets/planner.png`).
 - Hotkeys: dropped (maintainer, 2026-10-12).
 
 ## Loading screen (2026-10-12)

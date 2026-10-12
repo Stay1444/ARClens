@@ -355,9 +355,7 @@ hunt-help = Not learned yet first. Blueprints come out of containers; the game m
 ## Progress → Planner
 
 progress-planner = Planner
-progress-planner-help = Pick a goal: what it takes, what your latest stash scan covers, what to craft from parts and what is still missing.
-planner-pick = Pick a goal…
-planner-goal-station = { $station } → level { $level }
+progress-planner-help = Pick any goals, all at once and in no order: benches to upgrade, projects and expeditions to deliver, items to craft. ARClens adds up what they take, counts your stash once, and shows what to craft from parts and what is missing.
 planner-goal-craft = Craft { $item }
 planner-stash-from = Stash from the scan of { $date }.
 planner-no-scan = No stash scan yet: everything counts as missing. Open your stash in game and scroll through it once.
@@ -374,3 +372,18 @@ planner-summary-ready = ready
 planner-summary-missing = { $count } missing
 planner-summary-none = no goal
 items-plan-craft = Plan crafting
+planner-reach = How far
+planner-reach-next = Next level / phase
+planner-reach-max = All the way
+planner-all-benches = All benches
+planner-station-chip = { $station } → { $level }
+planner-project-chip = { $project } → { $phase }/{ $total }
+planner-workshop = Workshop
+planner-projects = Projects and expeditions
+planner-crafting = Crafting
+planner-crafting-help = Add items from their page with "Plan crafting".
+planner-clear = Clear goals
+planner-goal-count = { $count ->
+    [one] 1 goal
+   *[other] { $count } goals
+}

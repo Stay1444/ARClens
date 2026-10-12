@@ -15,6 +15,7 @@ mod map_hold;
 mod overlay_link;
 mod overlay_process;
 mod paths;
+mod plan_goals;
 mod platform;
 mod presets;
 mod progress;

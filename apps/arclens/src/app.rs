@@ -52,8 +52,6 @@ pub struct App {
     item_categories: Vec<String>,
     /// Map tab: the item whose spots are shown instead of the filter.
     item_on_map: Option<ItemId>,
-    /// Progress → Planner: what is being planned.
-    plan_goal: Option<arclens_core::Goal>,
     overlay: Option<OverlayHandle>,
     overlay_visible: bool,
     overlay_interactive: bool,
@@ -175,6 +173,9 @@ struct Settings {
     /// [`condition_key`]: arclens_core::condition_key
     #[serde(default)]
     alerts: std::collections::BTreeSet<String>,
+    /// What the Planner plans for.
+    #[serde(default)]
+    plan: crate::plan_goals::PlanGoals,
 }
 
 const fn default_refresh_hours() -> u32 {
@@ -189,6 +190,7 @@ impl Default for Settings {
             refresh_hours: default_refresh_hours(),
             language: None,
             alerts: std::collections::BTreeSet::new(),
+            plan: crate::plan_goals::PlanGoals::default(),
         }
     }
 }
@@ -312,8 +314,9 @@ pub enum Message {
     /// The start-up screen's frame; any key or "Skip" leaves it.
     StartupTick,
     SkipStartup,
-    /// Progress → Planner: plan this goal; an item's "Plan crafting".
-    SetPlanGoal(arclens_core::Goal),
+    /// Progress → Planner: plan for these goals; an item's "Plan crafting"
+    /// adds one more of it.
+    SetPlanGoals(crate::plan_goals::PlanGoals),
     PlanCraft(ItemId),
     /// Encyclopedia: show where an item turns up on the map, or stop.
     ShowItemOnMap(ItemId),
@@ -416,7 +419,6 @@ impl App {
             item_filter: arclens_core::ItemFilter::default(),
             item_categories: Vec::new(),
             item_on_map: None,
-            plan_goal: None,
             overlay: None,
             overlay_visible: false,
             overlay_interactive: false,
@@ -627,7 +629,10 @@ impl App {
             | Message::SetBlueprintLearned(..) => {
                 self.set_quest_or_project(message);
             }
-            Message::SetProgressSection(section) => self.progress_section = section,
+            Message::SetProgressSection(section) => {
+                self.progress_section = section;
+                return self.request_plan_icons();
+            }
             // In game the app may sit on any tab: the card's refresh keeps
             // the schedule current too.
             Message::RefreshMenuCard => {
@@ -869,11 +874,13 @@ impl App {
     /// screen, held map closes and the item shown on the map.
     fn update_view_state(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::SetPlanGoal(goal) => return self.set_plan_goal(goal),
+            Message::SetPlanGoals(goals) => return self.set_plan_goals(goals),
             Message::PlanCraft(item) => {
                 self.progress_section = crate::views::progress::Section::Planner;
                 self.tab = Tab::Progress;
-                return self.set_plan_goal(arclens_core::Goal::Craft { item, count: 1 });
+                let count = self.settings.plan.crafts.get(&item).map_or(1, |n| n + 1);
+                let goals = self.settings.plan.with_craft(&item, count);
+                return self.set_plan_goals(goals);
             }
             Message::ToggleAlert(_) | Message::CheckAlerts | Message::AlertOpened(_) => {
                 return self.update_alerts(message);
@@ -896,9 +903,18 @@ impl App {
         Task::none()
     }
 
-    /// Plans `goal` and fetches the icons of what it takes.
-    fn set_plan_goal(&mut self, goal: arclens_core::Goal) -> Task<Message> {
-        self.plan_goal = Some(goal);
+    /// Plans for `goals` (saved), with the icons of what they take.
+    fn set_plan_goals(&mut self, goals: crate::plan_goals::PlanGoals) -> Task<Message> {
+        self.settings.plan = goals;
+        crate::store::save(&self.paths.settings(), &self.settings);
+        self.request_plan_icons()
+    }
+
+    /// The icons of what the plan lists, while the Planner shows.
+    fn request_plan_icons(&mut self) -> Task<Message> {
+        if self.progress_section != crate::views::progress::Section::Planner {
+            return Task::none();
+        }
         let Load::Ready(catalog) = &self.catalog else {
             return Task::none();
         };
@@ -918,18 +934,34 @@ impl App {
         Task::batch(loads)
     }
 
-    /// The plan for the current goal, against the latest stash scan. Only
-    /// spare items (advised SELL or RECYCLE, KEEP ones beyond their needs)
-    /// are suggested for recycling.
+    /// The goals chosen, against the player's progress.
+    fn plan_goals(&self, catalog: &Catalog) -> Vec<arclens_core::Goal> {
+        let default = Progress::default();
+        let progress = self.progress.as_ref().unwrap_or(&default);
+        self.settings
+            .plan
+            .goals(&catalog.stations, &catalog.projects, progress)
+    }
+
+    /// The plan for every goal together, against the latest stash scan
+    /// (`None` without goals). Only spare items (advised SELL or RECYCLE,
+    /// KEEP ones beyond their needs) are suggested for recycling.
     fn current_plan(&self, catalog: &Catalog) -> Option<arclens_core::Plan> {
-        let goal = self.plan_goal.as_ref()?;
+        let goals = self.plan_goals(catalog);
+        if goals.is_empty() {
+            return None;
+        }
         let empty = std::collections::BTreeMap::new();
         let have = self.stash_history.latest().map_or(&empty, |s| &s.items);
-        let level = match goal {
-            arclens_core::Goal::Station { station, .. } => {
-                self.progress.as_ref().map_or(0, |p| p.level(station))
-            }
-            arclens_core::Goal::Craft { .. } => 0,
+        let default = Progress::default();
+        let progress = self.progress.as_ref().unwrap_or(&default);
+        // Station levels and project phases share the call: ids differ.
+        let level = |id: &str| {
+            progress
+                .stations
+                .get(id)
+                .copied()
+                .unwrap_or_else(|| progress.phases_done(id))
         };
         let spare = |id: &ItemId| {
             let (Some(item), Some(&count)) = (catalog.item(id), have.get(id)) else {
@@ -944,41 +976,13 @@ impl App {
                 _ => 0,
             }
         };
-        Some(arclens_core::plan(goal, &catalog.items, have, level, spare))
-    }
-
-    /// The planner's choices: each station's next level, and the item
-    /// being planned for crafting.
-    fn plan_choices(&self, catalog: &Catalog) -> Vec<crate::views::planner::GoalChoice> {
-        use crate::views::planner::GoalChoice;
-        let mut choices: Vec<GoalChoice> = catalog
-            .stations
-            .iter()
-            .filter_map(|station| {
-                let level = self.progress.as_ref().map_or(0, |p| p.level(&station.id)) + 1;
-                let goal = arclens_core::Goal::Station {
-                    station: station.id.clone(),
-                    level,
-                };
-                (level <= station.max_level).then(|| GoalChoice {
-                    label: goal_label(&goal, catalog),
-                    goal,
-                })
-            })
-            .collect();
-        if let Some(goal @ arclens_core::Goal::Craft { item, .. }) = &self.plan_goal {
-            let name = catalog
-                .item(item)
-                .map_or(item.as_str(), |i| i.name.as_str());
-            choices.insert(
-                0,
-                GoalChoice {
-                    goal: goal.clone(),
-                    label: t!("planner-goal-craft", item = name),
-                },
-            );
-        }
-        choices
+        Some(arclens_core::plan(
+            &goals,
+            &catalog.items,
+            have,
+            level,
+            spare,
+        ))
     }
 
     /// Condition alerts: following, the periodic check, a clicked notice.
@@ -1251,17 +1255,14 @@ impl App {
             return Vec::new();
         };
         let plan = self.current_plan(catalog);
-        let goal = self
-            .plan_goal
-            .as_ref()
-            .zip(plan.as_ref())
-            .map(|(goal, plan)| {
-                let status = match plan.missing() {
-                    0 => t!("planner-ready"),
-                    n => t!("planner-missing", count = n),
-                };
-                format!("{} · {status}", goal_label(goal, catalog))
-            });
+        let goal = plan.as_ref().map(|plan| {
+            let status = match plan.missing() {
+                0 => t!("planner-ready"),
+                n => t!("planner-missing", count = n),
+            };
+            let count = self.plan_goals(catalog).len();
+            format!("{} · {status}", t!("planner-goal-count", count = count))
+        });
         let mut wanted: Vec<(&Item, u32, u32)> = Vec::new();
         if let Some(plan) = &plan {
             let mut lines: Vec<_> = plan.lines.iter().filter(|l| l.missing > 0).collect();
@@ -3038,8 +3039,27 @@ impl App {
                 catalog,
             },
             planner: crate::views::planner::PlannerView {
-                choices: self.plan_choices(catalog),
-                goal: self.plan_goal.as_ref(),
+                goals: &self.settings.plan,
+                stations: catalog
+                    .stations
+                    .iter()
+                    .map(|s| crate::views::planner::Track {
+                        id: &s.id,
+                        name: std::borrow::Cow::Borrowed(&s.name),
+                        done: self.progress.as_ref().map_or(0, |p| p.level(&s.id)),
+                        total: s.max_level,
+                    })
+                    .collect(),
+                projects: catalog
+                    .projects
+                    .iter()
+                    .map(|p| crate::views::planner::Track {
+                        id: &p.id,
+                        name: std::borrow::Cow::Owned(numbered_name(&catalog.projects, p)),
+                        done: self.progress.as_ref().map_or(0, |pr| pr.phases_done(&p.id)),
+                        total: u32::try_from(p.phases.len()).unwrap_or(u32::MAX),
+                    })
+                    .collect(),
                 plan: if self.progress_section == crate::views::progress::Section::Planner {
                     self.current_plan(catalog)
                 } else {
@@ -3284,23 +3304,14 @@ fn game_condition(map: &str, line: Option<&str>) -> ConditionLine {
     }
 }
 
-/// "Gunsmith → level 3", "Craft Anvil I".
-fn goal_label(goal: &arclens_core::Goal, catalog: &Catalog) -> String {
-    match goal {
-        arclens_core::Goal::Station { station, level } => {
-            let name = catalog
-                .stations
-                .iter()
-                .find(|s| &s.id == station)
-                .map_or(station.as_str(), |s| s.name.as_str());
-            t!("planner-goal-station", station = name, level = *level)
-        }
-        arclens_core::Goal::Craft { item, .. } => {
-            let name = catalog
-                .item(item)
-                .map_or(item.as_str(), |i| i.name.as_str());
-            t!("planner-goal-craft", item = name)
-        }
+/// A project's name, numbered when another has the same one ("Phantom
+/// Targets 2": the data names both parts alike).
+fn numbered_name(projects: &[arclens_core::Project], project: &arclens_core::Project) -> String {
+    let same: Vec<&arclens_core::Project> =
+        projects.iter().filter(|p| p.name == project.name).collect();
+    match same.iter().position(|p| p.id == project.id) {
+        Some(i) if same.len() > 1 => format!("{} {}", project.name, i + 1),
+        _ => project.name.clone(),
     }
 }
 
