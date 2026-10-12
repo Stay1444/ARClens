@@ -78,7 +78,7 @@ impl Section {
                 let learned = page
                     .blueprints
                     .iter()
-                    .filter(|b| page.progress.is_some_and(|p| p.blueprint_learned(&b.id)))
+                    .filter(|b| page.progress.is_some_and(|p| p.blueprint_learned(&b.0.id)))
                     .count();
                 t!(
                     "progress-blueprints-summary",
@@ -96,8 +96,9 @@ pub struct ProgressView<'a> {
     pub stations: &'a [Station],
     pub quests: &'a [Quest],
     pub projects: &'a [Project],
-    /// Blueprint items, sorted by name.
-    pub blueprints: Vec<&'a Item>,
+    /// Blueprint items, sorted by name, each with a line on where to hunt
+    /// it ([`crate::detail::hunt_note`]).
+    pub blueprints: Vec<(&'a Item, String)>,
     /// `None`: never set.
     pub progress: Option<&'a Progress>,
     pub stash: crate::views::stash::StashView<'a>,
@@ -410,20 +411,48 @@ fn projects<'a>(page: &ProgressView<'a>) -> Element<'a, Message> {
 
 /// Blueprints, ticked once learned: until then advice says LEARN.
 fn blueprints<'a>(page: &ProgressView<'a>) -> Element<'a, Message> {
-    let list = page
-        .blueprints
+    let learned =
+        |id: &arclens_core::ItemId| page.progress.is_some_and(|p| p.blueprint_learned(id));
+    let row_for = |(blueprint, note): &&(&'a Item, String), is_learned: bool| {
+        let id = blueprint.id.clone();
+        let mut line = column![
+            row![
+                tick(is_learned, blueprint.name.as_str(), move |learned| {
+                    Message::SetBlueprintLearned(id.clone(), learned)
+                })
+                .width(Length::Fill),
+                link(&t!("hunt-open"), Message::Select(blueprint.id.clone())),
+            ]
+            .spacing(12)
+            .align_y(Alignment::Center)
+        ]
+        .spacing(2);
+        if !is_learned && !note.is_empty() {
+            line = line.push(
+                container(
+                    text(note.clone())
+                        .size(size::SMALL)
+                        .color(palette::TEXT_MUTED),
+                )
+                .padding(iced::Padding::ZERO.left(32)),
+            );
+        }
+        line
+    };
+    // To find first, then the ones learned.
+    let (to_find, done): (Vec<_>, Vec<_>) =
+        page.blueprints.iter().partition(|(b, _)| !learned(&b.id));
+    let list = to_find
         .iter()
-        .fold(column![].spacing(10), |col, blueprint| {
-            let learned = page
-                .progress
-                .is_some_and(|p| p.blueprint_learned(&blueprint.id));
-            let id = blueprint.id.clone();
-            col.push(tick(learned, blueprint.name.as_str(), move |learned| {
-                Message::SetBlueprintLearned(id.clone(), learned)
-            }))
-        });
+        .map(|b| row_for(b, false))
+        .chain(done.iter().map(|b| row_for(b, true)))
+        .fold(column![].spacing(12), iced::widget::Column::push);
+    let zones = high_loot_zones();
     column![
         header(&t!("progress-blueprints"), t!("progress-blueprints-help")),
+        text(t!("hunt-help", zones = zones))
+            .size(size::SMALL)
+            .color(palette::TEXT_MUTED),
         theme::panel(
             &t!("progress-blueprints"),
             Some(count(Section::Blueprints.summary(page))),
@@ -432,6 +461,38 @@ fn blueprints<'a>(page: &ProgressView<'a>) -> Element<'a, Message> {
     ]
     .spacing(space::SECTION)
     .max_width(CONTENT_WIDTH)
+    .into()
+}
+
+/// "Hydroponic Dome Complex, Control Tower (Dam Battlegrounds); …": the
+/// zones the game marks as high loot, per map.
+fn high_loot_zones() -> String {
+    use arclens_data::loot_zones::{LootValue, zones};
+    arclens_data::metaforge::MAPS
+        .iter()
+        .filter_map(|&(map, _)| {
+            let names: Vec<&str> = zones(map)
+                .iter()
+                .filter(|z| z.value == Some(LootValue::High))
+                .map(|z| z.name.as_str())
+                .collect();
+            (!names.is_empty())
+                .then(|| format!("{} ({})", names.join(", "), arclens_ui::names::map(map)))
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+/// A small text button.
+fn link<'a>(label: &str, on_press: Message) -> Element<'a, Message> {
+    button(
+        text(label.to_owned())
+            .size(size::SMALL)
+            .color(theme::ACCENT),
+    )
+    .padding([2, 6])
+    .on_press(on_press)
+    .style(|_, _| button::Style::default())
     .into()
 }
 

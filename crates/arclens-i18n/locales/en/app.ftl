@@ -343,3 +343,11 @@ stash-room-line = ×{ $count } · { $slots } { $slots ->
 stash-room-spare = spares
 stash-room-recycle = recycle
 stash-room-sell = sell
+
+## Blueprint hunt
+
+hunt-unlocks = Unlocks { $items }
+hunt-found-in = drops in { $places }
+hunt-dropped-by = dropped by { $arc }
+hunt-open = Open
+hunt-help = Not learned yet first. Blueprints come out of containers; the game marks these zones as high loot: { $zones }.

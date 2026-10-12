@@ -405,6 +405,26 @@ fn blueprint_of<'a>(item: &Item, catalog: &'a Catalog) -> Option<&'a Item> {
         .find_map(|bp| catalog.item(&ItemId::new(bp.as_str())))
 }
 
+/// One line on where to hunt a blueprint: what it unlocks, and where it
+/// drops when the data says ("Unlocks Anvil I · drops in Residential").
+pub fn hunt_note(blueprint: &Item, catalog: &Catalog) -> String {
+    let mut parts = Vec::new();
+    let unlocks: Vec<&str> = unlocked_by(blueprint, catalog)
+        .map(|i| i.name.as_str())
+        .collect();
+    if !unlocks.is_empty() {
+        parts.push(t!("hunt-unlocks", items = unlocks.join(", ")));
+    }
+    let d = &blueprint.details;
+    if !d.found_in.is_empty() {
+        parts.push(t!("hunt-found-in", places = d.found_in.join(", ")));
+    }
+    if !d.dropped_by.is_empty() {
+        parts.push(t!("hunt-dropped-by", arc = d.dropped_by.join(", ")));
+    }
+    parts.join(" · ")
+}
+
 /// For a blueprint: the items it unlocks.
 fn unlocked_by<'a>(item: &'a Item, catalog: &'a Catalog) -> impl Iterator<Item = &'a Item> + 'a {
     let blueprint = item.is_blueprint();

@@ -438,7 +438,10 @@ Research: `docs/research/frozen-trail.md`.
       windows), from the last stash scan: "Need 12 · 4 in stash · 8 to go".
 - [x] Value per stash slot (item facts); Progress → Stash "Make room":
       what the latest scan holds that can go, most slots freed first.
-- [ ] Blueprint hunt list with where each drops.
+- [x] Blueprint hunt list (Progress → Blueprints): not learned first, what
+      each unlocks, drops where the data has them (MetaForge), the game's
+      high-loot zones, and a link into the encyclopedia. RaidTheory has no
+      drop data for blueprints (0 of 83, 2026-10-12).
 - [ ] Crafting/upgrade planner with the stash subtracted.
 - Hotkeys: dropped (maintainer, 2026-10-12).
 

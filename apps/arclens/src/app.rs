@@ -2729,7 +2729,18 @@ impl App {
                 let mut blueprints: Vec<&Item> =
                     catalog.items.iter().filter(|i| i.is_blueprint()).collect();
                 blueprints.sort_by(|a, b| a.name.cmp(&b.name));
+                let notes = self.progress_section == crate::views::progress::Section::Blueprints;
                 blueprints
+                    .into_iter()
+                    .map(|b| {
+                        let note = if notes {
+                            crate::detail::hunt_note(b, catalog)
+                        } else {
+                            String::new()
+                        };
+                        (b, note)
+                    })
+                    .collect()
             },
             progress: self.progress.as_ref(),
             stash: crate::views::stash::StashView {

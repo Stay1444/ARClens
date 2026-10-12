@@ -343,3 +343,11 @@ stash-room-line = ×{ $count } · { $slots } { $slots ->
 stash-room-spare = sobrantes
 stash-room-recycle = reciclar
 stash-room-sell = vender
+
+## Blueprint hunt
+
+hunt-unlocks = Desbloquea { $items }
+hunt-found-in = aparece en { $places }
+hunt-dropped-by = lo sueltan { $arc }
+hunt-open = Abrir
+hunt-help = Primero los que faltan. Los planos salen de contenedores; el juego marca estas zonas como botín alto: { $zones }.
