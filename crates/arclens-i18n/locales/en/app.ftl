@@ -277,6 +277,7 @@ detail-weight = Weight
 detail-value-per-kg = Value per kg
 detail-stack = Stack size
 detail-found-in = Found in
+detail-value-per-slot = Value per slot
 detail-where-to-look = Where to look
 detail-loot-high = high loot
 detail-loot-medium = medium loot
@@ -329,3 +330,16 @@ alert-kicker = Condition alert
 alert-title = { $condition } in { $minutes } min
 alert-body = { $map } · { $start } – { $end }
 alert-open = Open ARClens
+
+## Stash: make room
+
+stash-room = Make room
+stash-room-help = From the latest scan: what can go to free stash slots, most slots first. Sell and recycle advice, plus spare copies of items you keep beyond what is still needed.
+stash-room-slots = { $slots } slots
+stash-room-line = ×{ $count } · { $slots } { $slots -> 
+    [one] slot
+   *[other] slots
+} · { $how }
+stash-room-spare = spares
+stash-room-recycle = recycle
+stash-room-sell = sell

@@ -13,7 +13,8 @@ pub mod progress;
 pub mod spots;
 
 pub use advice::{
-    Advice, PARTS_MIN_VALUE_PERCENT, Place, Situation, Verdict, advise, advise_in, breakdown,
+    Advice, PARTS_MIN_VALUE_PERCENT, Place, SellPick, Situation, Verdict, advise, advise_in,
+    breakdown, sell_picks,
 };
 pub use areas::{MarkerArea, MarkerLayout, layout};
 pub use events::{Agenda, ScheduledEvent, agenda, condition_key, countdown, due_alerts};

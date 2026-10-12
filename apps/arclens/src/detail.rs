@@ -171,6 +171,13 @@ fn facts(
     }
     if let Some(stack) = item.stack_size.filter(|&s| s > 1) {
         facts.push((t!("detail-stack"), stack.to_string()));
+        // A full stack in one stash slot.
+        if let Some(value) = item.value {
+            facts.push((
+                t!("detail-value-per-slot"),
+                coins(value.saturating_mul(stack)),
+            ));
+        }
     }
     if !d.found_in.is_empty() {
         let places: Vec<String> = d

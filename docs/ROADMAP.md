@@ -436,7 +436,8 @@ Research: `docs/research/frozen-trail.md`.
       Verified headlessly with mako; KDE and Windows **unverified**.
 - [x] Have vs need on the item card (hover card, encyclopedia, item
       windows), from the last stash scan: "Need 12 · 4 in stash · 8 to go".
-- [ ] Value per stash slot; "stash nearly full: sell these".
+- [x] Value per stash slot (item facts); Progress → Stash "Make room":
+      what the latest scan holds that can go, most slots freed first.
 - [ ] Blueprint hunt list with where each drops.
 - [ ] Crafting/upgrade planner with the stash subtracted.
 - Hotkeys: dropped (maintainer, 2026-10-12).

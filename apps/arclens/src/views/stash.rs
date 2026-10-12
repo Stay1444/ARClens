@@ -1,10 +1,11 @@
 //! The Progress tab's Stash section: the latest stash scan, what the
-//! player still needs against what they have, and past scans.
+//! player still needs against what they have, what can go to make room,
+//! and past scans.
 
 use crate::app::Message;
 use crate::stash::Snapshot;
 use crate::stash_worker::ScanState;
-use arclens_core::{Item, ItemId};
+use arclens_core::{Item, ItemId, SellPick, Verdict};
 use arclens_i18n::t;
 use arclens_ui::format::thousands;
 use arclens_ui::palette;
@@ -26,6 +27,8 @@ pub struct StashView<'a> {
     pub live: Option<&'a ScanState>,
     /// Items the remaining progress needs, missing ones first.
     pub needs: Vec<Shortfall<'a>>,
+    /// What in the latest scan can go, most slots freed first.
+    pub sell: Vec<SellPick<'a>>,
     pub catalog: &'a arclens_data::Catalog,
 }
 
@@ -79,6 +82,10 @@ pub fn view<'a>(page: &StashView<'a>, header: Element<'a, Message>) -> Element<'
         );
     }
     body = body.push(latest(page));
+    // Short (capped), so above the long list of needs.
+    if !page.sell.is_empty() {
+        body = body.push(make_room(page));
+    }
     body = body.push(needed(page));
     if page.history.len() > 1 {
         body = body.push(history(page));
@@ -154,6 +161,68 @@ fn needed<'a>(page: &StashView<'a>) -> Element<'a, Message> {
             &t!("stash-needed"),
             Some(
                 text(t!("stash-missing", count = missing))
+                    .size(size::BODY)
+                    .font(theme::DISPLAY)
+                    .color(theme::INK)
+                    .into()
+            ),
+            list
+        ),
+    ]
+    .spacing(8)
+    .into()
+}
+
+/// Picks shown at most.
+const SELL_SHOWN: usize = 15;
+
+/// What can go to free slots: SELL and RECYCLE items, spare KEEP copies.
+fn make_room<'a>(page: &StashView<'a>) -> Element<'a, Message> {
+    let slots: u32 = page.sell.iter().map(|p| p.slots).sum();
+    let list = page
+        .sell
+        .iter()
+        .take(SELL_SHOWN)
+        .fold(column![].spacing(8), |col, pick| {
+            let how = match pick.verdict {
+                Verdict::Keep => t!("stash-room-spare"),
+                Verdict::Recycle => t!("stash-room-recycle"),
+                _ => t!("stash-room-sell"),
+            };
+            let value = pick
+                .value
+                .map_or_else(String::new, |v| format!("{} ¢", thousands(v)));
+            col.push(
+                row![
+                    column![
+                        text(pick.item.name.clone()).size(size::BODY),
+                        text(t!(
+                            "stash-room-line",
+                            count = pick.count,
+                            slots = pick.slots,
+                            how = how
+                        ))
+                        .size(size::SMALL)
+                        .color(palette::TEXT_MUTED),
+                    ]
+                    .width(Length::Fill),
+                    text(value)
+                        .size(size::BODY)
+                        .font(theme::DISPLAY)
+                        .color(palette::COIN),
+                ]
+                .spacing(12)
+                .align_y(iced::Alignment::Center),
+            )
+        });
+    column![
+        text(t!("stash-room-help"))
+            .size(size::SMALL)
+            .color(palette::TEXT_MUTED),
+        theme::panel(
+            &t!("stash-room"),
+            Some(
+                text(t!("stash-room-slots", slots = slots))
                     .size(size::BODY)
                     .font(theme::DISPLAY)
                     .color(theme::INK)

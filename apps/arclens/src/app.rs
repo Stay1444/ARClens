@@ -2740,6 +2740,11 @@ impl App {
                 } else {
                     Vec::new()
                 },
+                sell: if self.progress_section == crate::views::progress::Section::Stash {
+                    self.stash_sell(catalog)
+                } else {
+                    Vec::new()
+                },
                 catalog,
             },
         })
@@ -2772,6 +2777,21 @@ impl App {
                 .then_with(|| a.item.name.cmp(&b.item.name))
         });
         needs
+    }
+
+    /// What the latest stash scan holds that can go.
+    fn stash_sell<'a>(&self, catalog: &'a Catalog) -> Vec<arclens_core::SellPick<'a>> {
+        let Some(scan) = self.stash_history.latest() else {
+            return Vec::new();
+        };
+        arclens_core::sell_picks(scan.items.iter().filter_map(|(id, &count)| {
+            let item = catalog.item(id)?;
+            Some((
+                item,
+                count,
+                self.advice(item, catalog, Situation::default()),
+            ))
+        }))
     }
 
     fn view_row<'a>(&'a self, item: &'a Item, catalog: &'a Catalog) -> Element<'a, Message> {

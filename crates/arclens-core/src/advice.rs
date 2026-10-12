@@ -84,6 +84,53 @@ impl Advice {
     }
 }
 
+/// Something in the stash that can go to make room.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SellPick<'a> {
+    pub item: &'a Item,
+    /// How many can go: all of a SELL or RECYCLE item, the spares of a KEEP
+    /// one.
+    pub count: u32,
+    /// Stash slots they take.
+    pub slots: u32,
+    /// What selling them brings, if the value is known.
+    pub value: Option<u32>,
+    pub verdict: Verdict,
+}
+
+/// From a stash scan (item, how many, its advice): what can go, most slots
+/// freed first, then the cheapest. Items advised SELL or RECYCLE go whole;
+/// KEEP items only beyond what is still needed (a KEEP with nothing ahead
+/// of it, kept for its own sake, stays); blueprints stay.
+pub fn sell_picks<'a>(
+    stash: impl IntoIterator<Item = (&'a Item, u32, Advice)>,
+) -> Vec<SellPick<'a>> {
+    let mut picks: Vec<SellPick<'a>> = stash
+        .into_iter()
+        .filter_map(|(item, count, advice)| {
+            let spare = match advice.verdict {
+                Verdict::Sell | Verdict::Recycle => count,
+                Verdict::Keep if advice.needed() > 0 => count.saturating_sub(advice.needed()),
+                _ => 0,
+            };
+            (spare > 0).then(|| SellPick {
+                item,
+                count: spare,
+                slots: spare.div_ceil(item.stack_size.unwrap_or(1).max(1)),
+                value: advice.sell_value.map(|v| v.saturating_mul(spare)),
+                verdict: advice.verdict,
+            })
+        })
+        .collect();
+    picks.sort_by(|a, b| {
+        b.slots
+            .cmp(&a.slots)
+            .then(a.value.unwrap_or(0).cmp(&b.value.unwrap_or(0)))
+            .then_with(|| a.item.name.cmp(&b.item.name))
+    });
+    picks
+}
+
 /// Break an item down for upgrade parts only if the parts are worth at least
 /// this share of its sell value. Beyond that the loss is too big to justify
 /// without knowing how many parts the player already owns.
@@ -217,6 +264,62 @@ mod owned_tests {
             parts_for: None,
             owned,
         }
+    }
+
+    fn stackable(id: &str, stack: u32) -> Item {
+        Item {
+            id: ItemId::new(id),
+            name: id.into(),
+            aliases: Vec::new(),
+            description: None,
+            rarity: None,
+            category: None,
+            value: Some(100),
+            weight: None,
+            stack_size: Some(stack),
+            recycles_into: Vec::new(),
+            salvages_into: Vec::new(),
+            required_for: Vec::new(),
+            ingredient_of: Vec::new(),
+            image_url: None,
+            details: crate::ItemDetails::default(),
+        }
+    }
+
+    #[test]
+    fn picks_what_can_go_most_slots_first() {
+        let (junk, gear, kept) = (
+            stackable("junk", 5),
+            stackable("gear", 3),
+            stackable("kept", 1),
+        );
+        let sell = |verdict| Advice {
+            verdict,
+            sell_value: Some(100),
+            ..keep(&[], None)
+        };
+        let picks = sell_picks([
+            (&junk, 11, sell(Verdict::Sell)),
+            // Needs 4, has 10: 6 spare, two stacks of three.
+            (
+                &gear,
+                10,
+                Advice {
+                    sell_value: Some(100),
+                    ..keep(&[4], Some(10))
+                },
+            ),
+            // Kept for its own sake: stays.
+            (&kept, 2, keep(&[], Some(2))),
+        ]);
+        let got: Vec<_> = picks
+            .iter()
+            .map(|p| (p.item.id.as_str(), p.count, p.slots, p.value))
+            .collect();
+        assert_eq!(
+            got,
+            [("junk", 11, 3, Some(1100)), ("gear", 6, 2, Some(600))]
+        );
     }
 
     #[test]

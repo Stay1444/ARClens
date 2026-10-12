@@ -277,6 +277,7 @@ detail-weight = Peso
 detail-value-per-kg = Valor por kg
 detail-stack = Tamaño de pila
 detail-found-in = Se encuentra en
+detail-value-per-slot = Valor por hueco
 detail-where-to-look = Dónde buscar
 detail-loot-high = botín alto
 detail-loot-medium = botín medio
@@ -329,3 +330,16 @@ alert-kicker = Aviso de condición
 alert-title = { $condition } en { $minutes } min
 alert-body = { $map } · { $start } – { $end }
 alert-open = Abrir ARClens
+
+## Stash: make room
+
+stash-room = Hacer sitio
+stash-room-help = Del último escaneo: lo que puede irse para liberar huecos del alijo, primero lo que más ocupa. Lo aconsejado vender o reciclar, y las copias de sobra de lo que guardas.
+stash-room-slots = { $slots } huecos
+stash-room-line = ×{ $count } · { $slots } { $slots -> 
+    [one] hueco
+   *[other] huecos
+} · { $how }
+stash-room-spare = sobrantes
+stash-room-recycle = reciclar
+stash-room-sell = vender
