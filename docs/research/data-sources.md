@@ -42,8 +42,9 @@ _Last researched: 2026-10-03. Re-verify before relying on anything marked
   - `map-events/map-events.json` (event *types* and icons, **no schedule**).
 - Localised strings are `{lang: text}` objects, sometimes plain strings.
   `arclens-data::raidtheory` handles both.
-- Attribution requested: link to the repo and arctracker.io. The app
-  displays the source in its footer.
+- Attribution requested: link to the repo and arctracker.io. Credited in
+  the README's "Data and attribution" section (not in the app's UI: the
+  maintainer's call, AGENTS.md rule 2).
 - Loader: `crates/arclens-data/src/raidtheory.rs`. Download:
   `crates/arclens-data/src/download.rs` (GitHub tarball, JSON only).
 
