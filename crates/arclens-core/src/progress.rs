@@ -139,6 +139,28 @@ impl Progress {
     /// Whether `req` is still ahead of the player: workshop upgrades not
     /// built yet, quests not done, project phases not finished. Anything
     /// without an id to check counts.
+    /// Whether `req` is the very next step: a station's next level, a
+    /// quest whose earlier quests are done, a project's next phase. What
+    /// the player works on now, unlike [`Self::needs`] (everything ahead).
+    pub fn is_next_step(&self, req: &Requirement, quests: &[Quest]) -> bool {
+        match (req.kind, req.station.as_deref(), req.level) {
+            (RequirementKind::WorkshopUpgrade, Some(station), Some(level)) => {
+                level == self.level(station) + 1
+            }
+            (RequirementKind::Quest, Some(quest), _) => {
+                !self.quest_done(quest)
+                    && quests
+                        .iter()
+                        .find(|q| q.id == quest)
+                        .is_none_or(|q| q.previous.iter().all(|p| self.quest_done(p)))
+            }
+            (RequirementKind::Project, Some(project), Some(phase)) => {
+                phase == self.phases_done(project) + 1
+            }
+            _ => false,
+        }
+    }
+
     pub fn needs(&self, req: &Requirement) -> bool {
         match (req.kind, req.station.as_deref(), req.level) {
             (RequirementKind::WorkshopUpgrade, Some(station), Some(level)) => {
@@ -156,6 +178,48 @@ impl Progress {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn next_steps_are_one_ahead() {
+        let mut progress = Progress::default();
+        progress.stations.insert("weapon_bench".into(), 2);
+        progress.quests_done.insert("first".into());
+        progress.projects.insert("trophy".into(), 1);
+        let quests = [
+            Quest {
+                id: "second".into(),
+                name: "Second".into(),
+                aliases: Vec::new(),
+                trader: String::new(),
+                previous: vec!["first".into()],
+                needs_items: true,
+            },
+            Quest {
+                id: "third".into(),
+                name: "Third".into(),
+                aliases: Vec::new(),
+                trader: String::new(),
+                previous: vec!["second".into()],
+                needs_items: true,
+            },
+        ];
+        let req = |kind, id: &str, level| Requirement {
+            kind,
+            name: String::new(),
+            quantity: 1,
+            station: Some(id.into()),
+            level,
+        };
+        let next = |r: &Requirement| progress.is_next_step(r, &quests);
+        assert!(next(&upgrade("weapon_bench", 3)));
+        assert!(!next(&upgrade("weapon_bench", 4)));
+        assert!(!next(&upgrade("weapon_bench", 2)));
+        assert!(next(&req(RequirementKind::Quest, "second", None)));
+        assert!(!next(&req(RequirementKind::Quest, "third", None)));
+        assert!(!next(&req(RequirementKind::Quest, "first", None)));
+        assert!(next(&req(RequirementKind::Project, "trophy", Some(2))));
+        assert!(!next(&req(RequirementKind::Project, "trophy", Some(3))));
+    }
 
     fn upgrade(station: &str, level: u32) -> Requirement {
         Requirement {

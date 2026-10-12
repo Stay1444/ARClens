@@ -150,23 +150,36 @@ fn footprint(size: (f32, f32), px_per_logical: f32) -> arclens_vision::Footprint
     footprint
 }
 
-/// Whether the main menu is up, with hysteresis: two frames in a row to
-/// appear, [`MAP_CLOSE_GRACE`] gone to disappear.
-#[derive(Debug, Default)]
-struct MenuWatch {
+/// Whether a screen (the main menu, the loading screen) is up, with
+/// hysteresis: two frames in a row to appear, [`MAP_CLOSE_GRACE`] gone to
+/// disappear.
+#[derive(Debug)]
+struct ScreenWatch {
+    detect: fn(&RgbImage) -> bool,
+    event: fn(bool) -> Event,
     shown: bool,
     seen: u8,
     missing_since: Option<Instant>,
 }
 
-impl MenuWatch {
+impl ScreenWatch {
+    fn new(detect: fn(&RgbImage) -> bool, event: fn(bool) -> Event) -> Self {
+        Self {
+            detect,
+            event,
+            shown: false,
+            seen: 0,
+            missing_since: None,
+        }
+    }
+
     fn check(&mut self, frame: &RgbImage, out: &mut Outbox) {
-        if arclens_vision::is_main_menu(frame) {
+        if (self.detect)(frame) {
             self.missing_since = None;
             self.seen = self.seen.saturating_add(1);
             if !self.shown && self.seen >= 2 {
                 self.shown = true;
-                out.send_lossy(Event::MainMenu(true));
+                out.send_lossy((self.event)(true));
             }
             return;
         }
@@ -180,8 +193,31 @@ impl MenuWatch {
         {
             self.shown = false;
             self.missing_since = None;
-            out.send_lossy(Event::MainMenu(false));
+            out.send_lossy((self.event)(false));
         }
+    }
+}
+
+/// The whole-screen states reported as they come and go.
+#[derive(Debug)]
+struct Screens {
+    menu: ScreenWatch,
+    loading: ScreenWatch,
+}
+
+impl Default for Screens {
+    fn default() -> Self {
+        Self {
+            menu: ScreenWatch::new(arclens_vision::is_main_menu, Event::MainMenu),
+            loading: ScreenWatch::new(arclens_vision::is_loading_screen, Event::Loading),
+        }
+    }
+}
+
+impl Screens {
+    fn check(&mut self, frame: &RgbImage, out: &mut Outbox) {
+        self.menu.check(frame, out);
+        self.loading.check(frame, out);
     }
 }
 
@@ -367,6 +403,8 @@ pub enum Event {
     ActiveQuests(Vec<String>),
     /// The game's main menu appeared (`true`) or went away.
     MainMenu(bool),
+    /// The loading screen before a raid appeared (`true`) or went.
+    Loading(bool),
     /// Where the pointer is over the open map, normalised to the screen
     /// (`None`: unknown). Sent when it moves.
     MapPointer(Option<(f32, f32)>),
@@ -478,7 +516,7 @@ fn run(output: mpsc::Sender<Event>) {
     let mut map_watch = MapWatch::default();
     let mut map_view = MapView::default();
     let mut station = StationWatch::default();
-    let mut menu = MenuWatch::default();
+    let mut screens = Screens::default();
     let mut stash = StashWatch::spawn(model.as_ref().ok(), &paths, &out);
     let labels = model.ok().and_then(|model| LabelWorker::spawn(&model));
     while let Some(frame) = source.next_frame() {
@@ -514,7 +552,7 @@ fn run(output: mpsc::Sender<Event>) {
         }
         map_view.reset();
         station.check(&analyzer, &frame, &mut out);
-        menu.check(&frame, &mut out);
+        screens.check(&frame, &mut out);
         let hover = match analyzer.analyze(&frame) {
             Ok(hover) => hover,
             Err(error) => {

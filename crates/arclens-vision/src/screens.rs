@@ -37,13 +37,18 @@ pub enum Screen {
     TraderQuests,
     /// The pause menu's LOGBOOK tab.
     Logbook,
+    /// The loading screen before a raid: black, a tip in the middle, the
+    /// spinning emblem bottom right.
+    Loading,
     /// Anything else (in raid without a menu, projects, crafting, …).
     Unknown,
 }
 
 /// Which screen `frame` shows. Cheap (no OCR); run it every frame.
 pub fn classify(frame: &RgbImage) -> Screen {
-    if is_main_menu(frame) {
+    if is_loading_screen(frame) {
+        Screen::Loading
+    } else if is_main_menu(frame) {
         Screen::MainMenu
     } else if is_map_screen(frame) {
         Screen::Map
@@ -131,6 +136,35 @@ pub fn is_main_menu(frame: &RgbImage) -> bool {
         && cream_share(frame, TRADE_PANEL) < MIN_CREAM
         && bright_share(frame, PLAY_TAB_LEFT) >= MIN_OUTLINE
         && bright_share(frame, PLAY_TAB_RIGHT) >= MIN_OUTLINE
+}
+
+/// The loading screen's spinning emblem, bottom right: `[x, y, w, h]`.
+const LOADING_SPINNER: [f32; 4] = [0.86, 0.75, 0.07, 0.13];
+/// Its blue glow covers ~6 % of that box (2026-10-11 capture); nothing on
+/// the near-black rest of the screen is that blue.
+const MIN_SPINNER_BLUE: f32 = 0.02;
+/// Near-black share of the whole frame (99 % in the capture; faint lines
+/// and the tip text make up the rest).
+const MIN_LOADING_DARK: f32 = 0.9;
+
+/// Whether `frame` is the loading screen before a raid: almost all black,
+/// with the blue spinner bottom right. Cheap (no OCR; the dark share is
+/// sampled every 8th pixel).
+pub fn is_loading_screen(frame: &RgbImage) -> bool {
+    let blue = share(frame, LOADING_SPINNER, |[r, _, b]| {
+        b >= 170 && b.saturating_sub(r) >= 50
+    });
+    if blue < MIN_SPINNER_BLUE {
+        return false;
+    }
+    let (mut dark, mut total) = (0u32, 0u32);
+    for row in (0..frame.height()).step_by(8) {
+        for col in (0..frame.width()).step_by(8) {
+            total += 1;
+            dark += u32::from(frame.get_pixel(col, row).0.iter().all(|&c| c < 40));
+        }
+    }
+    total > 0 && dark as f32 / total as f32 >= MIN_LOADING_DARK
 }
 
 /// Whether `frame` shows the pause menu's INVENTORY tab (stash and

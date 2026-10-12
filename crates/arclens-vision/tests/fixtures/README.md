@@ -17,6 +17,7 @@ maintainer's permission, for testing only. Game UI © Embark Studios AB.
 | `projects_overview`, `project_*` | Projects list and project pages (phase circles) | Screenshots 2026-10-04 |
 | `stash_heavy_ammo`, `stash_looting_mk2` | Pause menu stash, from a 2026-10-05 recording | A short ammo tooltip; a chip glyph with a dark speck |
 | `stash/scroll_*`, `stash/labels.tsv` | Pause menu stash, scrolled, nothing hovered (2026-10-05 recording) | 42 labelled slots; labels from a second recording hovering each slot |
+| `loading_tip` | The loading screen before a raid: a tip and its author centred, the spinner bottom right | Screenshot 2026-10-11, received at 2000×1125 and scaled up to 2560×1440 |
 | `inventory_stash` | Pause menu, INVENTORY tab, nothing hovered | Screenshot 2026-10-04 |
 
 Frames are JPEG (quality ≈ 90), extracted at 1 fps with ffmpeg or

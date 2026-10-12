@@ -74,6 +74,11 @@ first, with Windows support too.
   areas, and preset management (save, update, delete, reset per map or
   condition).
   ![Map tab](docs/assets/map-tab.jpg)
+- **Raid prep on the loading screen**: while the game loads into a raid,
+  a card lists what to look for (your planner goal, then what your next
+  upgrades, open quests and project phases still need), how many you have,
+  where to look, and the conditions running.
+  ![Loading card](docs/assets/overlay-loading-card.png)
 - **Events**: map-condition timers for your server region: what runs now,
   what's next per map, and the schedule per condition in local time.
   "Alert me" on a condition sends a desktop notification and an in-game

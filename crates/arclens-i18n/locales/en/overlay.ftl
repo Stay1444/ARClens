@@ -31,3 +31,15 @@ overlay-stash-filtered = Pick the first tab (all items) to scan
 overlay-stash-done = Stash scanned
 overlay-stash-count = { $seen } / { $total }
 overlay-stash-seen = { $seen } slots
+
+## Loading screen: raid prep
+
+loading-kicker = ARClens · raid prep
+loading-title = Loading in
+loading-title-map = Loading in · last map { $map }
+loading-look-for = Look for
+loading-nothing-needed = Nothing on your list: set a planner goal or your progress to get one.
+loading-conditions = Conditions
+loading-ends-in = ends in { $time }
+loading-starts-in = in { $time }
+loading-have-need = { $have } / { $need }

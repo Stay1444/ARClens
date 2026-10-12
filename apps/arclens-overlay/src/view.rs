@@ -50,6 +50,9 @@ pub fn view(state: &Overlay) -> Element<'_, Message> {
             screen,
         ));
     }
+    if let (Some(card), Some(screen)) = (&state.loading_card, state.screen) {
+        layers = layers.push(crate::loading_card::view(card, state.now_ms, screen));
+    }
     if let (Some(toast), Some(screen)) = (&state.toast, state.screen) {
         layers = layers.push(crate::toast::view(toast, screen));
     }

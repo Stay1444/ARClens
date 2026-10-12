@@ -12,6 +12,7 @@
 
 mod detail;
 mod ipc;
+mod loading_card;
 mod map_panel;
 mod menu_card;
 mod search;
@@ -137,6 +138,8 @@ pub struct Overlay {
     menu_icons: menu_card::Icons,
     /// A notice at the top of the screen, until it expires.
     toast: Option<toast::Shown>,
+    /// Raid prep, while the game's loading screen shows.
+    loading_card: Option<loading_card::Shown>,
     /// Wall clock (Unix ms) for the card's countdowns.
     now_ms: i64,
     /// Sends to the companion app while connected.
@@ -167,6 +170,7 @@ impl Overlay {
             || self.panel.panel.is_some()
             || self.menu_card.is_some()
             || self.toast.is_some()
+            || self.loading_card.is_some()
             || !self.stash_badges.is_empty()
             || self.stash_progress.is_some()
             || ((!self.markers.is_empty() || !self.areas.is_empty()) && self.transform.is_some())
@@ -248,6 +252,9 @@ fn subscription(state: &Overlay) -> Subscription<Message> {
         shell::subscription(state),
         if state.menu_card.is_some() {
             iced::time::every(menu_card::tick_interval(state.now_ms)).map(|_| Message::Tick)
+        } else if state.loading_card.is_some() {
+            // Its countdowns.
+            iced::time::every(std::time::Duration::from_secs(1)).map(|_| Message::Tick)
         } else if state.toast.is_some() {
             // Its expiry.
             iced::time::every(std::time::Duration::from_millis(500)).map(|_| Message::Tick)
@@ -405,7 +412,7 @@ fn configure(
     shell::input_task(state)
 }
 
-/// The main-menu card and toasts.
+/// The main-menu and loading cards, and toasts.
 fn show_card(state: &mut Overlay, msg: ToOverlay) {
     match msg {
         ToOverlay::ShowMenuCard { card } => {
@@ -417,6 +424,11 @@ fn show_card(state: &mut Overlay, msg: ToOverlay) {
         ToOverlay::ShowToast { toast } => {
             state.toast = Some(toast::Shown::new(toast, std::time::Instant::now()));
         }
+        ToOverlay::ShowLoadingCard { card } => {
+            state.now_ms = now_ms();
+            state.loading_card = Some(loading_card::Shown::new(card));
+        }
+        ToOverlay::HideLoadingCard => state.loading_card = None,
         _ => {}
     }
 }
@@ -501,6 +513,8 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
         }
         msg @ (ToOverlay::ShowMenuCard { .. }
         | ToOverlay::HideMenuCard
+        | ToOverlay::ShowLoadingCard { .. }
+        | ToOverlay::HideLoadingCard
         | ToOverlay::ShowToast { .. }) => show_card(state, msg),
         ToOverlay::SearchResults { query, hits } => state.search.results(&query, hits),
         ToOverlay::ShowStashBadges { badges } => state.stash_badges = badges,

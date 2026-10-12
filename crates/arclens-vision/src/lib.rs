@@ -49,7 +49,9 @@ pub use map_motion::{Estimate, Footprint, Motion, MotionTracker, TRACK_REGION};
 pub use panel::{PanelParams, find_panels};
 pub use quests::{QuestScreen, quest_screen, quest_title_boxes, read_active_quests};
 pub use read::{NameReader, RECOGNITION_MODEL_URL};
-pub use screens::{Screen, classify, is_inventory, is_main_menu, map_from_title};
+pub use screens::{
+    Screen, classify, is_inventory, is_loading_screen, is_main_menu, map_from_title,
+};
 pub use stash::{
     SAME_ROW_SLOT, SAME_SLOT, SlotBadge, SlotThumb, THUMB_SIDE, badge_box, hovered_slot,
     parse_count, parse_quantity, read_badge, read_stash_count, slot_is_empty, slot_thumb,

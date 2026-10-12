@@ -448,6 +448,20 @@ Research: `docs/research/frozen-trail.md`.
       recycle into missing parts. "Plan crafting" on craftable items.
 - Hotkeys: dropped (maintainer, 2026-10-12).
 
+## Loading screen (2026-10-12)
+
+- [x] Detect the loading screen before a raid (near-black frame, the blue
+      spinner bottom right; fixture from the maintainer's capture).
+- [x] Raid-prep card on it (protocol 21): the planner goal, what to look
+      for (planner gaps, then the next levels, open quests and next project
+      phases, smallest gap first) with item icons, have/need and where to
+      look, and the conditions around
+      (`docs/assets/overlay-loading-card.png`, headless replay).
+- [ ] Verify in game (KDE): timing and placement over the real screen.
+- [ ] After-raid Findings screen: tag backpack slots like the stash, log
+      the raid. Needs a capture with loot in the backpack and one after an
+      extraction.
+
 ## Item encyclopedia (2026-10-11)
 
 - [x] Items tab: every fact under the card, rarity and type filters,

@@ -18,7 +18,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 mod transport;
 pub use transport::{Endpoint, Listener};
 
-pub const PROTOCOL_VERSION: u32 = 20;
+pub const PROTOCOL_VERSION: u32 = 21;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hello {
@@ -112,6 +112,12 @@ pub enum ToOverlay {
         card: MenuCard,
     },
     HideMenuCard,
+    /// The game is loading into a raid: show the raid-prep card
+    /// (protocol 21).
+    ShowLoadingCard {
+        card: LoadingCard,
+    },
+    HideLoadingCard,
     /// A short notice drawn for a few seconds, e.g. a followed map
     /// condition about to start (protocol 20).
     ShowToast {
@@ -343,6 +349,44 @@ pub struct MenuCard {
     /// The player's progress, one line per part of the game.
     #[serde(default)]
     pub progress: Vec<ProgressLine>,
+}
+
+/// Raid prep, shown on the loading screen: what to look for and where,
+/// and the conditions around.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct LoadingCard {
+    /// The planner's goal and what it misses ("Gunsmith → level 3 · 12 to
+    /// find").
+    #[serde(default)]
+    pub goal: Option<String>,
+    /// The map the player last had open in game, by name.
+    #[serde(default)]
+    pub map: Option<String>,
+    /// Items to look for, most wanted first.
+    #[serde(default)]
+    pub hunt: Vec<HuntItem>,
+    /// Conditions running now, ending soonest first.
+    #[serde(default)]
+    pub active: Vec<CardEvent>,
+    /// Followed conditions (or the next ones) starting soon.
+    #[serde(default)]
+    pub upcoming: Vec<CardEvent>,
+}
+
+/// An item to look for in the raid.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HuntItem {
+    pub name: String,
+    #[serde(default)]
+    pub icon: Option<PathBuf>,
+    /// For the icon tile's border.
+    #[serde(default)]
+    pub rarity: Option<Rarity>,
+    pub have: u32,
+    pub need: u32,
+    /// Where to look ("Railyard, Loading Platforms"), if known.
+    #[serde(default)]
+    pub look: String,
 }
 
 /// "Quests: 12 of 100", for the menu card.

@@ -68,6 +68,8 @@ pub struct App {
     tab: Tab,
     /// Since when the game shows its main menu (our card is up).
     main_menu: Option<std::time::Instant>,
+    /// Since when the game's loading screen is up (raid prep card shown).
+    loading: Option<std::time::Instant>,
     /// Progress tab: the section shown.
     progress_section: crate::views::progress::Section,
     /// Map-condition schedule (MetaForge).
@@ -459,6 +461,7 @@ impl App {
             map_hold: crate::map_hold::MapHold::default(),
             game_view: GameMapView::default(),
             last_map: None,
+            loading: None,
             map_summary: crate::views::map::MapSummary::default(),
             map_plot: iced::widget::canvas::Cache::new(),
             map_images: std::collections::HashMap::new(),
@@ -656,9 +659,13 @@ impl App {
             _ => false,
         };
         let is_hovered = self.hover.as_ref().is_some_and(|(h, ..)| *h == id);
+        let on_loading_card = self.loading.is_some();
         let in_search =
             self.overlay_interactive && self.results.iter().take(SEARCH_HITS).any(|r| *r == id);
         self.icons.insert(id, icon);
+        if on_loading_card {
+            self.push_loading_card();
+        }
         // Resend so the overlay picks up the icon path.
         if in_window {
             self.push_overlay_items(false);
@@ -809,6 +816,7 @@ impl App {
             vision::Event::WorkshopLevels(levels) => self.on_workshop_levels(&levels),
             vision::Event::ActiveQuests(titles) => self.on_active_quests(&titles),
             vision::Event::MainMenu(shown) => self.on_main_menu(shown),
+            vision::Event::Loading(shown) => return self.on_loading(shown),
             vision::Event::MapPointer(at) => self.send(ToOverlay::Pointer { at }),
             vision::Event::StashView(slots) => self.on_stash_view(slots),
             vision::Event::StashScan(state) => self.on_stash_scan(state),
@@ -948,16 +956,13 @@ impl App {
             .iter()
             .filter_map(|station| {
                 let level = self.progress.as_ref().map_or(0, |p| p.level(&station.id)) + 1;
+                let goal = arclens_core::Goal::Station {
+                    station: station.id.clone(),
+                    level,
+                };
                 (level <= station.max_level).then(|| GoalChoice {
-                    goal: arclens_core::Goal::Station {
-                        station: station.id.clone(),
-                        level,
-                    },
-                    label: t!(
-                        "planner-goal-station",
-                        station = station.name.as_str(),
-                        level = level
-                    ),
+                    label: goal_label(&goal, catalog),
+                    goal,
                 })
             })
             .collect();
@@ -1207,6 +1212,178 @@ impl App {
                 progress: self.progress_lines(),
             },
         });
+    }
+
+    /// The loading screen came or went: the raid-prep card, and the icons
+    /// of the items it lists (it is sent again as they load).
+    fn on_loading(&mut self, shown: bool) -> Task<Message> {
+        tracing::info!(shown, "loading screen");
+        self.loading = shown.then(std::time::Instant::now);
+        if !shown {
+            self.send(ToOverlay::HideLoadingCard);
+            return Task::none();
+        }
+        let ids = self.push_loading_card();
+        let Load::Ready(catalog) = &self.catalog else {
+            return Task::none();
+        };
+        let loads: Vec<_> = ids
+            .iter()
+            .filter_map(|id| catalog.item(id))
+            .filter_map(|item| self.icons.request(item))
+            .map(|load| Task::perform(load, |(id, icon)| Message::IconLoaded(id, icon)))
+            .collect();
+        Task::batch(loads)
+    }
+
+    /// Raid prep for the loading screen: what to look for (the planner's
+    /// missing parts first, then what progress still needs), where, and
+    /// the conditions around.
+    /// Returns the items listed.
+    fn push_loading_card(&self) -> Vec<ItemId> {
+        if self.loading.is_none() {
+            return Vec::new();
+        }
+        let Load::Ready(catalog) = &self.catalog else {
+            self.send(ToOverlay::ShowLoadingCard {
+                card: arclens_ipc::LoadingCard::default(),
+            });
+            return Vec::new();
+        };
+        let plan = self.current_plan(catalog);
+        let goal = self
+            .plan_goal
+            .as_ref()
+            .zip(plan.as_ref())
+            .map(|(goal, plan)| {
+                let status = match plan.missing() {
+                    0 => t!("planner-ready"),
+                    n => t!("planner-missing", count = n),
+                };
+                format!("{} · {status}", goal_label(goal, catalog))
+            });
+        let mut wanted: Vec<(&Item, u32, u32)> = Vec::new();
+        if let Some(plan) = &plan {
+            let mut lines: Vec<_> = plan.lines.iter().filter(|l| l.missing > 0).collect();
+            lines.sort_by_key(|l| std::cmp::Reverse(l.missing));
+            wanted.extend(
+                lines
+                    .into_iter()
+                    .filter_map(|l| Some((catalog.item(&l.item)?, l.from_stash, l.needed))),
+            );
+        }
+        // Then what the next steps take (next levels, quests open now,
+        // next phases), smallest gap first: what one raid can finish.
+        let default = Progress::default();
+        let progress = self.progress.as_ref().unwrap_or(&default);
+        let have = |id: &ItemId| self.stash_history.latest().map_or(0, |s| s.count(id));
+        let mut next: Vec<(&Item, u32, u32)> = catalog
+            .items
+            .iter()
+            .filter(|item| wanted.iter().all(|(i, ..)| i.id != item.id))
+            .filter_map(|item| {
+                let need: u32 = item
+                    .required_for
+                    .iter()
+                    .filter(|r| progress.is_next_step(r, &catalog.quests))
+                    .map(|r| r.quantity)
+                    .sum();
+                let owned = have(&item.id);
+                (need > owned).then_some((item, owned, need))
+            })
+            .collect();
+        next.sort_by_key(|&(item, owned, need)| (need - owned, item.name.clone()));
+        wanted.extend(next);
+        wanted.truncate(6);
+        let ids = wanted.iter().map(|(item, ..)| item.id.clone()).collect();
+        let hunt = wanted
+            .into_iter()
+            .map(|(item, have, need)| arclens_ipc::HuntItem {
+                name: item.name.clone(),
+                icon: self.icons.get(&item.id).map(|i| i.path.clone()),
+                rarity: item.rarity,
+                have,
+                need,
+                look: self.where_to_look(item),
+            })
+            .collect();
+        let card = arclens_ipc::LoadingCard {
+            goal,
+            map: self.last_map.map(arclens_ui::names::map),
+            hunt,
+            ..self.loading_conditions()
+        };
+        self.send(ToOverlay::ShowLoadingCard { card });
+        ids
+    }
+
+    /// Where to look for `item`: its zones on the last map played, else
+    /// the best zones anywhere, else the ARC that drop it.
+    fn where_to_look(&self, item: &Item) -> String {
+        let kinds = &item.details.found_in;
+        let holds = |z: &arclens_data::loot_zones::LootZone| {
+            z.kinds
+                .iter()
+                .any(|k| kinds.iter().any(|f| f.eq_ignore_ascii_case(k)))
+        };
+        if let Some(map) = self.last_map {
+            let here: Vec<&str> = arclens_data::loot_zones::zones(map)
+                .iter()
+                .filter(|z| holds(z))
+                .map(|z| z.name.as_str())
+                .collect();
+            if !here.is_empty() {
+                return here.join(", ");
+            }
+        }
+        let anywhere: Vec<String> = arclens_data::loot_zones::zones_with(kinds)
+            .into_iter()
+            .take(2)
+            .map(|(map, z)| format!("{} ({})", z.name, arclens_ui::names::map(map)))
+            .collect();
+        if !anywhere.is_empty() {
+            return anywhere.join(", ");
+        }
+        if !item.details.dropped_by.is_empty() {
+            return t!("hunt-dropped-by", arc = item.details.dropped_by.join(", "));
+        }
+        String::new()
+    }
+
+    /// Conditions for the loading card: what runs now, then the followed
+    /// ones starting within two hours, else the next few.
+    fn loading_conditions(&self) -> arclens_ipc::LoadingCard {
+        let Load::Ready(events) = &self.events else {
+            return arclens_ipc::LoadingCard::default();
+        };
+        let now = now_ms();
+        let agenda = arclens_core::agenda(events, now);
+        let card = |e: &arclens_core::ScheduledEvent, at_ms| arclens_ipc::CardEvent {
+            name: e.name.clone(),
+            map: e.map.clone(),
+            at_ms,
+            icon: self.event_icons.path(&e.name).map(Path::to_path_buf),
+        };
+        let followed: Vec<_> = agenda
+            .upcoming
+            .iter()
+            .filter(|e| {
+                self.settings
+                    .alerts
+                    .contains(&arclens_core::condition_key(&e.name))
+                    && e.start_ms - now <= 2 * 3_600_000
+            })
+            .collect();
+        let upcoming = if followed.is_empty() {
+            agenda.upcoming.iter().take(3).collect()
+        } else {
+            followed
+        };
+        arclens_ipc::LoadingCard {
+            active: agenda.active.iter().map(|e| card(e, e.end_ms)).collect(),
+            upcoming: upcoming.into_iter().map(|e| card(e, e.start_ms)).collect(),
+            ..arclens_ipc::LoadingCard::default()
+        }
     }
 
     /// The Progress page's summary, for the menu card.
@@ -1677,7 +1854,9 @@ impl App {
             self.map_hold.reset();
             self.game_view = GameMapView::default();
             self.main_menu = None;
+            self.loading = None;
             self.send(ToOverlay::HideMenuCard);
+            self.send(ToOverlay::HideLoadingCard);
             self.send(ToOverlay::ClearHover);
             self.send(ToOverlay::HideMapPanel);
             self.send(ToOverlay::ClearMarkers);
@@ -3102,6 +3281,26 @@ fn game_condition(map: &str, line: Option<&str>) -> ConditionLine {
             .map_or(ConditionLine::Other, |(name, _)| {
                 ConditionLine::Condition(name)
             }),
+    }
+}
+
+/// "Gunsmith → level 3", "Craft Anvil I".
+fn goal_label(goal: &arclens_core::Goal, catalog: &Catalog) -> String {
+    match goal {
+        arclens_core::Goal::Station { station, level } => {
+            let name = catalog
+                .stations
+                .iter()
+                .find(|s| &s.id == station)
+                .map_or(station.as_str(), |s| s.name.as_str());
+            t!("planner-goal-station", station = name, level = *level)
+        }
+        arclens_core::Goal::Craft { item, .. } => {
+            let name = catalog
+                .item(item)
+                .map_or(item.as_str(), |i| i.name.as_str());
+            t!("planner-goal-craft", item = name)
+        }
     }
 }
 

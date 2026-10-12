@@ -13,6 +13,8 @@
 //! - `trader_*`: a trader's TRADES tab ([`Screen::Trader`]).
 //! - `projects_overview`, `project_*`: projects, which no detector
 //!   covers ([`Screen::Unknown`]).
+//! - `loading_tip`: the loading screen before a raid (a tip, the spinner):
+//!   [`Screen::Loading`].
 
 use arclens_vision::{Screen, classify, map_from_title};
 use std::collections::BTreeMap;
@@ -21,6 +23,7 @@ use std::path::Path;
 /// Every fixture frame (path below `tests/fixtures/`) and what it shows.
 const LABELS: &[(&str, Screen)] = &[
     ("frames/inventory_stash.jpg", Screen::Inventory),
+    ("frames/loading_tip.jpg", Screen::Loading),
     ("frames/logbook.jpg", Screen::Logbook),
     ("frames/project_ascending_the_mountain.jpg", Screen::Unknown),
     ("frames/project_trophy_display.jpg", Screen::Unknown),
@@ -111,6 +114,7 @@ fn classifies_every_fixture_frame() {
         Screen::Trader,
         Screen::TraderQuests,
         Screen::Logbook,
+        Screen::Loading,
         Screen::Unknown,
     ];
     eprintln!("expected -> got: count");
@@ -225,4 +229,10 @@ fn address_bar_is_not_the_map_tab() {
         }
     }
     assert_ne!(classify(&frame), Screen::Map);
+}
+
+#[test]
+fn a_black_screen_without_the_spinner_is_not_loading() {
+    let black = image::RgbImage::new(2560, 1440);
+    assert!(!arclens_vision::is_loading_screen(&black));
 }

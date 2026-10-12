@@ -31,3 +31,15 @@ overlay-stash-filtered = Elige la primera pestaña (todo) para leerlo
 overlay-stash-done = Alijo leído
 overlay-stash-count = { $seen } / { $total }
 overlay-stash-seen = { $seen } casillas
+
+## Loading screen: raid prep
+
+loading-kicker = ARClens · preparación
+loading-title = Cargando
+loading-title-map = Cargando · último mapa { $map }
+loading-look-for = Busca
+loading-nothing-needed = Nada en tu lista: elige un objetivo en el planificador o tu progreso.
+loading-conditions = Condiciones
+loading-ends-in = acaba en { $time }
+loading-starts-in = en { $time }
+loading-have-need = { $have } / { $need }
