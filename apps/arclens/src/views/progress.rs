@@ -24,15 +24,17 @@ pub enum Section {
     Projects,
     Blueprints,
     Stash,
+    Planner,
 }
 
 impl Section {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Workshop,
         Self::Quests,
         Self::Projects,
         Self::Blueprints,
         Self::Stash,
+        Self::Planner,
     ];
 
     fn title(self) -> String {
@@ -42,6 +44,7 @@ impl Section {
             Self::Projects => t!("progress-projects"),
             Self::Blueprints => t!("progress-blueprints"),
             Self::Stash => t!("progress-stash"),
+            Self::Planner => t!("progress-planner"),
         }
     }
 
@@ -87,6 +90,7 @@ impl Section {
                 )
             }
             Self::Stash => crate::views::stash::summary(&page.stash),
+            Self::Planner => crate::views::planner::summary(&page.planner),
         }
     }
 }
@@ -102,6 +106,7 @@ pub struct ProgressView<'a> {
     /// `None`: never set.
     pub progress: Option<&'a Progress>,
     pub stash: crate::views::stash::StashView<'a>,
+    pub planner: crate::views::planner::PlannerView<'a>,
 }
 
 pub fn view<'a>(page: &ProgressView<'a>) -> Element<'a, Message> {
@@ -120,6 +125,10 @@ pub fn view<'a>(page: &ProgressView<'a>) -> Element<'a, Message> {
         Section::Stash => crate::views::stash::view(
             &page.stash,
             header(&t!("progress-stash"), t!("progress-stash-help")),
+        ),
+        Section::Planner => crate::views::planner::view(
+            &page.planner,
+            header(&t!("progress-planner"), t!("progress-planner-help")),
         ),
     };
     row![

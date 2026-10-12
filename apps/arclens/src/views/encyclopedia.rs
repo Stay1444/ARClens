@@ -98,7 +98,14 @@ pub fn page<'a>(
         row![theme::secondary_button(
             &t!("items-show-on-map"),
             Some(Message::ShowItemOnMap(detail.item.id.clone())),
-        )],
+        )]
+        .push((!detail.item.details.recipe.is_empty()).then(|| {
+            theme::secondary_button(
+                &t!("items-plan-craft"),
+                Some(Message::PlanCraft(detail.item.id.clone())),
+            )
+        }))
+        .spacing(8),
     ]
     .spacing(18);
     if !detail.facts.is_empty() {

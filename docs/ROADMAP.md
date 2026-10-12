@@ -442,7 +442,10 @@ Research: `docs/research/frozen-trail.md`.
       each unlocks, drops where the data has them (MetaForge), the game's
       high-loot zones, and a link into the encyclopedia. RaidTheory has no
       drop data for blueprints (0 of 83, 2026-10-12).
-- [ ] Crafting/upgrade planner with the stash subtracted.
+- [x] Planner (Progress → Planner, 2026-10-12): a station's next level or
+      crafting an item, broken down to materials against the latest stash
+      scan; parts crafted where a recipe exists; spare stash items that
+      recycle into missing parts. "Plan crafting" on craftable items.
 - Hotkeys: dropped (maintainer, 2026-10-12).
 
 ## Item encyclopedia (2026-10-11)
@@ -457,4 +460,4 @@ Research: `docs/research/frozen-trail.md`.
 ## Later
 
 - X11 and Windows overlay backends.
-- Crafting and workshop planner, and quest tracker in the companion window.
+- Quest tracker in the companion window (the planner is done).

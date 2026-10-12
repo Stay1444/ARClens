@@ -8,6 +8,7 @@ pub mod areas;
 pub mod events;
 pub mod item;
 pub mod map;
+pub mod planner;
 pub mod presets;
 pub mod progress;
 pub mod spots;
@@ -25,6 +26,7 @@ pub use item::{
 pub use map::{
     MapId, MapPoint, Marker, MarkerFilter, PointPair, Transform, humanize, marker_counts,
 };
+pub use planner::{Goal, Plan, PlanLine, RecycleHint, plan};
 pub use presets::{Preset, PresetBook};
 pub use progress::{Progress, Project, Quest, Station};
 pub use spots::{ItemSpots, Spot};

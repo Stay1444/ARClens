@@ -351,3 +351,26 @@ hunt-found-in = drops in { $places }
 hunt-dropped-by = dropped by { $arc }
 hunt-open = Open
 hunt-help = Not learned yet first. Blueprints come out of containers; the game marks these zones as high loot: { $zones }.
+
+## Progress → Planner
+
+progress-planner = Planner
+progress-planner-help = Pick a goal: what it takes, what your latest stash scan covers, what to craft from parts and what is still missing.
+planner-pick = Pick a goal…
+planner-goal-station = { $station } → level { $level }
+planner-goal-craft = Craft { $item }
+planner-stash-from = Stash from the scan of { $date }.
+planner-no-scan = No stash scan yet: everything counts as missing. Open your stash in game and scroll through it once.
+planner-materials = Materials
+planner-ready = All there
+planner-missing = { $count } to find
+planner-in-stash = { $count } in stash
+planner-craft = craft { $count }
+planner-to-find = { $count } missing
+planner-recycle = Recycle for parts
+planner-recycle-help = Spare items in your stash (ones advised to sell or recycle, or kept beyond what is needed) that break down into missing parts.
+planner-nothing = Nothing to plan: this goal takes no items.
+planner-summary-ready = ready
+planner-summary-missing = { $count } missing
+planner-summary-none = no goal
+items-plan-craft = Plan crafting

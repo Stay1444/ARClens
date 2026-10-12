@@ -52,6 +52,8 @@ pub struct App {
     item_categories: Vec<String>,
     /// Map tab: the item whose spots are shown instead of the filter.
     item_on_map: Option<ItemId>,
+    /// Progress → Planner: what is being planned.
+    plan_goal: Option<arclens_core::Goal>,
     overlay: Option<OverlayHandle>,
     overlay_visible: bool,
     overlay_interactive: bool,
@@ -308,6 +310,9 @@ pub enum Message {
     /// The start-up screen's frame; any key or "Skip" leaves it.
     StartupTick,
     SkipStartup,
+    /// Progress → Planner: plan this goal; an item's "Plan crafting".
+    SetPlanGoal(arclens_core::Goal),
+    PlanCraft(ItemId),
     /// Encyclopedia: show where an item turns up on the map, or stop.
     ShowItemOnMap(ItemId),
     ClearItemOnMap,
@@ -409,6 +414,7 @@ impl App {
             item_filter: arclens_core::ItemFilter::default(),
             item_categories: Vec::new(),
             item_on_map: None,
+            plan_goal: None,
             overlay: None,
             overlay_visible: false,
             overlay_interactive: false,
@@ -855,6 +861,12 @@ impl App {
     /// screen, held map closes and the item shown on the map.
     fn update_view_state(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::SetPlanGoal(goal) => return self.set_plan_goal(goal),
+            Message::PlanCraft(item) => {
+                self.progress_section = crate::views::progress::Section::Planner;
+                self.tab = Tab::Progress;
+                return self.set_plan_goal(arclens_core::Goal::Craft { item, count: 1 });
+            }
             Message::ToggleAlert(_) | Message::CheckAlerts | Message::AlertOpened(_) => {
                 return self.update_alerts(message);
             }
@@ -874,6 +886,94 @@ impl App {
             _ => {}
         }
         Task::none()
+    }
+
+    /// Plans `goal` and fetches the icons of what it takes.
+    fn set_plan_goal(&mut self, goal: arclens_core::Goal) -> Task<Message> {
+        self.plan_goal = Some(goal);
+        let Load::Ready(catalog) = &self.catalog else {
+            return Task::none();
+        };
+        let Some(plan) = self.current_plan(catalog) else {
+            return Task::none();
+        };
+        let ids = plan
+            .lines
+            .iter()
+            .map(|l| &l.item)
+            .chain(plan.recycle.iter().map(|r| &r.from));
+        let loads: Vec<_> = ids
+            .filter_map(|id| catalog.item(id))
+            .filter_map(|item| self.icons.request(item))
+            .map(|load| Task::perform(load, |(id, icon)| Message::IconLoaded(id, icon)))
+            .collect();
+        Task::batch(loads)
+    }
+
+    /// The plan for the current goal, against the latest stash scan. Only
+    /// spare items (advised SELL or RECYCLE, KEEP ones beyond their needs)
+    /// are suggested for recycling.
+    fn current_plan(&self, catalog: &Catalog) -> Option<arclens_core::Plan> {
+        let goal = self.plan_goal.as_ref()?;
+        let empty = std::collections::BTreeMap::new();
+        let have = self.stash_history.latest().map_or(&empty, |s| &s.items);
+        let level = match goal {
+            arclens_core::Goal::Station { station, .. } => {
+                self.progress.as_ref().map_or(0, |p| p.level(station))
+            }
+            arclens_core::Goal::Craft { .. } => 0,
+        };
+        let spare = |id: &ItemId| {
+            let (Some(item), Some(&count)) = (catalog.item(id), have.get(id)) else {
+                return 0;
+            };
+            let advice = self.advice(item, catalog, Situation::default());
+            match advice.verdict {
+                arclens_core::Verdict::Sell | arclens_core::Verdict::Recycle => count,
+                arclens_core::Verdict::Keep if advice.needed() > 0 => {
+                    count.saturating_sub(advice.needed())
+                }
+                _ => 0,
+            }
+        };
+        Some(arclens_core::plan(goal, &catalog.items, have, level, spare))
+    }
+
+    /// The planner's choices: each station's next level, and the item
+    /// being planned for crafting.
+    fn plan_choices(&self, catalog: &Catalog) -> Vec<crate::views::planner::GoalChoice> {
+        use crate::views::planner::GoalChoice;
+        let mut choices: Vec<GoalChoice> = catalog
+            .stations
+            .iter()
+            .filter_map(|station| {
+                let level = self.progress.as_ref().map_or(0, |p| p.level(&station.id)) + 1;
+                (level <= station.max_level).then(|| GoalChoice {
+                    goal: arclens_core::Goal::Station {
+                        station: station.id.clone(),
+                        level,
+                    },
+                    label: t!(
+                        "planner-goal-station",
+                        station = station.name.as_str(),
+                        level = level
+                    ),
+                })
+            })
+            .collect();
+        if let Some(goal @ arclens_core::Goal::Craft { item, .. }) = &self.plan_goal {
+            let name = catalog
+                .item(item)
+                .map_or(item.as_str(), |i| i.name.as_str());
+            choices.insert(
+                0,
+                GoalChoice {
+                    goal: goal.clone(),
+                    label: t!("planner-goal-craft", item = name),
+                },
+            );
+        }
+        choices
     }
 
     /// Condition alerts: following, the periodic check, a clicked notice.
@@ -2757,6 +2857,21 @@ impl App {
                     Vec::new()
                 },
                 catalog,
+            },
+            planner: crate::views::planner::PlannerView {
+                choices: self.plan_choices(catalog),
+                goal: self.plan_goal.as_ref(),
+                plan: if self.progress_section == crate::views::progress::Section::Planner {
+                    self.current_plan(catalog)
+                } else {
+                    None
+                },
+                catalog,
+                icons: &self.icons,
+                scanned: self
+                    .stash_history
+                    .latest()
+                    .map(|s| crate::views::stash::when(s.taken_at)),
             },
         })
     }

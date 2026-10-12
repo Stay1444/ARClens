@@ -351,3 +351,26 @@ hunt-found-in = aparece en { $places }
 hunt-dropped-by = lo sueltan { $arc }
 hunt-open = Abrir
 hunt-help = Primero los que faltan. Los planos salen de contenedores; el juego marca estas zonas como botín alto: { $zones }.
+
+## Progress → Planner
+
+progress-planner = Planificador
+progress-planner-help = Elige un objetivo: lo que hace falta, lo que cubre tu último escaneo del alijo, lo que puedes fabricar con piezas y lo que aún falta.
+planner-pick = Elige un objetivo…
+planner-goal-station = { $station } → nivel { $level }
+planner-goal-craft = Fabricar { $item }
+planner-stash-from = Alijo del escaneo del { $date }.
+planner-no-scan = Aún no hay escaneo del alijo: todo cuenta como pendiente. Abre el alijo en el juego y recórrelo una vez.
+planner-materials = Materiales
+planner-ready = Todo listo
+planner-missing = faltan { $count }
+planner-in-stash = { $count } en el alijo
+planner-craft = fabricar { $count }
+planner-to-find = faltan { $count }
+planner-recycle = Reciclar para piezas
+planner-recycle-help = Objetos de sobra en tu alijo (aconsejados vender o reciclar, o guardados de más) que se desmontan en piezas que faltan.
+planner-nothing = Nada que planificar: este objetivo no pide objetos.
+planner-summary-ready = listo
+planner-summary-missing = faltan { $count }
+planner-summary-none = sin objetivo
+items-plan-craft = Planificar fabricación
