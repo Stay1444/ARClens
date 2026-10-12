@@ -326,7 +326,7 @@ mod tests {
         let plan = plan(&goal, &items, &have, 2, |_| 0);
         assert_eq!(plan.lines.len(), 1);
         assert_eq!(line(&plan, "rusted_gear").missing, 2);
-        assert!(plan.recycle.is_empty());
+        assert_eq!(plan.recycle, []);
     }
 
     #[test]

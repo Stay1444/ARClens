@@ -694,7 +694,23 @@ mod tests {
             .item(&ItemId::new("advanced_arc_powercell"))
             .unwrap();
         assert_eq!(cell.details.found_in, ["ARC"]);
-        assert!(!cell.details.dropped_by.is_empty());
+        // Sorted, once each.
+        assert_eq!(
+            cell.details.dropped_by,
+            [
+                "Bastion",
+                "Bombardier",
+                "Comet",
+                "Leaper",
+                "Matriarch",
+                "Queen",
+                "Rocketeer",
+                "Sentinel",
+                "Surveyor",
+                "Turbine",
+                "Vaporizer"
+            ]
+        );
         assert!(done.found_in >= 1);
 
         // New ones carry what MetaForge knows, with references resolved.

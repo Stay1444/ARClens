@@ -124,6 +124,6 @@ mod tests {
         assert!(names.contains(&"Hydroponic Dome Complex"));
         assert!(!names.contains(&"Old Town"));
         assert_eq!(found[0].1.value, Some(LootValue::High));
-        assert!(zones_with(&[]).is_empty());
+        assert_eq!(zones_with(&[]), []);
     }
 }
