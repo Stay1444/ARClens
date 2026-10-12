@@ -28,5 +28,5 @@ pub use map::{
 };
 pub use planner::{Goal, Plan, PlanLine, RecycleHint, plan};
 pub use presets::{Preset, PresetBook};
-pub use progress::{Progress, Project, Quest, Station};
+pub use progress::{DeliveryRow, Progress, Project, Quest, Station};
 pub use spots::{ItemSpots, Spot};

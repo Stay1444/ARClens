@@ -89,7 +89,9 @@ first, with Windows support too.
   upgrade or quest that needed them is done. Most of it fills in by
   itself: open the Workshop tab (all station levels) or a station, and the
   logbook or a trader's quest page (quests in progress mean the ones
-  before them are done).
+  before them are done), and a project's page (its current phase, and
+  what you've delivered to it so far, which then no longer counts as
+  needed).
   ![Progress: workshop](docs/assets/progress.png)
   ![Progress: quests](docs/assets/progress-quests.png)
   Its **Stash** section shows your latest stash scan, what your remaining
@@ -219,7 +221,7 @@ exactly what ARClens does and doesn't do, so you can judge for yourself.
   and Discord streaming use.
 - **Reads what the game already shows you**: the item name in a tooltip,
   place names and the map view, workshop levels, the quests in your
-  logbook, the main menu. Then it looks those up in public community data.
+  logbook, a project's progress, the main menu. Then it looks those up in public community data.
 - **Draws its own window on top** (a layer-shell surface on Linux, a
   topmost transparent window on Windows). It's click-through except where
   you need to click it.

@@ -820,6 +820,7 @@ impl App {
             vision::Event::StationLevel(read) => self.on_station_level(&read),
             vision::Event::WorkshopLevels(levels) => self.on_workshop_levels(&levels),
             vision::Event::ActiveQuests(titles) => self.on_active_quests(&titles),
+            vision::Event::ProjectPage(page) => self.on_project_page(&page),
             vision::Event::MainMenu(shown) => self.on_main_menu(shown),
             vision::Event::Loading(shown) => return self.on_loading(shown),
             vision::Event::MapPointer(at) => self.send(ToOverlay::Pointer { at }),
@@ -955,14 +956,6 @@ impl App {
         let have = self.stash_history.latest().map_or(&empty, |s| &s.items);
         let default = Progress::default();
         let progress = self.progress.as_ref().unwrap_or(&default);
-        // Station levels and project phases share the call: ids differ.
-        let level = |id: &str| {
-            progress
-                .stations
-                .get(id)
-                .copied()
-                .unwrap_or_else(|| progress.phases_done(id))
-        };
         let spare = |id: &ItemId| {
             let (Some(item), Some(&count)) = (catalog.item(id), have.get(id)) else {
                 return 0;
@@ -980,7 +973,7 @@ impl App {
             &goals,
             &catalog.items,
             have,
-            level,
+            progress,
             spare,
         ))
     }
@@ -1518,6 +1511,50 @@ impl App {
         }
     }
 
+    /// The game shows a project's page: which phase is current, and what
+    /// is delivered to it already.
+    fn on_project_page(&mut self, page: &arclens_vision::ProjectPage) {
+        let Load::Ready(catalog) = &self.catalog else {
+            return;
+        };
+        let rows: Vec<arclens_core::DeliveryRow> = page
+            .rows
+            .iter()
+            .map(|r| arclens_core::DeliveryRow {
+                delivered: r.delivered,
+                needed: r.needed,
+                locked: r.locked,
+            })
+            .collect();
+        let progress = self.progress.get_or_insert_with(Progress::default);
+        // Projects can share a name (Phantom Targets 1 and 2): the one
+        // whose phase asks for what the page lists.
+        let Some(best) = arclens_data::best_named(
+            &page.title,
+            &catalog.projects,
+            |p| vec![p.name.as_str()],
+            0.85,
+        ) else {
+            tracing::debug!(title = %page.title, "unknown project title");
+            return;
+        };
+        let named = catalog.projects.iter().filter(|p| p.name == best.name);
+        let mut changed = false;
+        for project in named {
+            if progress.note_project_page(project, page.phase, &rows) {
+                tracing::info!(project = %project.id, phase = page.phase, "project progress read from the game");
+                changed = true;
+                break;
+            }
+        }
+        if changed {
+            let marker = t!("status-from-game-marker");
+            self.status.retain(|s| !s.contains(&marker));
+            self.status.push(t!("status-project-from-game"));
+            self.progress_changed();
+        }
+    }
+
     fn send(&self, msg: ToOverlay) {
         if let Some(overlay) = &self.overlay {
             overlay.send(msg);
@@ -1591,7 +1628,7 @@ impl App {
                 progress.set_quest_done(&quest, done, &catalog.quests);
             }
             Message::SetProjectPhases(project, phases) => {
-                progress.projects.insert(project, phases);
+                progress.set_phases_done(&project, phases);
             }
             Message::SetBlueprintLearned(id, true) => {
                 progress.blueprints.insert(id);

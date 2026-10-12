@@ -228,6 +228,7 @@ struct StationWatch {
     last: Option<arclens_vision::StationLevel>,
     last_levels: Vec<(String, u32)>,
     last_quests: Vec<String>,
+    last_project: Option<arclens_vision::ProjectPage>,
 }
 
 impl StationWatch {
@@ -252,6 +253,16 @@ impl StationWatch {
             if !levels.is_empty() && levels != self.last_levels {
                 self.last_levels.clone_from(&levels);
                 out.send_lossy(Event::WorkshopLevels(levels));
+            }
+            return;
+        }
+        // A project's page: the selected phase and what is delivered.
+        if arclens_vision::is_project_page(frame) {
+            if let Ok(Some(page)) = analyzer.read_project_page(frame)
+                && self.last_project.as_ref() != Some(&page)
+            {
+                self.last_project = Some(page.clone());
+                out.send_lossy(Event::ProjectPage(page));
             }
             return;
         }
@@ -401,6 +412,9 @@ pub enum Event {
     WorkshopLevels(Vec<(String, u32)>),
     /// Quest titles the game lists as in progress (as read).
     ActiveQuests(Vec<String>),
+    /// A project's page: its title, the selected phase and its rows
+    /// (sent when it changes).
+    ProjectPage(arclens_vision::ProjectPage),
     /// The game's main menu appeared (`true`) or went away.
     MainMenu(bool),
     /// The loading screen before a raid appeared (`true`) or went.

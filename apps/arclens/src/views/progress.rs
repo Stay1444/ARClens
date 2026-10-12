@@ -387,6 +387,16 @@ fn projects<'a>(page: &ProgressView<'a>) -> Element<'a, Message> {
                     || t!("progress-all-phases-done"),
                     |p| t!("progress-next-phase", phase = p.as_str()),
                 );
+            // Read off the project's page in the game.
+            let delivered: u32 = page
+                .progress
+                .and_then(|p| p.delivered.get(&project.id))
+                .map_or(0, |items| items.values().sum());
+            let next = if delivered > 0 && done < total {
+                format!("{next} · {}", t!("progress-delivered", count = delivered))
+            } else {
+                next
+            };
             col.push(
                 row![
                     column![

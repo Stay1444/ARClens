@@ -112,6 +112,29 @@ Sources (2026-10-11): [Forbes](https://www.forbes.com/sites/erikkain/2026/10/09/
   a tool). The workshop overview and main menu look the same as before
   2.0 (maintainer); no Outpost, new stash tiers or other new items yet.
 
+## Projects after 2.0 (maintainer's screenshots, 2026-10-12)
+
+- The PROJECTS screen lists only **Trophy Display** (5 phases) and the
+  **Expedition**, which is "temporarily paused": "Expeditions are
+  currently undergoing a rework, so we are temporarily pausing the
+  feature. We expect to bring it back soon." The 2026-10-04 screenshot
+  also had the timed project Ascending the Mountain (not in RaidTheory's
+  data); it's gone now. **Verified** in game.
+- RaidTheory's `projects.json` (1.42) still lists the expeditions of
+  seasons 1-4 and both Phantom Targets parts as enabled. ARClens leaves
+  them out (`RETIRED_PROJECTS` in `crates/arclens-data/src/raidtheory.rs`)
+  so their items no longer count as reasons to keep; it keeps Season 5's
+  expedition for when expeditions return.
+- Trophy Display phases 1 (Roaming Threats: Rusted Bolts 3, Pop Trigger
+  15, Tick Pod 15, Surveyor Vault 5) and 2 (Soaring Menaces: Spotter
+  Relay 10, Expired Respirator 3, Wasp Driver 20, Hornet Driver 15)
+  match RaidTheory's data exactly, in the same order, and so do the
+  per-item rewards beside each row. **Verified.**
+- A project page shows, per row, the item with the stash count on its
+  icon ("×2"), a bar and "delivered/needed"; a locked phase dims its rows
+  and puts a lock on them and on its phase circle. Committed resources
+  can't be taken back.
+
 ## What ARClens does with it
 
 - Pendola Pass is a known map (`pendola-pass`): title OCR, names, events,

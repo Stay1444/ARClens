@@ -29,6 +29,7 @@ mod map_header;
 mod map_labels;
 mod map_motion;
 mod panel;
+mod project;
 mod quests;
 mod read;
 mod screens;
@@ -47,6 +48,10 @@ pub use map_header::{MapHeader, is_map_screen, quest_panel_open, read_map_header
 pub use map_labels::{LabelParams, find_map_labels};
 pub use map_motion::{Estimate, Footprint, Motion, MotionTracker, TRACK_REGION};
 pub use panel::{PanelParams, find_panels};
+pub use project::{
+    CountGlyph, ProjectLayout, ProjectPage, ProjectRow, ProjectRowBox, count_glyphs,
+    is_project_page, parse_delivery, project_layout, read_project_page,
+};
 pub use quests::{QuestScreen, quest_screen, quest_title_boxes, read_active_quests};
 pub use read::{NameReader, RECOGNITION_MODEL_URL};
 pub use screens::{

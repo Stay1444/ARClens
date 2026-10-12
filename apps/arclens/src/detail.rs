@@ -229,7 +229,21 @@ fn needed_for(item: &Item, progress: Option<&Progress>) -> Vec<DetailRow> {
             note: Some(match req.kind {
                 RequirementKind::Quest => t!("kind-quest"),
                 RequirementKind::WorkshopUpgrade => t!("kind-workshop"),
-                RequirementKind::Project => t!("kind-project"),
+                RequirementKind::Project => {
+                    // Part of it delivered already (read from the game).
+                    let delivered = progress.map_or(0, |p| {
+                        req.quantity - p.still_needed(&item.id, req).min(req.quantity)
+                    });
+                    if delivered > 0 && progress.is_some_and(|p| p.needs(req)) {
+                        format!(
+                            "{} · {}",
+                            t!("kind-project"),
+                            t!("detail-delivered", count = delivered)
+                        )
+                    } else {
+                        t!("kind-project")
+                    }
+                }
                 RequirementKind::Crafting => t!("kind-crafting"),
             }),
             done: progress.is_some_and(|p| !p.needs(req)),

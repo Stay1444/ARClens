@@ -169,12 +169,17 @@ pub fn advise_in<'a>(
     let sell_value = situation.sell_value.or(item.value);
     let outputs = breakdown(item, situation.place);
     let recycle_value = outputs_value(outputs, lookup);
-    let still_needed = |req: &&crate::item::Requirement| progress.is_none_or(|p| p.needs(req));
+    // What is still ahead, less what is delivered to projects already.
     let needs: Vec<_> = item
         .required_for
         .iter()
-        .filter(still_needed)
-        .cloned()
+        .filter_map(|req| {
+            let quantity = progress.map_or(req.quantity, |p| p.still_needed(&item.id, req));
+            (quantity > 0).then(|| crate::item::Requirement {
+                quantity,
+                ..req.clone()
+            })
+        })
         .collect();
 
     // Parts for a remaining *workshop upgrade* (only meaningful with progress).

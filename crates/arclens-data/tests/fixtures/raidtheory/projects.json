@@ -14,5 +14,13 @@
     "phases": [
       { "name": "Gone", "phase": 1, "requirementItemIds": [{ "itemId": "metal_parts", "quantity": 1 }] }
     ]
+  },
+  {
+    "id": "phantom_targets_project",
+    "disabled": false,
+    "name": "Phantom Targets",
+    "phases": [
+      { "name": "Retired", "phase": 1, "requirementItemIds": [{ "itemId": "metal_parts", "quantity": 1 }] }
+    ]
   }
 ]

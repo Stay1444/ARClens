@@ -141,6 +141,13 @@ impl Analyzer {
         crate::read_active_quests(&self.reader, frame)
     }
 
+    pub fn read_project_page(
+        &self,
+        frame: &RgbImage,
+    ) -> anyhow::Result<Option<crate::ProjectPage>> {
+        crate::read_project_page(&self.reader, frame)
+    }
+
     /// The hovered tooltip in `frame`, if any.
     ///
     /// When several panels are visible (trader screen: persistent purchase

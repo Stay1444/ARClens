@@ -37,6 +37,7 @@ status-detection-off = Detección de objetos desactivada: { $reason }
 status-from-game-marker = (leído del juego)
 status-level-from-game = { $station } pasa al nivel { $level } (leído del juego).
 status-quests-from-game = Progreso de misiones actualizado (leído del juego).
+status-project-from-game = Progreso del proyecto actualizado (leído del juego).
 status-refreshing = Actualizando los datos del juego…
 status-refresh-failed = No se pudieron actualizar los datos del juego; se muestra la copia guardada.
 error-schedule = no se ha podido cargar el calendario de eventos: { $error }
@@ -213,7 +214,11 @@ progress-other-trader = Otros
 progress-quests-help = Marca las misiones que has terminado: los objetos que pedían dejan de ser motivo para guardar. Marcar una misión también marca las anteriores.
 progress-all-phases-done = Todas las fases hechas
 progress-next-phase = Siguiente: { $phase }
-progress-projects-help = Indica cuántas fases de cada proyecto has entregado: los objetos de las fases terminadas dejan de ser motivo para guardar.
+progress-delivered = { $count } { $count ->
+    [one] objeto entregado
+   *[other] objetos entregados
+} por ahora
+progress-projects-help = Indica cuántas fases de cada proyecto has entregado: los objetos de las fases terminadas dejan de ser motivo para guardar. Con la lectura de pantalla activada, abrir la página de un proyecto en el juego lo rellena, junto con lo que ya has entregado a la fase actual.
 progress-blueprints-help = Los planos que no has aprendido muestran APRENDER en vez de un precio. Marca los que ya sabes: un duplicado solo vale su precio.
 
 progress-stash = Alijo
@@ -268,6 +273,7 @@ corner-bottom-right = Abajo a la derecha
 detail-crafting = Fabricación
 detail-upgrades = Mejoras
 detail-repair = Reparación
+detail-delivered = { $count } entregados
 detail-repair-restores = Reparación (restaura un { $percent } %)
 detail-sold-by = Lo venden
 detail-unlocks = Desbloquea la fabricación de

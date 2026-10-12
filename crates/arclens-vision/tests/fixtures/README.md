@@ -15,6 +15,7 @@ maintainer's permission, for testing only. Game UI © Embark Studios AB.
 | `quest_*` | A trader's QUESTS tab, one quest selected | Screenshots 2026-10-04 (Apollo, Lance) |
 | `logbook` | Pause menu, LOGBOOK tab: active quests, tracked resources | Screenshot 2026-10-04; the list scrolls |
 | `projects_overview`, `project_*` | Projects list and project pages (phase circles) | Screenshots 2026-10-04 |
+| `project_trophy_tracked`, `project_trophy_locked` | Trophy Display after 2.0: phase 1 tracked (2 bolts in the stash), phase 2 locked | Screenshots 2026-10-12, received at 2000×1125 and scaled up to 2560×1440 |
 | `stash_heavy_ammo`, `stash_looting_mk2` | Pause menu stash, from a 2026-10-05 recording | A short ammo tooltip; a chip glyph with a dark speck |
 | `stash/scroll_*`, `stash/labels.tsv` | Pause menu stash, scrolled, nothing hovered (2026-10-05 recording) | 42 labelled slots; labels from a second recording hovering each slot |
 | `loading_tip` | The loading screen before a raid: a tip and its author centred, the spinner bottom right | Screenshot 2026-10-11, received at 2000×1125 and scaled up to 2560×1440 |

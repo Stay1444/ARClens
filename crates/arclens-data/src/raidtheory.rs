@@ -270,12 +270,26 @@ impl RaidTheoryDir {
         let projects_path = self.root.join("projects.json");
         if projects_path.exists() {
             let raw: Vec<RawProject> = read_json(&projects_path)?;
-            for project in raw.into_iter().filter(|p| !p.disabled) {
+            let live = raw
+                .into_iter()
+                .filter(|p| !p.disabled && !RETIRED_PROJECTS.contains(&p.id.as_str()));
+            for project in live {
                 let project_name = project.name.resolve(&self.lang);
                 let mut phases = Vec::new();
+                let mut phase_items = Vec::new();
                 // Phases are listed in order; their number is their place.
                 for (phase, number) in project.phases.into_iter().zip(1u32..) {
                     let phase_name = phase.name.resolve(&self.lang);
+                    phase_items.push(
+                        phase
+                            .requirement_item_ids
+                            .iter()
+                            .map(|req| ItemQuantity {
+                                item: ItemId::new(&req.item_id),
+                                quantity: req.quantity,
+                            })
+                            .collect(),
+                    );
                     for req in phase.requirement_item_ids {
                         push(
                             &req.item_id,
@@ -292,6 +306,7 @@ impl RaidTheoryDir {
                     id: project.id,
                     name: project_name,
                     phases,
+                    phase_items,
                 });
             }
         }
@@ -747,6 +762,20 @@ struct RawQuest {
     required_item_ids: Vec<RawItemQuantity>,
 }
 
+/// Projects the data still lists as enabled that the game no longer
+/// offers: earlier seasons' expeditions, and the Phantom Targets event.
+/// The game's PROJECTS screen showed only Trophy Display and the
+/// (paused) Expedition on 2026-10-12, see
+/// `docs/research/frozen-trail.md`. Their items are not worth keeping.
+const RETIRED_PROJECTS: [&str; 6] = [
+    "expedition_project_s1",
+    "expedition_project",
+    "expedition_project_s3",
+    "expedition_project_s4",
+    "phantom_targets_project",
+    "phantom_targets_part_2_project",
+];
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RawProject {
@@ -900,8 +929,16 @@ mod tests {
         assert_eq!(catalog.quests[0].id, "wired_up");
         assert_eq!(catalog.quests[0].trader, "Shani");
         assert!(catalog.quests[0].needs_items);
+        // The disabled project and the retired one are left out.
         assert_eq!(catalog.projects.len(), 1);
         assert_eq!(catalog.projects[0].phases, ["Foundation"]);
+        assert_eq!(
+            catalog.projects[0].phase_items,
+            [vec![ItemQuantity {
+                item: ItemId::new("wires"),
+                quantity: 10
+            }]]
+        );
 
         let wires = catalog.item(&ItemId::new("wires")).unwrap();
         let quest = wires

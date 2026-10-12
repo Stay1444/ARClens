@@ -37,6 +37,7 @@ status-detection-off = Item detection off: { $reason }
 status-from-game-marker = (read from the game)
 status-level-from-game = { $station } set to level { $level } (read from the game).
 status-quests-from-game = Quest progress updated (read from the game).
+status-project-from-game = Project progress updated (read from the game).
 status-refreshing = Refreshing game data…
 status-refresh-failed = Could not refresh game data; showing the saved copy.
 error-schedule = could not load the event schedule: { $error }
@@ -213,7 +214,11 @@ progress-other-trader = Other
 progress-quests-help = Tick the quests you've finished: items they asked for stop counting as reasons to keep. Ticking a quest also ticks the ones before it.
 progress-all-phases-done = All phases done
 progress-next-phase = Next: { $phase }
-progress-projects-help = Set how many phases of each project you've delivered: items for finished phases stop counting as reasons to keep.
+progress-delivered = { $count } { $count ->
+    [one] item
+   *[other] items
+} delivered to it so far
+progress-projects-help = Set how many phases of each project you've delivered: items for finished phases stop counting as reasons to keep. With screen reading on, opening a project's page in the game fills this in, along with what you've delivered to the current phase.
 progress-blueprints-help = Blueprints you haven't learned show LEARN instead of a price. Tick the ones you know: a duplicate is then just worth its price.
 
 progress-stash = Stash
@@ -268,6 +273,7 @@ corner-bottom-right = Bottom right
 detail-crafting = Crafting
 detail-upgrades = Upgrades
 detail-repair = Repair
+detail-delivered = { $count } delivered
 detail-repair-restores = Repair (restores { $percent } %)
 detail-sold-by = Sold by
 detail-unlocks = Unlocks crafting

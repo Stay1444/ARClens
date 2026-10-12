@@ -140,6 +140,7 @@ mod tests {
             id: "trophy".into(),
             name: "Trophy Display".into(),
             phases: vec!["1".into(), "2".into(), "3".into()],
+            phase_items: Vec::new(),
         }];
         let mut progress = Progress::default();
         progress.stations.insert("weapon_bench".into(), 1);

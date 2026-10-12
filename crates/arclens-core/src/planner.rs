@@ -4,6 +4,7 @@
 //! crafted from parts, what is still missing, and which spare stash items
 //! would recycle into the missing parts.
 
+use crate::Progress;
 use crate::item::{Item, ItemId, ItemQuantity, RequirementKind};
 use std::collections::{BTreeMap, HashMap};
 
@@ -62,21 +63,21 @@ const MAX_DEPTH: u8 = 4;
 
 /// What `goals` take together from `items`, with the stash's `have`
 /// counts used first (each stash item counts once, whichever goal takes
-/// it). `level`: a station's level, or a project's phases done, now (by
-/// id). `spare`: how many of a stash item
+/// it). `progress` says what is built and delivered already. `spare`:
+/// how many of a stash item
 /// may be broken down (the caller's advice: SELL/RECYCLE items whole, KEEP
 /// ones beyond their needs).
 pub fn plan(
     goals: &[Goal],
     items: &[Item],
     have: &BTreeMap<ItemId, u32>,
-    level: impl Fn(&str) -> u32,
+    progress: &Progress,
     spare: impl Fn(&ItemId) -> u32,
 ) -> Plan {
     let by_id: HashMap<&ItemId, &Item> = items.iter().map(|i| (&i.id, i)).collect();
     let mut direct: BTreeMap<ItemId, u32> = BTreeMap::new();
     for goal in goals {
-        for (id, quantity) in direct_needs(goal, items, &by_id, &level) {
+        for (id, quantity) in direct_needs(goal, items, &by_id, progress) {
             *direct.entry(id).or_default() += quantity;
         }
     }
@@ -133,19 +134,24 @@ fn direct_needs(
     goal: &Goal,
     items: &[Item],
     by_id: &HashMap<&ItemId, &Item>,
-    current: &impl Fn(&str) -> u32,
+    progress: &Progress,
 ) -> BTreeMap<ItemId, u32> {
     let mut needs = BTreeMap::new();
-    // Requirements of `kind` on `id` past what is done, up to `upto`.
+    // Requirements of `kind` on `id` past what is done, up to `upto`,
+    // less what is delivered already.
     let mut ahead = |kind: RequirementKind, id: &str, upto: u32| {
-        let done = current(id);
         for item in items {
             for req in &item.required_for {
                 let wanted = req.kind == kind
                     && req.station.as_deref() == Some(id)
-                    && req.level.is_some_and(|l| l > done && l <= upto);
-                if wanted {
-                    *needs.entry(item.id.clone()).or_default() += req.quantity;
+                    && req.level.is_some_and(|l| l <= upto);
+                let left = if wanted {
+                    progress.still_needed(&item.id, req)
+                } else {
+                    0
+                };
+                if left > 0 {
+                    *needs.entry(item.id.clone()).or_default() += left;
                 }
             }
         }
@@ -288,6 +294,19 @@ mod tests {
         vec![mech, gear, item("metal_parts"), item("rubber_parts"), clock]
     }
 
+    /// Progress with `station` at `level` and `project` at `phases` done.
+    fn at(levels: &[(&str, u32)]) -> Progress {
+        let mut progress = Progress::default();
+        for &(id, level) in levels {
+            if id == "trophy" {
+                progress.projects.insert(id.into(), level);
+            } else {
+                progress.stations.insert(id.into(), level);
+            }
+        }
+        progress
+    }
+
     fn line<'a>(plan: &'a Plan, id: &str) -> &'a PlanLine {
         plan.lines.iter().find(|l| l.item.as_str() == id).unwrap()
     }
@@ -307,7 +326,9 @@ mod tests {
             station: "weapon_bench".into(),
             level: 3,
         };
-        let plan = plan(&[goal], &items, &have, |_| 1, |_| u32::MAX);
+        let plan = plan(&[goal], &items, &have, &at(&[("weapon_bench", 1)]), |_| {
+            u32::MAX
+        });
         let mech = line(&plan, "mechanical_components");
         assert_eq!((mech.needed, mech.from_stash, mech.crafted), (6, 2, 4));
         let gear = line(&plan, "rusted_gear");
@@ -340,7 +361,7 @@ mod tests {
             level: 3,
         };
         // Level 2 built: only Gunsmith 3's gears.
-        let plan = plan(&[goal], &items, &have, |_| 2, |_| 0);
+        let plan = plan(&[goal], &items, &have, &at(&[("weapon_bench", 2)]), |_| 0);
         assert_eq!(plan.lines.len(), 1);
         assert_eq!(line(&plan, "rusted_gear").missing, 2);
         assert_eq!(plan.recycle, []);
@@ -353,7 +374,7 @@ mod tests {
             item: ItemId::new("mechanical_components"),
             count: 3,
         };
-        let plan = plan(&[goal], &items, &BTreeMap::new(), |_| 0, |_| 0);
+        let plan = plan(&[goal], &items, &BTreeMap::new(), &at(&[]), |_| 0);
         assert_eq!(line(&plan, "metal_parts").missing, 6);
         assert_eq!(line(&plan, "rubber_parts").missing, 3);
     }
@@ -382,8 +403,8 @@ mod tests {
                 level: 1,
             },
         ];
-        let level = |station: &str| u32::from(station == "weapon_bench");
-        let planned = plan(&goals, &items, &have, level, |_| 0);
+        let level = at(&[("weapon_bench", 1)]);
+        let planned = plan(&goals, &items, &have, &level, |_| 0);
         // 4 for Gunsmith 2 + 3 for Refiner 1, the 5 in the stash once.
         let gear = line(&planned, "rusted_gear");
         assert_eq!((gear.needed, gear.from_stash, gear.missing), (7, 5, 2));
@@ -400,9 +421,24 @@ mod tests {
             project: "trophy".into(),
             phase: 2,
         };
-        let one_done = |id: &str| u32::from(id == "trophy");
-        let planned = plan(&[project], &items, &BTreeMap::new(), one_done, |_| 0);
+        let mut one_done = at(&[("trophy", 1)]);
+        let planned = plan(
+            std::slice::from_ref(&project),
+            &items,
+            &BTreeMap::new(),
+            &one_done,
+            |_| 0,
+        );
         assert_eq!(line(&planned, "mechanical_components").needed, 2);
-        assert_eq!(plan(&[], &items, &have, level, |_| 0), Plan::default());
+        // What is delivered to the current phase already is not needed.
+        one_done.delivered.insert(
+            "trophy".into(),
+            [(ItemId::new("mechanical_components"), 1)]
+                .into_iter()
+                .collect(),
+        );
+        let planned = plan(&[project], &items, &BTreeMap::new(), &one_done, |_| 0);
+        assert_eq!(line(&planned, "mechanical_components").needed, 1);
+        assert_eq!(plan(&[], &items, &have, &level, |_| 0), Plan::default());
     }
 }

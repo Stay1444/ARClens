@@ -41,11 +41,11 @@ const PILL_MIN_RUN: f32 = 0.03;
 const TAB_TEXT: [f32; 2] = [0.02, 0.04];
 /// Share of the label window that must be ink for "a tab label is there".
 /// Measured: a grey label ≈ 15 %, the empty bar after the last tab < 1 %.
-const MIN_LABEL_INK: f32 = 0.04;
+pub(crate) const MIN_LABEL_INK: f32 = 0.04;
 /// Where to look for a neighbouring label: from this far beside the pill…
-const LABEL_NEAR: f32 = 0.01;
+pub(crate) const LABEL_NEAR: f32 = 0.01;
 /// …to this far (a tab label plus the gap measures ≈ 0.05).
-const LABEL_FAR: f32 = 0.06;
+pub(crate) const LABEL_FAR: f32 = 0.06;
 
 /// The outlined LOGBOOK tab, centred in the bar between INVENTORY and
 /// SYSTEM: measured centre 0.509, width 0.062 (MAP's pill, at the same
@@ -78,7 +78,7 @@ const MAX_LEFT_INK: f32 = 0.06;
 const LINE_HEIGHT: [f32; 2] = [0.009, 0.025];
 
 /// Bright (white or cream) text, as in the rest of the crate.
-fn is_bright(frame: &RgbImage, col: u32, row: u32) -> bool {
+pub(crate) fn is_bright(frame: &RgbImage, col: u32, row: u32) -> bool {
     frame.get_pixel(col, row).0.iter().all(|&c| c >= 190)
 }
 
@@ -87,7 +87,7 @@ fn is_ink(frame: &RgbImage, col: u32, row: u32) -> bool {
     frame.get_pixel(col, row).0.iter().all(|&c| c >= 150)
 }
 
-fn px(fraction: f32, size: u32) -> u32 {
+pub(crate) fn px(fraction: f32, size: u32) -> u32 {
     ((fraction * size as f32) as u32).min(size)
 }
 
@@ -114,7 +114,7 @@ fn ink_runs(frame: &RgbImage, row: u32, min: u32) -> Vec<(u32, u32)> {
 /// Outlined tabs in the top bar, as `(left, right)` columns of their
 /// straight top border: a long ink run near the top with a matching one
 /// near the bottom of the bar.
-fn pills(frame: &RgbImage) -> Vec<(u32, u32)> {
+pub(crate) fn pills(frame: &RgbImage) -> Vec<(u32, u32)> {
     let (w, h) = frame.dimensions();
     let min = px(PILL_MIN_RUN, w).max(4);
     let collect = |[from, to]: [f32; 2]| -> Vec<(u32, u32)> {
@@ -142,7 +142,7 @@ fn pills(frame: &RgbImage) -> Vec<(u32, u32)> {
 }
 
 /// Share of label ink in the tab-label rows between columns `from..to`.
-fn label_ink(frame: &RgbImage, from: u32, to: u32) -> f32 {
+pub(crate) fn label_ink(frame: &RgbImage, from: u32, to: u32) -> f32 {
     let h = frame.height();
     let to = to.min(frame.width());
     let rows = px(TAB_TEXT[0], h)..px(TAB_TEXT[1], h);
@@ -185,7 +185,7 @@ pub fn quest_screen(frame: &RgbImage) -> Option<QuestScreen> {
 
 /// Bright text lines in `area`: groups of rows with bright pixels (gaps of
 /// up to 2 px inside a line), as tight boxes.
-fn bright_lines(frame: &RgbImage, area: Rect) -> Vec<Rect> {
+pub(crate) fn bright_lines(frame: &RgbImage, area: Rect) -> Vec<Rect> {
     let right = area.right().min(frame.width());
     let bottom = area.bottom().min(frame.height());
     let extent = |row: u32| {

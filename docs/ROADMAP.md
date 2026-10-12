@@ -143,9 +143,19 @@ green CI.
       titles). A quest in progress means every quest before it is done
       (`Progress::note_active_quest`). Verified end to end by replaying the
       fixtures through the app.
-- [ ] Project phases from the project pages. The highlighted phase circle
-      is the one *being viewed*, which needn't be the current phase; needs
-      a fixture of a project with finished phases to tell them apart.
+- [x] **Project progress from the project pages** (2026-10-12): the
+      PROJECT tab, the selected phase circle and each row's bar are found
+      by shape (`arclens_vision::project_layout`); the title and the
+      "delivered/needed" counts are read by OCR, with the font's narrow 1s
+      and the slash taken from glyph shapes (OCR drops the 1 or reads it
+      as 7). The highlighted circle is only the phase *being viewed*, so
+      the rows decide (`Progress::note_project_page`): dimmed (locked)
+      rows mean the phase before isn't finished, a phase being delivered
+      is the current one, a full one is done. Its counts must match the
+      data's phase or nothing changes. Deliveries so far lower what
+      advice, the planner and item pages still ask for. Verified end to
+      end by replaying a fixture through the app; **unverified**: a page
+      with something delivered (no fixture yet) and a finished phase.
 
 ## M2: Maps and timers
 

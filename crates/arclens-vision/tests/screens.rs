@@ -11,8 +11,9 @@
 //!   no STASH): also [`Screen::Inventory`]. Callers that need "in raid"
 //!   can tell from the tooltip footer (no sell value) or the tab set.
 //! - `trader_*`: a trader's TRADES tab ([`Screen::Trader`]).
-//! - `projects_overview`, `project_*`: projects, which no detector
-//!   covers ([`Screen::Unknown`]).
+//! - `projects_overview`, `project_*`: projects ([`Screen::Unknown`]; a
+//!   project's page is told by `arclens_vision::project_layout`, see
+//!   `tests/project.rs`).
 //! - `loading_tip`: the loading screen before a raid (a tip, the spinner):
 //!   [`Screen::Loading`].
 
@@ -27,6 +28,8 @@ const LABELS: &[(&str, Screen)] = &[
     ("frames/logbook.jpg", Screen::Logbook),
     ("frames/project_ascending_the_mountain.jpg", Screen::Unknown),
     ("frames/project_trophy_display.jpg", Screen::Unknown),
+    ("frames/project_trophy_locked.jpg", Screen::Unknown),
+    ("frames/project_trophy_tracked.jpg", Screen::Unknown),
     ("frames/projects_overview.jpg", Screen::Unknown),
     (
         "frames/quest_apollo_battening_down.jpg",

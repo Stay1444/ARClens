@@ -123,3 +123,16 @@ hidden (Ctrl+Shift+O), unless a step says otherwise.
 10. Optional, for later features: the Reward Pass screen, the skill tree,
     the post-raid summary.
 
+
+## 8. Project pages (2026-10-12)
+
+With screen reading on, open PROJECTS → Trophy Display:
+
+1. On the current phase, ARClens's Progress → Projects should show that
+   phase as next, and the status bar "Project progress updated (read from
+   the game)" if it changed.
+2. Commit some of an item (not all of it), reopen the page: Progress
+   should say how many items are delivered, and the item's page and the
+   Planner should ask for that many fewer. A screenshot of this page with
+   a count above 0 would make a good fixture.
+3. Click a later, locked phase: progress must not move forward.
