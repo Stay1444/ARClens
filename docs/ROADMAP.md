@@ -434,7 +434,8 @@ Research: `docs/research/frozen-trail.md`.
       (notify-rust: the desktop's service on Linux, a toast on Windows) and
       a themed toast in the overlay (protocol 20), 5 minutes before.
       Verified headlessly with mako; KDE and Windows **unverified**.
-- [ ] Have vs need on the hover card, from the last stash scan.
+- [x] Have vs need on the item card (hover card, encyclopedia, item
+      windows), from the last stash scan: "Need 12 · 4 in stash · 8 to go".
 - [ ] Value per stash slot; "stash nearly full: sell these".
 - [ ] Blueprint hunt list with where each drops.
 - [ ] Crafting/upgrade planner with the stash subtracted.

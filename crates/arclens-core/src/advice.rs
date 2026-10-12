@@ -62,6 +62,26 @@ pub struct Advice {
     /// upgrade the player still has to build: that upgrade's name.
     #[serde(default)]
     pub parts_for: Option<String>,
+    /// How many the player has, from the last stash scan (`None`: no scan
+    /// yet). Set by the caller; advice itself doesn't know the stash.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owned: Option<u32>,
+}
+
+impl Advice {
+    /// How many the requirements still ahead take, all together.
+    pub fn needed(&self) -> u32 {
+        self.needs.iter().map(|r| r.quantity).sum()
+    }
+
+    /// How many more to find: needed minus owned. `None` without a stash
+    /// scan or when nothing needs the item.
+    pub fn missing(&self) -> Option<u32> {
+        let needed = self.needed();
+        (needed > 0)
+            .then_some(self.owned?)
+            .map(|owned| needed.saturating_sub(owned))
+    }
 }
 
 /// Break an item down for upgrade parts only if the parts are worth at least
@@ -155,6 +175,7 @@ pub fn advise_in<'a>(
         value_from_game,
         needs,
         parts_for,
+        owned: None,
     }
 }
 
@@ -169,6 +190,43 @@ fn outputs_value<'a>(
         let unit = lookup(&output.item)?.value?;
         Some(acc.saturating_add(unit.saturating_mul(output.quantity)))
     })
+}
+
+#[cfg(test)]
+mod owned_tests {
+    use super::*;
+    use crate::{Requirement, RequirementKind};
+
+    fn keep(quantities: &[u32], owned: Option<u32>) -> Advice {
+        Advice {
+            verdict: Verdict::Keep,
+            sell_value: None,
+            recycle_value: None,
+            place: Place::Workshop,
+            value_from_game: false,
+            needs: quantities
+                .iter()
+                .map(|&quantity| Requirement {
+                    kind: RequirementKind::WorkshopUpgrade,
+                    name: "Gunsmith 3".into(),
+                    quantity,
+                    station: None,
+                    level: None,
+                })
+                .collect(),
+            parts_for: None,
+            owned,
+        }
+    }
+
+    #[test]
+    fn counts_what_is_still_missing() {
+        assert_eq!(keep(&[3, 9], None).needed(), 12);
+        assert_eq!(keep(&[3, 9], None).missing(), None);
+        assert_eq!(keep(&[3, 9], Some(5)).missing(), Some(7));
+        assert_eq!(keep(&[3, 9], Some(14)).missing(), Some(0));
+        assert_eq!(keep(&[], Some(4)).missing(), None);
+    }
 }
 
 #[cfg(test)]

@@ -1457,10 +1457,13 @@ impl App {
         self.push_stash_badges();
     }
 
+    /// Advice for `item`, with how many the last stash scan found.
     fn advice(&self, item: &Item, catalog: &Catalog, situation: Situation) -> arclens_core::Advice {
-        advise_in(item, situation, self.progress.as_ref(), |id| {
+        let mut advice = advise_in(item, situation, self.progress.as_ref(), |id| {
             catalog.item(id)
-        })
+        });
+        advice.owned = self.stash_history.latest().map(|s| s.count(&item.id));
+        advice
     }
 
     fn push_hover_to_overlay(&self) {

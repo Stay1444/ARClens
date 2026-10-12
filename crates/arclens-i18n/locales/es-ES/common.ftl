@@ -12,6 +12,8 @@ verdict-unknown = SIN DATOS
 ## Por qué, en una línea
 
 reason-worth-keeping = Merece la pena guardarlo
+card-stash-missing = Necesitas { $needed } · { $owned } en el alijo · faltan { $missing }
+card-stash-enough = Necesitas { $needed } · { $owned } en el alijo: suficiente, sobran
 reason-needed-for = Necesario para { $name }{ $more ->
     [0] {""}
    *[other] {" "}y { $more } más

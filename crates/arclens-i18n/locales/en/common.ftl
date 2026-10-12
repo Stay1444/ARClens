@@ -12,6 +12,8 @@ verdict-unknown = NO DATA
 ## Why that verdict, one line
 
 reason-worth-keeping = Worth keeping
+card-stash-missing = Need { $needed } · { $owned } in stash · { $missing } to go
+card-stash-enough = Need { $needed } · { $owned } in stash: enough, extras can go
 reason-needed-for = Needed for { $name }{ $more ->
     [0] {""}
    *[other] {" "}+{ $more } more

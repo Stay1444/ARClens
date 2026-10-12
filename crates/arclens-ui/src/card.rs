@@ -212,10 +212,18 @@ fn verdict_bar<'a, Message: 'a>(card: &ItemCard<'a>) -> Element<'a, Message> {
                 .size(30)
                 .font(theme::DISPLAY)
                 .color(theme::INK),
-            text(reason(card))
-                .size(size::SMALL)
-                .font(theme::STRONG)
-                .color(theme::INK),
+            column![
+                text(reason(card))
+                    .size(size::SMALL)
+                    .font(theme::STRONG)
+                    .color(theme::INK),
+            ]
+            .push(stash_line(&card.advice).map(|line| {
+                text(line)
+                    .size(size::TINY + 1.0)
+                    .font(theme::STRONG)
+                    .color(with_alpha(theme::INK, 0.75))
+            })),
         ]
         .spacing(14)
         .align_y(Alignment::Center),
@@ -231,6 +239,24 @@ fn verdict_bar<'a, Message: 'a>(card: &ItemCard<'a>) -> Element<'a, Message> {
         ..container::Style::default()
     })
     .into()
+}
+
+/// "Need 12 · 5 in stash · 7 to go", or that the stash has enough, for a
+/// KEEP item once the stash was scanned.
+fn stash_line(advice: &arclens_core::Advice) -> Option<String> {
+    if advice.verdict != Verdict::Keep {
+        return None;
+    }
+    let (needed, owned) = (advice.needed(), advice.owned?);
+    match advice.missing()? {
+        0 => Some(t!("card-stash-enough", needed = needed, owned = owned)),
+        missing => Some(t!(
+            "card-stash-missing",
+            needed = needed,
+            owned = owned,
+            missing = missing
+        )),
+    }
 }
 
 /// One short line explaining the verdict.
