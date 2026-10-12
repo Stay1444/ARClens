@@ -319,3 +319,13 @@ startup-overlay = Overlay
 startup-capture = Game capture
 startup-off = off
 startup-waiting-game = waiting for the game
+
+## Condition alerts
+
+events-alert-on = Alerting
+events-alert-off = Alert me
+events-alert-hint = Alert me sends a desktop notification and an in-game notice 5 minutes before a condition starts.
+alert-kicker = Condition alert
+alert-title = { $condition } in { $minutes } min
+alert-body = { $map } · { $start } – { $end }
+alert-open = Open ARClens

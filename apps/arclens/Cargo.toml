@@ -32,6 +32,7 @@ sysinfo = { version = "0.37", default-features = false, features = ["system"] }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+notify-rust = "4"
 
 [dev-dependencies]
 tempfile = { workspace = true }

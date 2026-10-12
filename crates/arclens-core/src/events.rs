@@ -46,6 +46,33 @@ pub fn agenda<'a>(events: impl IntoIterator<Item = &'a ScheduledEvent>, now_ms: 
     Agenda { active, upcoming }
 }
 
+/// A condition name as a key that ignores case and spacing ("Night Raid",
+/// "night-raid" → "nightraid"), for remembering which ones to alert on.
+pub fn condition_key(name: &str) -> String {
+    name.chars()
+        .filter(char::is_ascii_alphanumeric)
+        .map(|c| c.to_ascii_lowercase())
+        .collect()
+}
+
+/// Events of `followed` conditions ([`condition_key`]s) that start within
+/// `lead_ms` from `now_ms`, soonest first. The caller remembers which it
+/// already announced.
+pub fn due_alerts<'a>(
+    events: &'a [ScheduledEvent],
+    followed: &std::collections::BTreeSet<String>,
+    now_ms: i64,
+    lead_ms: i64,
+) -> Vec<&'a ScheduledEvent> {
+    let mut due: Vec<&ScheduledEvent> = events
+        .iter()
+        .filter(|e| e.start_ms > now_ms && e.start_ms - now_ms <= lead_ms)
+        .filter(|e| followed.contains(&condition_key(&e.name)))
+        .collect();
+    due.sort_by(|a, b| (a.start_ms, &a.map).cmp(&(b.start_ms, &b.map)));
+    due
+}
+
 /// "33m 16s", "1h 33m", "2d 4h": compact countdown for `ms` milliseconds.
 pub fn countdown(ms: i64) -> String {
     let secs = (ms.max(0) + 999) / 1000;
@@ -87,6 +114,22 @@ mod tests {
         let names = |v: &[&ScheduledEvent]| v.iter().map(|e| e.name.clone()).collect::<Vec<_>>();
         assert_eq!(names(&agenda.active), ["Matriarch", "Night Raid"]);
         assert_eq!(names(&agenda.upcoming), ["Harvester"]);
+    }
+
+    #[test]
+    fn alerts_only_followed_conditions_about_to_start() {
+        let events = [
+            event("Night Raid", "Dam", 104, 160),
+            event("Night Raid", "Spaceport", 120, 180),
+            event("Harvester", "Dam", 103, 160),
+            event("Night Raid", "Blue Gate", 90, 150),
+        ];
+        let followed = ["nightraid".to_owned()].into_iter().collect();
+        let due = due_alerts(&events, &followed, 100 * 60_000, 5 * 60_000);
+        let maps: Vec<&str> = due.iter().map(|e| e.map.as_str()).collect();
+        // Not the one 20 min away, not the running one, not Harvester.
+        assert_eq!(maps, ["Dam"]);
+        assert_eq!(condition_key("Night Raid"), condition_key("night-raid"));
     }
 
     #[test]

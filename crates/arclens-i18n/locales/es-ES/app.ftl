@@ -319,3 +319,13 @@ startup-overlay = Overlay
 startup-capture = Captura del juego
 startup-off = desactivada
 startup-waiting-game = esperando al juego
+
+## Condition alerts
+
+events-alert-on = Avisando
+events-alert-off = Avisarme
+events-alert-hint = Avisarme envía una notificación de escritorio y un aviso en el juego 5 minutos antes de que empiece una condición.
+alert-kicker = Aviso de condición
+alert-title = { $condition } en { $minutes } min
+alert-body = { $map } · { $start } – { $end }
+alert-open = Abrir ARClens

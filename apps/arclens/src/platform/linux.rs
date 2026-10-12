@@ -98,6 +98,33 @@ fn write_if_changed(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Through the desktop's notification service (KDE draws it in its own
+/// theme): app name and icon from the desktop entry, the condition's icon
+/// as the image, an "open" button. Blocks until the notification closes.
+pub fn notify(notice: &super::Notice) -> Result<bool, notify_rust::error::Error> {
+    use notify_rust::{Hint, Notification, Timeout, Urgency};
+    let mut notification = Notification::new();
+    notification
+        .appname("ARClens")
+        .summary(&notice.title)
+        .body(&notice.body)
+        .icon(APP_ID)
+        .hint(Hint::DesktopEntry(APP_ID.to_owned()))
+        .urgency(Urgency::Normal)
+        .timeout(Timeout::Milliseconds(15_000))
+        // "default" is a click on the notification itself.
+        .action("default", &notice.open_label)
+        .action("open", &notice.open_label);
+    if let Some(image) = notice.image.as_deref().and_then(std::path::Path::to_str) {
+        notification.image_path(image);
+    }
+    let mut opened = false;
+    notification
+        .show()?
+        .wait_for_action(|action| opened = matches!(action, "default" | "open"));
+    Ok(opened)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -16,7 +16,7 @@ pub use advice::{
     Advice, PARTS_MIN_VALUE_PERCENT, Place, Situation, Verdict, advise, advise_in, breakdown,
 };
 pub use areas::{MarkerArea, MarkerLayout, layout};
-pub use events::{Agenda, ScheduledEvent, agenda, countdown};
+pub use events::{Agenda, ScheduledEvent, agenda, condition_key, countdown, due_alerts};
 pub use item::{
     Item, ItemDetails, ItemFilter, ItemId, ItemQuantity, Rarity, Requirement, RequirementKind,
     Vendor, categories,

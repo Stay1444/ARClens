@@ -15,6 +15,7 @@ mod ipc;
 mod map_panel;
 mod menu_card;
 mod search;
+mod toast;
 mod tooltip;
 mod view;
 
@@ -134,6 +135,8 @@ pub struct Overlay {
     stash_progress: Option<arclens_ipc::StashProgress>,
     /// Its condition icons, decoded once.
     menu_icons: menu_card::Icons,
+    /// A notice at the top of the screen, until it expires.
+    toast: Option<toast::Shown>,
     /// Wall clock (Unix ms) for the card's countdowns.
     now_ms: i64,
     /// Sends to the companion app while connected.
@@ -163,6 +166,7 @@ impl Overlay {
             || !self.details.is_empty()
             || self.panel.panel.is_some()
             || self.menu_card.is_some()
+            || self.toast.is_some()
             || !self.stash_badges.is_empty()
             || self.stash_progress.is_some()
             || ((!self.markers.is_empty() || !self.areas.is_empty()) && self.transform.is_some())
@@ -244,6 +248,9 @@ fn subscription(state: &Overlay) -> Subscription<Message> {
         shell::subscription(state),
         if state.menu_card.is_some() {
             iced::time::every(menu_card::tick_interval(state.now_ms)).map(|_| Message::Tick)
+        } else if state.toast.is_some() {
+            // Its expiry.
+            iced::time::every(std::time::Duration::from_millis(500)).map(|_| Message::Tick)
         } else if state
             .stash_progress
             .is_some_and(|p| !p.complete && !p.filtered)
@@ -254,6 +261,20 @@ fn subscription(state: &Overlay) -> Subscription<Message> {
             Subscription::none()
         },
     ])
+}
+
+/// The clock for countdowns, and an expired toast leaving.
+fn tick(state: &mut Overlay) -> Task<Message> {
+    state.now_ms = now_ms();
+    if state
+        .toast
+        .as_ref()
+        .is_some_and(|t| t.expired(std::time::Instant::now()))
+    {
+        state.toast = None;
+        return shell::sync_surface(state);
+    }
+    Task::none()
 }
 
 fn update(state: &mut Overlay, message: Message) -> Task<Message> {
@@ -318,10 +339,7 @@ fn update(state: &mut Overlay, message: Message) -> Task<Message> {
             return Task::none();
         }
         Message::SurfaceFocused => return focus_search(state),
-        Message::Tick => {
-            state.now_ms = now_ms();
-            return Task::none();
-        }
+        Message::Tick => return tick(state),
         // Layer-shell requests, which only exist on Linux.
         #[allow(unreachable_patterns, reason = "the layer-shell variants")]
         _ => return Task::none(),
@@ -385,6 +403,22 @@ fn configure(
     state.marker_cache.clear();
     state.update_screen();
     shell::input_task(state)
+}
+
+/// The main-menu card and toasts.
+fn show_card(state: &mut Overlay, msg: ToOverlay) {
+    match msg {
+        ToOverlay::ShowMenuCard { card } => {
+            state.now_ms = now_ms();
+            menu_card::load_icons(&card, &mut state.menu_icons);
+            state.menu_card = Some(card);
+        }
+        ToOverlay::HideMenuCard => state.menu_card = None,
+        ToOverlay::ShowToast { toast } => {
+            state.toast = Some(toast::Shown::new(toast, std::time::Instant::now()));
+        }
+        _ => {}
+    }
 }
 
 fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
@@ -465,12 +499,9 @@ fn apply(state: &mut Overlay, msg: ToOverlay) -> Task<Message> {
                 return shell::input_task(state);
             }
         }
-        ToOverlay::ShowMenuCard { card } => {
-            state.now_ms = now_ms();
-            menu_card::load_icons(&card, &mut state.menu_icons);
-            state.menu_card = Some(card);
-        }
-        ToOverlay::HideMenuCard => state.menu_card = None,
+        msg @ (ToOverlay::ShowMenuCard { .. }
+        | ToOverlay::HideMenuCard
+        | ToOverlay::ShowToast { .. }) => show_card(state, msg),
         ToOverlay::SearchResults { query, hits } => state.search.results(&query, hits),
         ToOverlay::ShowStashBadges { badges } => state.stash_badges = badges,
         ToOverlay::ShowStashProgress { progress } => {

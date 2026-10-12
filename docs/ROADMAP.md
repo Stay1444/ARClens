@@ -428,6 +428,18 @@ Research: `docs/research/frozen-trail.md`.
 - [ ] Outposts and the Research Bench in Progress, once a data source
       covers them.
 
+## Quick wins (asked 2026-10-12)
+
+- [x] Condition alerts: "Alert me" per condition; a desktop notification
+      (notify-rust: the desktop's service on Linux, a toast on Windows) and
+      a themed toast in the overlay (protocol 20), 5 minutes before.
+      Verified headlessly with mako; KDE and Windows **unverified**.
+- [ ] Have vs need on the hover card, from the last stash scan.
+- [ ] Value per stash slot; "stash nearly full: sell these".
+- [ ] Blueprint hunt list with where each drops.
+- [ ] Crafting/upgrade planner with the stash subtracted.
+- Hotkeys: dropped (maintainer, 2026-10-12).
+
 ## Item encyclopedia (2026-10-11)
 
 - [x] Items tab: every fact under the card, rarity and type filters,

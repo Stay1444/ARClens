@@ -50,6 +50,9 @@ pub fn view(state: &Overlay) -> Element<'_, Message> {
             screen,
         ));
     }
+    if let (Some(toast), Some(screen)) = (&state.toast, state.screen) {
+        layers = layers.push(crate::toast::view(toast, screen));
+    }
     if let Some(screen) = state.screen
         && (state.interactive || !state.details.is_empty())
     {

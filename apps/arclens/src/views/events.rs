@@ -36,6 +36,8 @@ pub struct EventsView<'a> {
     pub region: Option<&'a str>,
     /// The region the schedule says it is for.
     pub served_region: Option<&'a str>,
+    /// Conditions alerted on ([`arclens_core::condition_key`]s).
+    pub alerts: &'a std::collections::BTreeSet<String>,
 }
 
 pub fn view<'a>(page: &EventsView<'a>) -> Element<'a, Message> {
@@ -84,7 +86,8 @@ pub fn view<'a>(page: &EventsView<'a>) -> Element<'a, Message> {
     let schedule = by_condition
         .into_iter()
         .fold(row![].spacing(space::GAP), |r, (name, list)| {
-            r.push(schedule_card(name, &list, icons, now_ms))
+            let followed = page.alerts.contains(&arclens_core::condition_key(name));
+            r.push(schedule_card(name, &list, icons, now_ms, followed))
         });
 
     let content = column![
@@ -110,6 +113,9 @@ pub fn view<'a>(page: &EventsView<'a>) -> Element<'a, Message> {
             schedule.wrap().vertical_spacing(space::GAP).into(),
             agenda.upcoming.is_empty() && agenda.active.is_empty()
         ),
+        text(t!("events-alert-hint"))
+            .size(size::SMALL)
+            .color(palette::TEXT_MUTED),
         text(t!("events-footnote"))
             .size(size::SMALL)
             .color(palette::TEXT_MUTED),
@@ -274,6 +280,7 @@ fn schedule_card<'a>(
     list: &[&ScheduledEvent],
     icons: &'a EventIcons,
     now_ms: i64,
+    followed: bool,
 ) -> Element<'a, Message> {
     let mut maps: Vec<String> = list.iter().map(|e| names::map(&e.map)).collect();
     maps.sort_unstable();
@@ -328,7 +335,17 @@ fn schedule_card<'a>(
                     text(maps.join(", "))
                         .size(size::TINY)
                         .color(palette::TEXT_MUTED),
-                ],
+                ]
+                .width(Length::Fill),
+                theme::chip(
+                    &if followed {
+                        t!("events-alert-on")
+                    } else {
+                        t!("events-alert-off")
+                    },
+                    followed,
+                    Message::ToggleAlert(name.to_owned()),
+                ),
             ]
             .spacing(12)
             .align_y(Alignment::Center),
@@ -357,7 +374,7 @@ pub(crate) fn tile(accent: Color) -> container::Style {
 }
 
 /// "19:00", or "Sat 19:00" when not today, in the system time zone.
-fn local_time(ms: i64) -> String {
+pub(crate) fn local_time(ms: i64) -> String {
     let tz = jiff::tz::TimeZone::system();
     let Ok(at) = jiff::Timestamp::from_millisecond(ms) else {
         return "?".into();

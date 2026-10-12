@@ -76,6 +76,8 @@ first, with Windows support too.
   ![Map tab](docs/assets/map-tab.jpg)
 - **Events**: map-condition timers for your server region: what runs now,
   what's next per map, and the schedule per condition in local time.
+  "Alert me" on a condition sends a desktop notification and an in-game
+  notice 5 minutes before it starts, on any map.
   ![Events tab](docs/assets/events.png)
 - **Progress**: workshop levels, finished quests, delivered project phases
   and learned blueprints. Advice uses them: items stop being KEEP once the

@@ -18,7 +18,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 mod transport;
 pub use transport::{Endpoint, Listener};
 
-pub const PROTOCOL_VERSION: u32 = 19;
+pub const PROTOCOL_VERSION: u32 = 20;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hello {
@@ -112,6 +112,11 @@ pub enum ToOverlay {
         card: MenuCard,
     },
     HideMenuCard,
+    /// A short notice drawn for a few seconds, e.g. a followed map
+    /// condition about to start (protocol 20).
+    ShowToast {
+        toast: Toast,
+    },
     /// The user's overlay settings; sent on connect and on every change.
     Configure {
         settings: OverlaySettings,
@@ -159,6 +164,21 @@ pub struct ItemDetail {
     /// Titled lists: needed for, recycling, crafting, vendors, mods…
     #[serde(default)]
     pub sections: Vec<DetailSection>,
+}
+
+/// A notice in the overlay: icon, title, two lines.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Toast {
+    /// Small caps over the title ("Condition alert").
+    pub kicker: String,
+    pub title: String,
+    #[serde(default)]
+    pub body: String,
+    /// A local image file (the condition's icon).
+    #[serde(default)]
+    pub icon: Option<PathBuf>,
+    /// How long it stays, in seconds.
+    pub seconds: u32,
 }
 
 /// A titled list in the detailed window.

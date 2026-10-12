@@ -24,6 +24,8 @@ finish-args:
   - --share=network
   # Screen capture and global shortcuts go through portals, which a
   # sandboxed app reaches without extra permissions.
+  # Condition alerts: the desktop's notification service.
+  - --talk-name=org.freedesktop.Notifications
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/llvm20/bin
   prepend-ld-library-path: /usr/lib/sdk/llvm20/lib

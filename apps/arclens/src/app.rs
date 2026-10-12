@@ -20,6 +20,8 @@ use std::sync::Arc;
 
 /// Rows shown in the result list (the whole catalogue is ~600 items).
 const MAX_RESULTS: usize = 100;
+/// How long before a followed condition starts its alert comes.
+const ALERT_LEAD: std::time::Duration = std::time::Duration::from_secs(5 * 60);
 /// A weak label fit within this share of the tracked scale is taken as
 /// noise around it; further off, tracking is taken to have lost the zoom.
 const WEAK_FIT_SCALE_SPAN: f32 = 0.3;
@@ -92,6 +94,8 @@ pub struct App {
     marker_query: String,
     /// The app icon, for the Home tab (parsed once).
     logo: iced::widget::svg::Handle,
+    /// Alerts already given: `(condition, map, start)`.
+    alerted: std::collections::HashSet<(String, String, i64)>,
     /// The start-up screen, while shown.
     startup: Option<crate::views::startup::Startup>,
     expanded_categories: std::collections::BTreeSet<String>,
@@ -162,6 +166,11 @@ struct Settings {
     /// Interface language as a BCP 47 tag; `None`: the system's.
     #[serde(default)]
     language: Option<String>,
+    /// Map conditions to alert on before they start ([`condition_key`]s).
+    ///
+    /// [`condition_key`]: arclens_core::condition_key
+    #[serde(default)]
+    alerts: std::collections::BTreeSet<String>,
 }
 
 const fn default_refresh_hours() -> u32 {
@@ -175,6 +184,7 @@ impl Default for Settings {
             overlay: arclens_ipc::OverlaySettings::default(),
             refresh_hours: default_refresh_hours(),
             language: None,
+            alerts: std::collections::BTreeSet::new(),
         }
     }
 }
@@ -289,6 +299,12 @@ pub enum Message {
     /// The cached catalogue, shown while a refresh runs.
     CatalogCached(Option<Arc<Catalog>>),
     SetItemFilter(arclens_core::ItemFilter),
+    /// Events tab: alert on a condition (by name) or stop.
+    ToggleAlert(String),
+    /// Time to look for followed conditions about to start.
+    CheckAlerts,
+    /// A desktop notification was clicked: show the Events tab.
+    AlertOpened(bool),
     /// The start-up screen's frame; any key or "Skip" leaves it.
     StartupTick,
     SkipStartup,
@@ -428,6 +444,7 @@ impl App {
             presets: crate::presets::Presets::load(paths.presets()),
             marker_query: String::new(),
             logo: iced::widget::svg::Handle::from_memory(crate::platform::ICON_SVG),
+            alerted: std::collections::HashSet::new(),
             startup: Some(crate::views::startup::Startup::new(
                 std::time::Instant::now(),
             )),
@@ -504,6 +521,11 @@ impl App {
                 .then_some(Message::SkipStartup)
             }));
         }
+        if !self.settings.alerts.is_empty() {
+            subscriptions.push(
+                iced::time::every(std::time::Duration::from_secs(15)).map(|_| Message::CheckAlerts),
+            );
+        }
         if self.map_hold.is_pending() {
             subscriptions.push(
                 iced::time::every(std::time::Duration::from_millis(250))
@@ -535,23 +557,9 @@ impl App {
             }
             Message::IconLoaded(id, icon) => self.on_icon_loaded(id, icon),
             Message::StashIcons(icons) => self.on_stash_icons(icons),
-            Message::ToggleOverlay
-            | Message::Hotkey(hotkeys::Event::Pressed(Action::ToggleOverlay)) => {
-                self.overlay_visible = !self.overlay_visible;
-                self.send(ToOverlay::SetVisible {
-                    visible: self.overlay_visible,
-                });
-            }
-            Message::ToggleInteractive
-            | Message::Hotkey(hotkeys::Event::Pressed(Action::ToggleInteractive)) => {
-                self.overlay_interactive = !self.overlay_interactive;
-                self.send(ToOverlay::SetInteractive {
-                    interactive: self.overlay_interactive,
-                });
-            }
-            Message::Hotkey(hotkeys::Event::Unavailable(error)) => {
-                tracing::debug!(%error, "hotkeys unavailable");
-                self.status.push(t!("status-no-hotkeys"));
+            message
+            @ (Message::ToggleOverlay | Message::ToggleInteractive | Message::Hotkey(_)) => {
+                self.toggle_overlay(message);
             }
             Message::Overlay(event) => return self.on_overlay_event(event),
             Message::ToggleVision => {
@@ -573,6 +581,10 @@ impl App {
                 self.event_icons.insert(url, icon);
                 // The menu card shows the icons too.
                 self.push_menu_card();
+            }
+            message
+            @ (Message::ToggleAlert(_) | Message::CheckAlerts | Message::AlertOpened(_)) => {
+                return self.update_alerts(message);
             }
             message @ (Message::QueryChanged(_)
             | Message::SetItemFilter(_)
@@ -813,10 +825,39 @@ impl App {
         Task::none()
     }
 
-    /// The item list's query and filter, the start-up screen, held map
-    /// closes and the item shown on the map.
+    /// The overlay's visibility and interactive mode, from the buttons or
+    /// the global shortcuts.
+    fn toggle_overlay(&mut self, message: Message) {
+        match message {
+            Message::ToggleOverlay
+            | Message::Hotkey(hotkeys::Event::Pressed(Action::ToggleOverlay)) => {
+                self.overlay_visible = !self.overlay_visible;
+                self.send(ToOverlay::SetVisible {
+                    visible: self.overlay_visible,
+                });
+            }
+            Message::ToggleInteractive
+            | Message::Hotkey(hotkeys::Event::Pressed(Action::ToggleInteractive)) => {
+                self.overlay_interactive = !self.overlay_interactive;
+                self.send(ToOverlay::SetInteractive {
+                    interactive: self.overlay_interactive,
+                });
+            }
+            Message::Hotkey(hotkeys::Event::Unavailable(error)) => {
+                tracing::debug!(%error, "hotkeys unavailable");
+                self.status.push(t!("status-no-hotkeys"));
+            }
+            _ => {}
+        }
+    }
+
+    /// Condition alerts, the item list's query and filter, the start-up
+    /// screen, held map closes and the item shown on the map.
     fn update_view_state(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::ToggleAlert(_) | Message::CheckAlerts | Message::AlertOpened(_) => {
+                return self.update_alerts(message);
+            }
             Message::QueryChanged(query) => {
                 self.query = query;
                 return self.refresh_results();
@@ -833,6 +874,77 @@ impl App {
             _ => {}
         }
         Task::none()
+    }
+
+    /// Condition alerts: following, the periodic check, a clicked notice.
+    fn update_alerts(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::ToggleAlert(name) => {
+                let key = arclens_core::condition_key(&name);
+                if !self.settings.alerts.remove(&key) {
+                    self.settings.alerts.insert(key);
+                }
+                crate::store::save(&self.paths.settings(), &self.settings);
+                Task::none()
+            }
+            Message::CheckAlerts => self.check_alerts(),
+            Message::AlertOpened(true) => self.set_tab(Tab::Events),
+            _ => Task::none(),
+        }
+    }
+
+    /// Announces followed conditions starting within [`ALERT_LEAD`]: a
+    /// desktop notification and a toast in the overlay. Each once.
+    fn check_alerts(&mut self) -> Task<Message> {
+        let refresh = self.refresh_events_if_stale();
+        let Load::Ready(events) = &self.events else {
+            return refresh;
+        };
+        let now = now_ms();
+        let lead = i64::try_from(ALERT_LEAD.as_millis()).unwrap_or(i64::MAX);
+        let due: Vec<arclens_core::ScheduledEvent> =
+            arclens_core::due_alerts(events, &self.settings.alerts, now, lead)
+                .into_iter()
+                .filter(|e| {
+                    self.alerted
+                        .insert((e.name.clone(), e.map.clone(), e.start_ms))
+                })
+                .cloned()
+                .collect();
+        let mut tasks = vec![refresh];
+        for event in due {
+            let condition = arclens_ui::names::condition(&event.name);
+            // Rounded up: "in 2 min" with 1 min 28 s left reads right.
+            let minutes = ((event.start_ms - now + 59_999) / 60_000).max(1);
+            let title = t!("alert-title", condition = condition, minutes = minutes);
+            let body = t!(
+                "alert-body",
+                map = arclens_ui::names::map(&event.map),
+                start = crate::views::events::local_time(event.start_ms),
+                end = crate::views::events::local_time(event.end_ms)
+            );
+            let image = self.event_icons.path(&event.name).map(Path::to_path_buf);
+            tracing::info!(condition = %event.name, map = %event.map, "condition alert");
+            self.send(ToOverlay::ShowToast {
+                toast: arclens_ipc::Toast {
+                    kicker: t!("alert-kicker"),
+                    title: title.clone(),
+                    body: body.clone(),
+                    icon: image.clone(),
+                    seconds: 12,
+                },
+            });
+            tasks.push(Task::perform(
+                crate::platform::notify(crate::platform::Notice {
+                    title,
+                    body,
+                    image,
+                    open_label: t!("alert-open"),
+                }),
+                Message::AlertOpened,
+            ));
+        }
+        Task::batch(tasks)
     }
 
     /// Animates the start-up screen and leaves it once the data is in.
@@ -2344,6 +2456,7 @@ impl App {
                 map_filter: self.event_map_filter.as_deref(),
                 region: self.settings.region.as_deref(),
                 served_region: self.events_region.as_deref(),
+                alerts: &self.settings.alerts,
             }),
         }
     }
